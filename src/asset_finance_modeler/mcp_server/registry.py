@@ -42,7 +42,11 @@ class ToolSpec:
     handler: Callable[[dict[str, Any]], Any]
 
 
-def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
+def build_registry(
+    store: SQLiteScenarioStore | None,
+    kb_db_path: str | None = None,
+    kb_index_path: str | None = None,
+) -> dict[str, ToolSpec]:
     """Build the full tool registry. `store` is the shared SQLite store
     used by all stateful tools. Pass None for discovery-only tools."""
 
@@ -399,6 +403,69 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
                 description="V2 stub: variance analysis. Not implemented in v1.",
                 input_schema={"type": "object", "additionalProperties": True},
                 handler=make_track_stub("variance_report"),
+            ),
+        ])
+
+    # Knowledge base (optional)
+    if kb_db_path is not None and kb_index_path is not None:
+        from asset_finance_modeler.intelligence.embeddings import LocalEmbeddingProvider
+        from asset_finance_modeler.intelligence.knowledge.base import KnowledgeBase
+        from .tools.knowledge import (
+            make_knowledge_add,
+            make_knowledge_list_categories,
+            make_knowledge_search,
+        )
+
+        kb = KnowledgeBase(
+            db_path=kb_db_path,
+            index_path=kb_index_path,
+            embedding_provider=LocalEmbeddingProvider(),
+        )
+        kb.initialize()
+
+        specs.extend([
+            ToolSpec(
+                name="finance.knowledge.search",
+                description=(
+                    "Search the financial knowledge base semantically. "
+                    "Returns relevant concepts, formulas, benchmarks, frameworks. "
+                    "Use this BEFORE answering technical financial questions."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "top_k": {"type": "integer", "default": 5},
+                        "category": {"type": "string"},
+                        "tenant_id": {"type": "string"},
+                    },
+                    "required": ["query"],
+                    "additionalProperties": False,
+                },
+                handler=make_knowledge_search(kb),
+            ),
+            ToolSpec(
+                name="finance.knowledge.add",
+                description="Add a new knowledge entry. Optional tenant_id for company-specific knowledge.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                        "category": {"type": "string", "default": "general"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "tenant_id": {"type": "string"},
+                    },
+                    "required": ["title", "content"],
+                    "additionalProperties": False,
+                },
+                handler=make_knowledge_add(kb),
+            ),
+            ToolSpec(
+                name="finance.knowledge.list_categories",
+                description="List available knowledge categories with entry counts.",
+                input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+                handler=make_knowledge_list_categories(kb),
             ),
         ])
 

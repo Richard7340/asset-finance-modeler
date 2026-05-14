@@ -32,7 +32,13 @@ def _build_app() -> tuple[Server, dict[str, ToolSpec]]:
     db_path = _default_db_path()
     store = SQLiteScenarioStore(db_path)
     store.initialize()
-    registry = build_registry(store)
+
+    # Knowledge base paths
+    kb_dir = Path(db_path).parent
+    kb_db_path = str(kb_dir / "knowledge.db")
+    kb_index_path = str(kb_dir / "knowledge.faiss")
+
+    registry = build_registry(store, kb_db_path=kb_db_path, kb_index_path=kb_index_path)
     app: Server = Server("asset-finance-modeler")
 
     @app.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
