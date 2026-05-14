@@ -61,6 +61,14 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
     ]
 
     if store is not None:
+        from .tools.crud import (
+            make_clone_scenario,
+            make_create_scenario,
+            make_delete_scenario,
+            make_list_scenarios,
+            make_set_canonical,
+        )
+
         specs.append(
             ToolSpec(
                 name="finance.simulate.load_baseline",
@@ -79,5 +87,87 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
                 handler=make_handle_load_baseline(store),
             )
         )
+        specs.extend([
+            ToolSpec(
+                name="finance.simulate.create_scenario",
+                description=(
+                    "Create a new Scenario as a child of an existing one. "
+                    "Overrides use JSONPath syntax: 'revenue.sources[0].pricing.per_unit_per_period'."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "base_scenario_id": {"type": "string"},
+                        "description": {"type": "string"},
+                        "overrides": {"type": "object", "additionalProperties": True},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "notes": {"type": "string"},
+                    },
+                    "required": ["name", "base_scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_create_scenario(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.clone_scenario",
+                description=(
+                    "Branch from an existing Scenario inheriting its overrides; new overrides win on conflict. "
+                    "Use this to compose hypotheses: pricing-250 → pricing-250-with-debt."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "name": {"type": "string"},
+                        "description": {"type": "string"},
+                        "overrides": {"type": "object", "additionalProperties": True},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "notes": {"type": "string"},
+                    },
+                    "required": ["scenario_id", "name"],
+                    "additionalProperties": False,
+                },
+                handler=make_clone_scenario(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.list_scenarios",
+                description="List scenarios in the store with optional filters.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "base_model": {"type": "string"},
+                        "include_deleted": {"type": "boolean", "default": False},
+                    },
+                    "additionalProperties": False,
+                },
+                handler=make_list_scenarios(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.delete_scenario",
+                description="Soft-delete a Scenario. Canonical scenarios cannot be deleted.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"scenario_id": {"type": "string"}},
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_delete_scenario(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.set_canonical",
+                description="Mark a Scenario as canonical (protected from deletion).",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "name": {"type": "string"},
+                    },
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_set_canonical(store),
+            ),
+        ])
 
     return {s.name: s for s in specs}
