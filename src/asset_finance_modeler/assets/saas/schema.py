@@ -23,11 +23,16 @@ class ModelMeta(BaseModel):
 class PricingConfig(BaseModel):
     per_unit_per_period: NonNegativeFloat = Field(description="Recurring price per unit (e.g. €/agent/month)")
     setup_one_time: NonNegativeFloat = Field(default=0, description="One-time setup fee per new customer")
-    price_escalation_annual: float = Field(default=0, ge=0, le=1, description="Annual % price increase applied at year boundary")
+    price_escalation_annual: float = Field(
+        default=0, ge=0, le=1,
+        description="Annual % price increase applied at year boundary",
+    )
 
 
 class AcquisitionConfig(BaseModel):
-    new_units_per_period: list[float] | float = Field(description="New units added per period — list (per-period) or constant")
+    new_units_per_period: list[float] | float = Field(
+        description="New units added per period — list (per-period) or constant",
+    )
     avg_units_per_customer: NonNegativeFloat = Field(default=1.0, description="Multiplier units per acquired customer")
     cac_per_customer: NonNegativeFloat = Field(description="Cost to acquire one customer (blended)")
     cac_payback_target_months: NonNegativeInt = Field(default=12, description="Informational only")

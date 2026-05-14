@@ -55,7 +55,10 @@ def _minimal_config(periods=24, with_debt=False) -> SaasModelConfig:
             infra_fixed_eur=500,
             marketing_eur=1000,
         ),
-        capital=CapitalConfig(working_capital=WorkingCapital(days_sales_outstanding=30, days_payable_outstanding=30), debt=debt),
+        capital=CapitalConfig(
+            working_capital=WorkingCapital(days_sales_outstanding=30, days_payable_outstanding=30),
+            debt=debt,
+        ),
         taxes=TaxesConfig(),
         valuation=ValuationConfig(discount_rate_annual=0.20),
         external_data=ExternalDataConfig(),
