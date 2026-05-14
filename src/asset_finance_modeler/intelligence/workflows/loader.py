@@ -29,4 +29,5 @@ def load_workflow(workflow_id: str) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"workflow {workflow_id!r} not found")
     with path.open() as f:
-        return yaml.safe_load(f)
+        result: dict[str, Any] = yaml.safe_load(f)
+    return result

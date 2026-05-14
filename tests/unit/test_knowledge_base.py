@@ -18,7 +18,10 @@ def kb(tmp_path):
 def test_add_and_get(kb):
     entry_id = kb.add(KnowledgeEntry(
         title="LTV definition",
-        content="Lifetime Value (LTV) is the total revenue a customer generates during their relationship with the business.",
+        content=(
+            "Lifetime Value (LTV) is the total revenue a customer generates"
+            " during their relationship with the business."
+        ),
         category="unit_economics",
         tags=["ltv", "metric"],
     ))

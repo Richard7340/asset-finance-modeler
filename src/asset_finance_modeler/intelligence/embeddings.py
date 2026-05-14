@@ -23,7 +23,7 @@ DEFAULT_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 @lru_cache(maxsize=1)
 def _load_model(model_name: str):  # type: ignore[no-untyped-def]
-    from sentence_transformers import SentenceTransformer
+    from sentence_transformers import SentenceTransformer  # noqa: PLC0415
     return SentenceTransformer(model_name)
 
 

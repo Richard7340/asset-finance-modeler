@@ -409,9 +409,9 @@ def build_registry(
 
     # Knowledge base (optional)
     if kb_db_path is not None and kb_index_path is not None:
-        from asset_finance_modeler.intelligence.embeddings import LocalEmbeddingProvider
-        from asset_finance_modeler.intelligence.knowledge.base import KnowledgeBase
-        from .tools.knowledge import (
+        from asset_finance_modeler.intelligence.embeddings import LocalEmbeddingProvider  # noqa: PLC0415
+        from asset_finance_modeler.intelligence.knowledge.base import KnowledgeBase  # noqa: PLC0415
+        from .tools.knowledge import (  # noqa: PLC0415
             make_knowledge_add,
             make_knowledge_list_categories,
             make_knowledge_search,
@@ -471,16 +471,16 @@ def build_registry(
         ])
 
     # Workflows
-    from .tools.workflows import (
+    from .tools.workflows import (  # noqa: PLC0415
         handle_workflows_describe,
         handle_workflows_list,
         make_workflows_run,
     )
 
     # Mutable holder for the registry so the dispatcher can resolve tools at run time
-    _registry_holder: dict[str, dict] = {}
+    _registry_holder: dict[str, dict[str, ToolSpec]] = {}
 
-    def _registry_provider() -> dict:
+    def _registry_provider() -> dict[str, ToolSpec]:
         return _registry_holder["registry"]
 
     specs.extend([
@@ -522,9 +522,9 @@ def build_registry(
 
     # Context memory (optional)
     if ctx_db_path is not None:
-        from asset_finance_modeler.intelligence.context.memory import ContextMemory
-        from asset_finance_modeler.intelligence.embeddings import LocalEmbeddingProvider
-        from .tools.context import (
+        from asset_finance_modeler.intelligence.context.memory import ContextMemory  # noqa: PLC0415
+        from asset_finance_modeler.intelligence.embeddings import LocalEmbeddingProvider  # noqa: PLC0415
+        from .tools.context import (  # noqa: PLC0415
             make_context_recent,
             make_context_search,
             make_context_store,

@@ -79,5 +79,5 @@ class WorkflowEngine:
 
         # Build output
         output_spec = workflow.get("output", {})
-        output = _substitute(output_spec, context)
+        output: dict[str, Any] = _substitute(output_spec, context)
         return output

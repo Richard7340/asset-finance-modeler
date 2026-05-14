@@ -4,8 +4,6 @@
 - Store + retrieve context
 - All multi-tenant
 """
-import pytest
-
 from asset_finance_modeler.intelligence.embeddings import LocalEmbeddingProvider
 from asset_finance_modeler.intelligence.knowledge.base import KnowledgeBase
 from asset_finance_modeler.intelligence.knowledge.seed import seed_default_knowledge

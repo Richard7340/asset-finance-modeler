@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import faiss
+import faiss  # type: ignore[import-untyped]
 import numpy as np
 
 from asset_finance_modeler.intelligence.embeddings import EmbeddingProvider
