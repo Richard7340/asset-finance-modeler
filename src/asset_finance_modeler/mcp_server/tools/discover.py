@@ -1,7 +1,7 @@
 from typing import Any
 
-from asset_finance_modeler.assets.saas.schema import SaasModelConfig
 from asset_finance_modeler.assets.saas.loader import load_preset
+from asset_finance_modeler.assets.saas.schema import SaasModelConfig
 from asset_finance_modeler.core.scenario import Scenario, new_scenario_id
 
 _PRESET_INDEX = {

@@ -2,6 +2,35 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from asset_finance_modeler.mcp_server.tools.analyze import (
+    make_compare,
+    make_sensitivity_1d,
+    make_sensitivity_grid,
+)
+from asset_finance_modeler.mcp_server.tools.crud import (
+    make_clone_scenario,
+    make_create_scenario,
+    make_delete_scenario,
+    make_list_scenarios,
+    make_set_canonical,
+)
+from asset_finance_modeler.mcp_server.tools.discover import (
+    handle_describe_schema,
+    handle_list_models,
+    handle_list_presets,
+    make_handle_load_baseline,
+)
+from asset_finance_modeler.mcp_server.tools.execute import (
+    make_get_genealogy,
+    make_get_results,
+    make_run,
+)
+from asset_finance_modeler.mcp_server.tools.output import (
+    make_export,
+    make_fetch_external,
+    make_set_external,
+    make_track_stub,
+)
 from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
 
 
@@ -16,12 +45,6 @@ class ToolSpec:
 def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
     """Build the full tool registry. `store` is the shared SQLite store
     used by all stateful tools. Pass None for discovery-only tools."""
-    from .tools.discover import (
-        handle_describe_schema,
-        handle_list_models,
-        handle_list_presets,
-        make_handle_load_baseline,
-    )
 
     specs: list[ToolSpec] = [
         ToolSpec(
@@ -61,14 +84,6 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
     ]
 
     if store is not None:
-        from .tools.crud import (
-            make_clone_scenario,
-            make_create_scenario,
-            make_delete_scenario,
-            make_list_scenarios,
-            make_set_canonical,
-        )
-
         specs.append(
             ToolSpec(
                 name="finance.simulate.load_baseline",
@@ -170,17 +185,6 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
             ),
         ])
 
-        from .tools.analyze import (
-            make_compare,
-            make_sensitivity_1d,
-            make_sensitivity_grid,
-        )
-        from .tools.execute import (
-            make_get_genealogy,
-            make_get_results,
-            make_run,
-        )
-
         specs.extend([
             ToolSpec(
                 name="finance.simulate.run",
@@ -240,13 +244,6 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
                 handler=make_get_genealogy(store),
             ),
         ])
-
-        from .tools.output import (
-            make_export,
-            make_fetch_external,
-            make_set_external,
-            make_track_stub,
-        )
 
         specs.extend([
             ToolSpec(

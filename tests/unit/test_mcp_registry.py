@@ -1,5 +1,3 @@
-import pytest
-
 from asset_finance_modeler.mcp_server.registry import ToolSpec, build_registry
 
 

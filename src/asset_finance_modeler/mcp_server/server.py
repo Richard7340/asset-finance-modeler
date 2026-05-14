@@ -35,14 +35,14 @@ def _build_app() -> tuple[Server, dict[str, ToolSpec]]:
     registry = build_registry(store)
     app: Server = Server("asset-finance-modeler")
 
-    @app.list_tools()
+    @app.list_tools()  # type: ignore[no-untyped-call,untyped-decorator]
     async def _list_tools() -> list[Tool]:
         return [
             Tool(name=spec.name, description=spec.description, inputSchema=spec.input_schema)
             for spec in registry.values()
         ]
 
-    @app.call_tool()
+    @app.call_tool()  # type: ignore[untyped-decorator]
     async def _call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         if name not in registry:
             return [TextContent(type="text", text=json.dumps({"error": f"unknown tool: {name}"}))]

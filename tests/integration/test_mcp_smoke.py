@@ -1,7 +1,5 @@
 """In-process smoke test exercising the MCP server registry end-to-end
 without spawning a subprocess (which is brittle on macOS .venv hidden flag)."""
-import pytest
-
 from asset_finance_modeler.mcp_server.registry import build_registry
 from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
 
