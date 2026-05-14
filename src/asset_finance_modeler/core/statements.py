@@ -172,3 +172,22 @@ def compute_runway(cash_series: list[float]) -> float:
         if c < 0:
             return float(t)
     return math.inf
+
+
+def compute_debt_metrics(
+    ebitda: list[float],
+    ebit: list[float],
+    interest_expense: list[float],
+    principal_repaid: list[float],
+    debt_outstanding: list[float],
+) -> dict[str, list[float]]:
+    n = len(ebitda)
+    dscr: list[float] = []
+    icr: list[float] = []
+    leverage: list[float] = []
+    for t in range(n):
+        debt_service = interest_expense[t] + principal_repaid[t]
+        dscr.append(ebitda[t] / debt_service if debt_service > 0 else math.inf)
+        icr.append(ebit[t] / interest_expense[t] if interest_expense[t] > 0 else math.inf)
+        leverage.append(debt_outstanding[t] / ebitda[t] if ebitda[t] > 0 else 0)
+    return {"dscr": dscr, "icr": icr, "leverage": leverage}
