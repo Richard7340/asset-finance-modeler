@@ -170,6 +170,11 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
             ),
         ])
 
+        from .tools.analyze import (
+            make_compare,
+            make_sensitivity_1d,
+            make_sensitivity_grid,
+        )
         from .tools.execute import (
             make_get_genealogy,
             make_get_results,
@@ -233,6 +238,72 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
                     "additionalProperties": False,
                 },
                 handler=make_get_genealogy(store),
+            ),
+        ])
+
+        specs.extend([
+            ToolSpec(
+                name="finance.simulate.compare",
+                description=(
+                    "Side-by-side comparison of N Scenarios (each must have been run). "
+                    "Default metrics include revenue_y1, EBITDA margin, cash, runway, LTV/CAC, EV."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                        "metrics": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["scenario_ids"],
+                    "additionalProperties": False,
+                },
+                handler=make_compare(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.sensitivity_1d",
+                description=(
+                    "Sweep a single variable (JSONPath) across values, return metric values. "
+                    "Use to answer 'what if pricing was X, Y, Z?'"
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "variable": {
+                            "type": "string",
+                            "description": "JSONPath, e.g. 'revenue.sources[0].pricing.per_unit_per_period'",
+                        },
+                        "values": {"type": "array", "items": {"type": "number"}, "minItems": 1},
+                        "metric": {
+                            "type": "string",
+                            "description": "Summary metric to track, e.g. 'enterprise_value'",
+                        },
+                    },
+                    "required": ["scenario_id", "variable", "values", "metric"],
+                    "additionalProperties": False,
+                },
+                handler=make_sensitivity_1d(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.sensitivity_grid",
+                description=(
+                    "2D sensitivity grid: sweep two variables and report a metric. "
+                    "Classic use: WACC × growth → enterprise_value heatmap."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "var_x": {"type": "string"},
+                        "values_x": {"type": "array", "items": {"type": "number"}, "minItems": 1},
+                        "var_y": {"type": "string"},
+                        "values_y": {"type": "array", "items": {"type": "number"}, "minItems": 1},
+                        "metric": {"type": "string"},
+                    },
+                    "required": ["scenario_id", "var_x", "values_x", "var_y", "values_y", "metric"],
+                    "additionalProperties": False,
+                },
+                handler=make_sensitivity_grid(store),
             ),
         ])
 
