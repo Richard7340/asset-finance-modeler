@@ -2,8 +2,8 @@ from datetime import date
 
 from asset_finance_modeler.assets.saas.schema import (
     AcquisitionConfig,
-    COGSConfig,
     CapitalConfig,
+    COGSConfig,
     ExternalDataConfig,
     HorizonConfig,
     ModelMeta,

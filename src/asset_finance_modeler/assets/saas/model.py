@@ -37,7 +37,7 @@ class ModelResults:
     debt_metrics: dict[str, list[float]]
     revenue_breakdown: dict[str, list[float]]
     summary: dict[str, float | int]
-    inputs_resolved: dict = field(default_factory=dict)
+    inputs_resolved: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass

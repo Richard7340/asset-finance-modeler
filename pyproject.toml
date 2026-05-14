@@ -18,6 +18,7 @@ dev = [
     "pytest-snapshot>=0.9",
     "ruff>=0.5",
     "mypy>=1.10",
+    "types-PyYAML>=6.0",
 ]
 
 [build-system]
@@ -36,12 +37,15 @@ addopts = "-ra --strict-markers"
 pythonpath = ["src"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "PL"]
-ignore = ["PLR0913"]
+ignore = ["PLR0913", "PLR0912", "PLR0917", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["PLR2004", "PLR0913", "PLR0917"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -1,8 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt, model_validator
-from pydantic import conlist
+from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt, conlist, model_validator
 
 
 class HorizonConfig(BaseModel):

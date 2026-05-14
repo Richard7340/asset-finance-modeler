@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from asset_finance_modeler.core.drivers import AmortizationSchedule, expand_growth
 
-from .schema import COGSConfig, CapExItem, DebtInstrument, OpexConfig, RevenueSource
+from .schema import CapExItem, COGSConfig, DebtInstrument, OpexConfig, RevenueSource
 
 
 @dataclass

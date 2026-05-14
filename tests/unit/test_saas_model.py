@@ -1,12 +1,10 @@
 from datetime import date
 
-import pytest
-
 from asset_finance_modeler.assets.saas.model import ModelResults, SaasModel
 from asset_finance_modeler.assets.saas.schema import (
     AcquisitionConfig,
-    COGSConfig,
     CapitalConfig,
+    COGSConfig,
     DebtInstrument,
     ExternalDataConfig,
     HorizonConfig,
