@@ -1,0 +1,231 @@
+- category: unit_economics
+  title: "CAC — Customer Acquisition Cost"
+  content: |
+    El CAC es el coste total de adquirir un nuevo cliente: gasto comercial + marketing dividido por el número de nuevos clientes captados en el periodo.
+    Fórmula: CAC = (sales + marketing spend) / new customers.
+    Benchmark SaaS B2B 2024: payback CAC < 12 meses se considera sano.
+  tags: [cac, sales, marketing, saas]
+
+- category: unit_economics
+  title: "LTV — Lifetime Value"
+  content: |
+    El LTV es el revenue total que un cliente generará durante toda su relación con la empresa.
+    Fórmula simple SaaS: LTV = ARPU * gross_margin / monthly_churn_rate.
+    Regla de oro: LTV/CAC >= 3 es sano. LTV/CAC < 1 = no rentable.
+  tags: [ltv, retention, saas]
+
+- category: unit_economics
+  title: "Payback CAC"
+  content: |
+    Meses necesarios para recuperar el coste de adquisición de un cliente con su margen bruto recurrente.
+    Fórmula: payback_months = CAC / (ARPU * gross_margin).
+    SaaS B2B típico: 12-18 meses payback. Más de 24 meses = problemático.
+  tags: [payback, cac, saas]
+
+- category: unit_economics
+  title: "Rule of 40"
+  content: |
+    Indicador SaaS: revenue_growth_yoy + ebitda_margin >= 40% indica negocio sano.
+    Cumplirlo es bandera verde para inversores en growth-stage SaaS.
+  tags: [rule_of_40, growth, ebitda]
+
+- category: unit_economics
+  title: "Magic Number"
+  content: |
+    Mide eficiencia comercial: (Δ ARR trimestral × 4) / gasto sales+marketing trimestre anterior.
+    > 1 = invertir más en ventas. < 0.5 = ventas no eficientes.
+  tags: [magic_number, sales_efficiency]
+
+- category: valuation
+  title: "DCF — Discounted Cash Flow"
+  content: |
+    Método de valoración: descuenta flujos de caja libres futuros (FCF) a su valor presente usando WACC.
+    Enterprise Value = Σ FCF_t / (1+WACC)^t + Terminal Value / (1+WACC)^n.
+    Terminal Value Gordon: FCF_terminal * (1+g) / (WACC - g) — requiere WACC > g.
+  tags: [dcf, valuation, npv, wacc]
+
+- category: valuation
+  title: "WACC — Weighted Average Cost of Capital"
+  content: |
+    Tasa de descuento que refleja el coste mixto de financiar la empresa con deuda y equity.
+    Para early-stage startup SaaS: 18-25%. Empresa establecida: 8-12%. Real estate: 6-10%.
+  tags: [wacc, discount_rate]
+
+- category: valuation
+  title: "Exit Multiple Valuation"
+  content: |
+    Alternativa a Gordon: terminal value = ARR_terminal × multiple.
+    Múltiplos típicos SaaS B2B 2024: 4-8x ARR (depende de growth y rule of 40).
+  tags: [exit_multiple, arr, saas]
+
+- category: valuation
+  title: "NPV — Net Present Value"
+  content: |
+    Valor presente neto de una serie de flujos descontados a una tasa dada.
+    Si NPV > 0 con WACC apropiado, el proyecto crea valor.
+  tags: [npv, valuation]
+
+- category: valuation
+  title: "IRR — Internal Rate of Return"
+  content: |
+    Tasa de descuento a la cual el NPV = 0. Representa la rentabilidad anual implícita.
+    En real estate proyectos: IRR > 12-15% se considera atractivo en mercado estabilizado.
+  tags: [irr, returns]
+
+- category: cash_flow
+  title: "FCF — Free Cash Flow"
+  content: |
+    Caja libre: CFO - CapEx. Es la métrica más importante para valoración.
+    Indica caja disponible para pagar deuda, dividendos, o reinvertir.
+  tags: [fcf, cashflow]
+
+- category: cash_flow
+  title: "Runway"
+  content: |
+    Meses hasta que la caja llegue a cero al ritmo actual de quema.
+    Cálculo: cash_actual / monthly_burn_rate.
+    Recomendado: > 18 meses para startups en growth, > 24 meses pre-Serie A.
+  tags: [runway, burn_rate, cash]
+
+- category: cash_flow
+  title: "Working Capital"
+  content: |
+    Necesidades de circulante: AR + inventory - AP. Día a día.
+    DSO (días cobro) y DPO (días pago) son inputs clave. SaaS típico: DSO 30-45 días.
+  tags: [working_capital, dso, dpo]
+
+- category: debt
+  title: "DSCR — Debt Service Coverage Ratio"
+  content: |
+    EBITDA / (intereses + principal de deuda). Mide capacidad de servicio de deuda.
+    Bancos exigen DSCR > 1.2-1.5 para project finance. < 1 = no puedes pagar la deuda.
+  tags: [dscr, debt, banking]
+
+- category: debt
+  title: "ICR — Interest Coverage Ratio"
+  content: |
+    EBIT / Intereses. Cuántas veces el beneficio operativo cubre los intereses.
+    > 3 sano. < 1.5 zona de riesgo.
+  tags: [icr, interest, debt]
+
+- category: debt
+  title: "LTV — Loan to Value (real estate)"
+  content: |
+    Loan to Value en inmobiliario: principal_deuda / valor_activo.
+    Banca europea hipotecas residenciales: 70-80%. Comercial: 60-70%. CARE: distinto al LTV de SaaS.
+  tags: [ltv, real_estate, mortgage]
+
+- category: debt
+  title: "Amortización francesa"
+  content: |
+    Cuota fija constante donde el componente de intereses decrece y el de principal crece.
+    Estándar en hipotecas residenciales en España y Europa.
+  tags: [amortization, french, mortgage]
+
+- category: pnl
+  title: "EBITDA"
+  content: |
+    Earnings Before Interest, Taxes, Depreciation, Amortization.
+    Métrica de rentabilidad operativa "core" — ignora financiación y contabilidad CapEx.
+    Margen EBITDA SaaS maduro: 20-40%. Real estate operativo: 60-80%.
+  tags: [ebitda, profitability]
+
+- category: pnl
+  title: "Gross Margin"
+  content: |
+    (Revenue - COGS) / Revenue. Para SaaS típico: 70-85%. Servicios: 30-50%.
+    Por debajo del benchmark de sector indica problema de pricing o de costes variables.
+  tags: [gross_margin, cogs]
+
+- category: pnl
+  title: "Tax loss carryforward"
+  content: |
+    Pérdidas fiscales pueden compensar beneficios futuros. En España hay límite del 70% de base imponible positiva.
+    Importante en modelos de startups: años de pérdida reducen tax bill cuando hay ganancias.
+  tags: [tax, carryforward, spain]
+
+- category: capex
+  title: "Depreciación lineal"
+  content: |
+    CapEx se reparte uniformemente durante la vida útil del activo (años).
+    Ordenadores: 4 años. Mobiliario: 10 años. Edificios: 33 años.
+    Reduce el beneficio fiscal pero no afecta a caja después de la compra inicial.
+  tags: [depreciation, capex]
+
+- category: capex
+  title: "Maintenance vs Growth CapEx"
+  content: |
+    Maintenance CapEx mantiene la capacidad actual. Growth CapEx expande.
+    Buffett: FCF "owner earnings" = NI + D&A - maintenance CapEx (más conservador que FCF estándar).
+  tags: [capex, maintenance, growth]
+
+- category: saas
+  title: "Cohort Retention"
+  content: |
+    Análisis de churn por cohorte de adquisición. Cada mes se mira qué % de la cohorte original sigue activa.
+    SaaS B2B sano: 90-95% retención a 12 meses. < 80% indica problema de fit/producto.
+  tags: [cohort, churn, retention, saas]
+
+- category: saas
+  title: "ARR — Annual Recurring Revenue"
+  content: |
+    Revenue recurrente anualizado: MRR × 12.
+    Métrica north star SaaS. Múltiplos de valoración se aplican sobre ARR.
+  tags: [arr, mrr, saas]
+
+- category: saas
+  title: "Net Revenue Retention (NRR)"
+  content: |
+    (Revenue de cohorte hoy / Revenue inicial de cohorte) - incluye expansion - churn.
+    SaaS top quartile: NRR > 110%. > 130% es world-class.
+  tags: [nrr, expansion, retention]
+
+- category: framework
+  title: "Cuándo usar Gordon vs Exit Multiple"
+  content: |
+    Gordon (perpetuity): adecuado para empresas estables con crecimiento sostenible y bajo riesgo. Requiere WACC > g.
+    Exit multiple: adecuado para escenarios donde se contempla venta en horizonte concreto (5-7 años), startups, PE.
+    En SaaS early-stage usar exit multiple ARR. En empresa madura usar Gordon.
+  tags: [valuation, methodology, framework]
+
+- category: framework
+  title: "Interpretar LTV/CAC"
+  content: |
+    LTV/CAC < 1: estás perdiendo dinero con cada cliente nuevo.
+    LTV/CAC entre 1 y 3: zona gris, hay que mejorar.
+    LTV/CAC >= 3: sano. >= 5: very strong unit economics.
+    LTV/CAC > 10: posible underinvestment en ventas — podrías acelerar.
+  tags: [framework, ltv, cac, decision]
+
+- category: framework
+  title: "Diagnosis cuando runway < 12 meses"
+  content: |
+    Acciones en orden de impacto:
+    1. Levantar capital (preferred si fundamentals OK).
+    2. Aumentar precio (test A/B en cohortes nuevas).
+    3. Reducir CAC: optimizar canales más caros.
+    4. Reducir burn fijo: revisar OPEX no esencial.
+    5. Cobrar más rápido: bajar DSO, prepayments.
+  tags: [framework, runway, diagnosis]
+
+- category: framework
+  title: "Cuándo evaluar levantar deuda vs equity"
+  content: |
+    Deuda apropiada si: DSCR proyectado > 1.5, ICR > 3, asset-backed, cashflow predecible.
+    Equity apropiado si: alta incertidumbre, cashflow negativo, ramp largo.
+    Mix recomendado growth-stage SaaS: 80% equity / 20% venture debt cuando ARR > €1M.
+  tags: [framework, debt, equity, capital_structure]
+
+- category: real_estate
+  title: "Cap Rate"
+  content: |
+    Net Operating Income / Property Value. Yield bruto del activo inmobiliario.
+    Madrid prime oficinas 2024: 4.5-5.5%. Residencial: 3-4%. Logística: 5.5-6.5%.
+  tags: [cap_rate, real_estate, yield]
+
+- category: real_estate
+  title: "Gross Yield vs Net Yield"
+  content: |
+    Gross: alquiler anual / valor. Net: descuenta IBI, comunidad, seguros, vacancy, mantenimiento (~25-30% del gross).
+    Comparar siempre net entre activos para decisión real.
+  tags: [yield, real_estate]
