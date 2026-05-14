@@ -22,9 +22,8 @@ from .registry import ToolSpec, build_registry
 
 
 def _default_db_path() -> str:
-    p = Path(os.environ.get("ASSET_FINANCE_DB_PATH", "")) or Path.home() / ".asset-finance-modeler" / "scenarios.db"
-    if isinstance(p, str):
-        p = Path(p)
+    raw = os.environ.get("ASSET_FINANCE_DB_PATH", "").strip()
+    p = Path(raw) if raw else Path.home() / ".asset-finance-modeler" / "scenarios.db"
     p.parent.mkdir(parents=True, exist_ok=True)
     return str(p)
 
