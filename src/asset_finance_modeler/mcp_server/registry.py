@@ -241,6 +241,13 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
             ),
         ])
 
+        from .tools.output import (
+            make_export,
+            make_fetch_external,
+            make_set_external,
+            make_track_stub,
+        )
+
         specs.extend([
             ToolSpec(
                 name="finance.simulate.compare",
@@ -304,6 +311,97 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
                     "additionalProperties": False,
                 },
                 handler=make_sensitivity_grid(store),
+            ),
+        ])
+
+        specs.extend([
+            ToolSpec(
+                name="finance.simulate.export",
+                description=(
+                    "Export scenario results in various formats. "
+                    "Inline-return for summary/markdown_table/markdown_report/json (when no path). "
+                    "File-write for csv/xlsx/json (with path)."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "format": {
+                            "type": "string",
+                            "enum": ["summary", "markdown_table", "markdown_report", "json", "csv", "xlsx"],
+                        },
+                        "view": {
+                            "type": "string",
+                            "enum": ["pnl", "cashflow", "balance", "unit_econ"],
+                            "description": "Required for csv and markdown_table",
+                        },
+                        "path": {"type": "string", "description": "Required for csv/xlsx; optional for json"},
+                    },
+                    "required": ["scenario_id", "format"],
+                    "additionalProperties": False,
+                },
+                handler=make_export(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.fetch_external",
+                description=(
+                    "Request the caller to fetch an external benchmark. "
+                    "Returns the query payload — the caller then runs WebSearch and calls set_external."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "field_path": {"type": "string"},
+                        "query": {"type": "string"},
+                        "hint": {"type": "string"},
+                    },
+                    "required": ["scenario_id", "field_path", "query"],
+                    "additionalProperties": False,
+                },
+                handler=make_fetch_external(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.set_external",
+                description=(
+                    "Set an external benchmark value on the scenario after fetching it. "
+                    "Persists value+source+confidence as overrides."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "field_path": {"type": "string"},
+                        "value": {},
+                        "source": {"type": "string"},
+                        "confidence": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"],
+                            "default": "medium",
+                        },
+                    },
+                    "required": ["scenario_id", "field_path", "value"],
+                    "additionalProperties": False,
+                },
+                handler=make_set_external(store),
+            ),
+            ToolSpec(
+                name="finance.track.import_real_data",
+                description="V2 stub: import real accounting data. Not implemented in v1.",
+                input_schema={"type": "object", "additionalProperties": True},
+                handler=make_track_stub("import_real_data"),
+            ),
+            ToolSpec(
+                name="finance.track.reconcile",
+                description="V2 stub: reconcile model vs actuals. Not implemented in v1.",
+                input_schema={"type": "object", "additionalProperties": True},
+                handler=make_track_stub("reconcile"),
+            ),
+            ToolSpec(
+                name="finance.track.variance_report",
+                description="V2 stub: variance analysis. Not implemented in v1.",
+                input_schema={"type": "object", "additionalProperties": True},
+                handler=make_track_stub("variance_report"),
             ),
         ])
 
