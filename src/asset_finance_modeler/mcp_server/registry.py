@@ -469,4 +469,56 @@ def build_registry(
             ),
         ])
 
-    return {s.name: s for s in specs}
+    # Workflows
+    from .tools.workflows import (
+        handle_workflows_describe,
+        handle_workflows_list,
+        make_workflows_run,
+    )
+
+    # Mutable holder for the registry so the dispatcher can resolve tools at run time
+    _registry_holder: dict[str, dict] = {}
+
+    def _registry_provider() -> dict:
+        return _registry_holder["registry"]
+
+    specs.extend([
+        ToolSpec(
+            name="finance.workflows.list",
+            description="List built-in workflow templates with id+name+description+inputs.",
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+            handler=handle_workflows_list,
+        ),
+        ToolSpec(
+            name="finance.workflows.describe",
+            description="Describe a single workflow: full inputs spec + step count.",
+            input_schema={
+                "type": "object",
+                "properties": {"workflow_id": {"type": "string"}},
+                "required": ["workflow_id"],
+                "additionalProperties": False,
+            },
+            handler=handle_workflows_describe,
+        ),
+        ToolSpec(
+            name="finance.workflows.run",
+            description=(
+                "Execute a workflow by id. Pass inputs as object. "
+                "Returns the workflow's defined output."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "workflow_id": {"type": "string"},
+                    "inputs": {"type": "object", "additionalProperties": True},
+                },
+                "required": ["workflow_id"],
+                "additionalProperties": False,
+            },
+            handler=make_workflows_run(_registry_provider),
+        ),
+    ])
+
+    final_registry = {s.name: s for s in specs}
+    _registry_holder["registry"] = final_registry
+    return final_registry
