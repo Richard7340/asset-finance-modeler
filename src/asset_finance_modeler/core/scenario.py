@@ -48,3 +48,17 @@ def apply_overrides(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str
     for path, value in overrides.items():
         _set_by_path(result, path, value)
     return result
+
+
+from asset_finance_modeler.assets.saas.loader import load_preset
+from asset_finance_modeler.assets.saas.model import ModelResults, SaasModel
+from asset_finance_modeler.assets.saas.schema import SaasModelConfig
+
+
+def run_scenario_saas(scenario: Scenario) -> ModelResults:
+    """Resolve a Scenario for the SaaS asset type: load preset, apply overrides, run."""
+    base_cfg = load_preset(scenario.base_model)
+    base_dict = base_cfg.model_dump(mode="json")
+    resolved_dict = apply_overrides(base_dict, scenario.overrides)
+    resolved_cfg = SaasModelConfig.model_validate(resolved_dict)
+    return SaasModel(resolved_cfg).run()
