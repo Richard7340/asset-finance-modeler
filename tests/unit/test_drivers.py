@@ -11,9 +11,13 @@ def test_list_value_passes_through():
     assert expand_growth([1.0, 2.0, 3.0], periods=3) == [1.0, 2.0, 3.0]
 
 
-def test_list_value_wrong_length_raises():
+def test_list_value_shorter_pads_with_last():
+    assert expand_growth([1.0, 2.0], periods=4) == [1.0, 2.0, 2.0, 2.0]
+
+
+def test_list_value_longer_than_periods_raises():
     with pytest.raises(ValueError):
-        expand_growth([1.0, 2.0], periods=3)
+        expand_growth([1.0, 2.0, 3.0, 4.0], periods=3)
 
 
 def test_growth_curve_linear():

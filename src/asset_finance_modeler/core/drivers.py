@@ -5,8 +5,12 @@ from typing import Literal
 def expand_growth(value: float | list[float], periods: int) -> list[float]:
     if isinstance(value, (int, float)):
         return [float(value)] * periods
-    if len(value) != periods:
-        raise ValueError(f"List length {len(value)} != periods {periods}")
+    if len(value) > periods:
+        raise ValueError(f"List length {len(value)} > periods {periods}")
+    if len(value) < periods:
+        # Pad with last value (ramp-then-hold semantics)
+        last = float(value[-1])
+        return [float(v) for v in value] + [last] * (periods - len(value))
     return [float(v) for v in value]
 
 

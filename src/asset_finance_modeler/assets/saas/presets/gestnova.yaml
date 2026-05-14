@@ -1,0 +1,104 @@
+meta:
+  name: gestnova
+  base_currency: EUR
+  inflation_annual: 0.025
+  horizon:
+    periods: 60
+    frequency: M
+  start_date: "2026-05-01"
+  initial_cash: 50000
+  schema_version: 1
+
+revenue:
+  sources:
+    - name: agent_subscriptions
+      pricing:
+        per_unit_per_period: 300
+        setup_one_time: 1000
+        price_escalation_annual: 0.03
+      acquisition:
+        new_units_per_period: [2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20]
+        avg_units_per_customer: 2.5
+        cac_per_customer: 800
+        cac_payback_target_months: 12
+      retention:
+        monthly_churn_rate: 0.02
+        gross_revenue_retention: 0.95
+        expansion_revenue_pct: 0
+
+cost_of_revenue:
+  per_active_unit:
+    llm_tokens:
+      - model: sonnet-4-7
+        eur_per_million_input: 3.0
+        eur_per_million_output: 15.0
+        avg_tokens_in_per_month: 800000
+        avg_tokens_out_per_month: 200000
+      - model: haiku-4-5
+        eur_per_million_input: 0.8
+        eur_per_million_output: 4.0
+        avg_tokens_in_per_month: 1500000
+        avg_tokens_out_per_month: 400000
+    stt:
+      provider: deepgram
+      eur_per_minute: 0.0043
+      monthly_usage: 200
+    tts:
+      provider: cartesia
+      eur_per_million_chars: 25
+      monthly_usage: 50000
+    twilio:
+      whatsapp_eur_per_msg: 0.005
+      voice_eur_per_min: 0.012
+      msgs_per_month: 600
+      min_per_month: 80
+    infra_eur: 2
+  per_active_customer:
+    support_eur: 15
+    onboarding_one_time_eur: 0
+
+operating_expenses:
+  team:
+    - role: founders
+      monthly_cost: 4000
+      headcount: 3
+    - role: engineer
+      monthly_cost: 5500
+      headcount_schedule: [0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 2]
+      start_period: 0
+  infra_fixed_eur: 1200
+  marketing_eur: 2000
+  legal_admin_eur: 800
+  other_eur: 500
+
+capital:
+  working_capital:
+    days_sales_outstanding: 45
+    days_payable_outstanding: 30
+    days_inventory: 0
+  capex_schedule: []
+  funding_rounds:
+    - period: 6
+      amount: 250000
+      type: pre_seed
+      dilution: 0.15
+  debt: []
+
+taxes:
+  corporate_income_tax_rate: 0.25
+  vat_rate: 0.21
+  payroll_taxes_pct: 0.30
+  r_and_d_deduction_pct: 0.12
+  tax_loss_carryforward: true
+
+valuation:
+  discount_rate_annual: 0.20
+  terminal_growth_rate: 0.025
+  terminal_method: gordon
+  exit_multiple_arr: 6
+  sensitivity_grid:
+    wacc: [0.15, 0.18, 0.20, 0.22, 0.25]
+    growth: [0.015, 0.02, 0.025, 0.03]
+
+external_data:
+  benchmarks: {}
