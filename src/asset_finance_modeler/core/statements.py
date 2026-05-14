@@ -51,3 +51,56 @@ class PnLBuilder:
             "tax": tax,
             "net_income": net_income,
         }
+
+
+@dataclass
+class CashFlowBuilder:
+    net_income: list[float]
+    depreciation: list[float]
+    revenue: list[float]
+    cogs: list[float]
+    dso_days: int
+    dpo_days: int
+    capex: list[float]
+    funding_drawdowns: list[float]
+    debt_drawdowns: list[float]
+    debt_principal_repaid: list[float]
+    origination_fees: list[float]
+    initial_cash: float
+    period_days: int
+
+    def build(self) -> dict[str, list[float]]:
+        n = len(self.net_income)
+        ar = [self.revenue[t] * self.dso_days / self.period_days for t in range(n)]
+        ap = [self.cogs[t] * self.dpo_days / self.period_days for t in range(n)]
+        delta_ar = [ar[t] - (ar[t - 1] if t > 0 else 0) for t in range(n)]
+        delta_ap = [ap[t] - (ap[t - 1] if t > 0 else 0) for t in range(n)]
+
+        cfo = [
+            self.net_income[t] + self.depreciation[t] - delta_ar[t] + delta_ap[t]
+            for t in range(n)
+        ]
+        cfi = [-self.capex[t] for t in range(n)]
+        cff = [
+            self.funding_drawdowns[t]
+            + self.debt_drawdowns[t]
+            - self.debt_principal_repaid[t]
+            - self.origination_fees[t]
+            for t in range(n)
+        ]
+
+        cash = [0.0] * n
+        cash[0] = self.initial_cash + cfo[0] + cfi[0] + cff[0]
+        for t in range(1, n):
+            cash[t] = cash[t - 1] + cfo[t] + cfi[t] + cff[t]
+
+        return {
+            "delta_ar": delta_ar,
+            "delta_ap": delta_ap,
+            "cfo": cfo,
+            "cfi": cfi,
+            "cff": cff,
+            "cash": cash,
+            "ar_balance": ar,
+            "ap_balance": ap,
+        }
