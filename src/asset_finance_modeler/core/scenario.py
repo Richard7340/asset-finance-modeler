@@ -1,10 +1,14 @@
 import copy
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from jsonpath_ng.ext import parse as jsonpath_parse
+from jsonpath_ng.ext import parse as jsonpath_parse  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field
+
+from asset_finance_modeler.assets.saas.loader import load_preset
+from asset_finance_modeler.assets.saas.model import ModelResults, SaasModel
+from asset_finance_modeler.assets.saas.schema import SaasModelConfig
 
 
 def new_scenario_id() -> str:
@@ -13,7 +17,7 @@ def new_scenario_id() -> str:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Scenario(BaseModel):
@@ -48,11 +52,6 @@ def apply_overrides(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str
     for path, value in overrides.items():
         _set_by_path(result, path, value)
     return result
-
-
-from asset_finance_modeler.assets.saas.loader import load_preset
-from asset_finance_modeler.assets.saas.model import ModelResults, SaasModel
-from asset_finance_modeler.assets.saas.schema import SaasModelConfig
 
 
 def run_scenario_saas(scenario: Scenario) -> ModelResults:

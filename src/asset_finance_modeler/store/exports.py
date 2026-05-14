@@ -26,9 +26,12 @@ def _section_for_view(view: str) -> tuple[str, list[str]]:
     return _VIEW_KEYS[view]
 
 
+_FORMAT_LARGE_THRESHOLD = 1000
+
+
 def _format_number(v: float | int) -> str:
     if isinstance(v, float):
-        if abs(v) >= 1000:
+        if abs(v) >= _FORMAT_LARGE_THRESHOLD:
             return f"{v:,.0f}"
         if abs(v) < 1:
             return f"{v:.4f}"
@@ -129,12 +132,30 @@ def to_json(results: ModelResults, path: str | None = None) -> str:
 
 
 _XLSX_SHEETS: list[tuple[str, str, list[str]]] = [
-    ("PnL", "pnl", ["revenue", "cogs", "gross_profit", "opex", "ebitda", "depreciation", "ebit", "interest_expense", "ebt", "tax", "net_income"]),
+    (
+        "PnL",
+        "pnl",
+        [
+            "revenue", "cogs", "gross_profit", "opex", "ebitda",
+            "depreciation", "ebit", "interest_expense", "ebt", "tax", "net_income",
+        ],
+    ),
     ("CashFlow", "cashflow", ["cfo", "cfi", "cff", "cash", "delta_ar", "delta_ap"]),
-    ("Balance", "balance", ["cash", "ar", "fixed_assets_net", "total_assets", "debt", "ap", "total_liabilities", "equity"]),
+    (
+        "Balance",
+        "balance",
+        ["cash", "ar", "fixed_assets_net", "total_assets", "debt", "ap", "total_liabilities", "equity"],
+    ),
     ("UnitEcon", "unit_econ", ["arpu", "gross_margin", "cac", "ltv", "ltv_cac", "payback_months"]),
     ("DebtMetrics", "debt_metrics", ["dscr", "icr", "leverage"]),
-    ("Revenue", "revenue_breakdown", ["active_units", "active_customers", "subscription_revenue", "setup_revenue", "total_revenue", "new_units", "new_customers"]),
+    (
+        "Revenue",
+        "revenue_breakdown",
+        [
+            "active_units", "active_customers", "subscription_revenue",
+            "setup_revenue", "total_revenue", "new_units", "new_customers",
+        ],
+    ),
 ]
 
 
@@ -144,6 +165,7 @@ def to_xlsx(results: ModelResults, path: str) -> None:
 
     # Summary sheet (key/value)
     summary_ws = wb.active
+    assert summary_ws is not None, "Workbook must have an active sheet"
     summary_ws.title = "Summary"
     summary_ws.append(["metric", "value"])
     for key, value in results.summary.items():

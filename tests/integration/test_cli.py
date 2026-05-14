@@ -5,7 +5,7 @@ import sys
 
 def _run_cli(*args, cwd):
     cmd = [sys.executable, "-m", "asset_finance_modeler.cli.main", *args]
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=str(cwd))
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=str(cwd), check=False)
 
 
 def test_cli_list_models(tmp_path):

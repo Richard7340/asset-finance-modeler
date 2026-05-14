@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import builtins
 import json
 import sqlite3
+from datetime import datetime
 from typing import Protocol
 
 from asset_finance_modeler.core.scenario import Scenario
@@ -71,7 +73,6 @@ class SQLiteScenarioStore:
 
     @staticmethod
     def _from_row(row: sqlite3.Row) -> Scenario:
-        from datetime import datetime
         return Scenario(
             id=row["id"],
             name=row["name"],
@@ -160,9 +161,9 @@ class SQLiteScenarioStore:
                     "UPDATE scenarios SET is_canonical = 1 WHERE id = ?", (scenario_id,)
                 )
 
-    def get_ancestors(self, scenario_id: str) -> list[Scenario]:
+    def get_ancestors(self, scenario_id: str) -> builtins.list[Scenario]:
         """Return ancestors in order: immediate parent first, then grandparent, etc."""
-        ancestors: list[Scenario] = []
+        ancestors: builtins.list[Scenario] = []
         current = self.get(scenario_id)
         if current is None:
             return []
@@ -174,9 +175,9 @@ class SQLiteScenarioStore:
             current = parent
         return ancestors
 
-    def get_descendants(self, scenario_id: str) -> list[Scenario]:
+    def get_descendants(self, scenario_id: str) -> builtins.list[Scenario]:
         """Return all non-deleted descendants (BFS)."""
-        out: list[Scenario] = []
+        out: builtins.list[Scenario] = []
         queue = [scenario_id]
         seen: set[str] = set()
         while queue:

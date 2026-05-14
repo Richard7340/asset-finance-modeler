@@ -22,6 +22,7 @@ from asset_finance_modeler.store.exports import (
 )
 
 _AVAILABLE_PRESETS = ["gestnova"]
+_EXPORT_PARTS_COUNT = 3
 
 
 def _parse_override(spec: str) -> tuple[str, object]:
@@ -75,7 +76,7 @@ def _do_run(args: argparse.Namespace) -> int:
     for export_spec in args.export or []:
         # Format: "csv:view:path" or "xlsx::path" or "json::path"
         parts = export_spec.split(":", 2)
-        if len(parts) != 3:
+        if len(parts) != _EXPORT_PARTS_COUNT:
             raise ValueError(f"Bad --export (expected fmt:view:path): {export_spec!r}")
         fmt, view, path = parts
         if fmt == "csv":
