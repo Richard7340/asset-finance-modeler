@@ -155,3 +155,54 @@ class OpexConfig(BaseModel):
     marketing_eur: NonNegativeFloat | list[NonNegativeFloat] = 0
     legal_admin_eur: NonNegativeFloat | list[NonNegativeFloat] = 0
     other_eur: NonNegativeFloat | list[NonNegativeFloat] = 0
+
+
+class WorkingCapital(BaseModel):
+    days_sales_outstanding: NonNegativeInt = 30
+    days_payable_outstanding: NonNegativeInt = 30
+    days_inventory: NonNegativeInt = 0
+
+
+class FundingRound(BaseModel):
+    period: NonNegativeInt
+    amount: NonNegativeFloat
+    type: str
+    dilution: float = Field(ge=0, le=1)
+    valuation_pre: NonNegativeFloat | None = None
+
+
+class CapExItem(BaseModel):
+    name: str
+    amount: NonNegativeFloat
+    period: NonNegativeInt
+    depreciation_years: int = Field(gt=0)
+
+
+class DebtInstrument(BaseModel):
+    name: str
+    principal: NonNegativeFloat
+    drawdown_period: NonNegativeInt
+    interest_rate_annual: float = Field(ge=0)
+    term_months: int = Field(gt=0)
+    grace_period_months: NonNegativeInt = 0
+    amortization: Literal["french", "bullet", "linear", "custom"] = "french"
+    custom_schedule: list[float] | None = None
+    origination_fee_pct: float = Field(default=0, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _validate_custom(self) -> "DebtInstrument":
+        if self.amortization == "custom" and self.custom_schedule is None:
+            raise ValueError("custom amortization requires custom_schedule")
+        if self.amortization == "custom":
+            assert self.custom_schedule is not None
+            expected = self.term_months - self.grace_period_months
+            if len(self.custom_schedule) != expected:
+                raise ValueError(f"custom_schedule length {len(self.custom_schedule)} != {expected}")
+        return self
+
+
+class CapitalConfig(BaseModel):
+    working_capital: WorkingCapital
+    capex_schedule: list[CapExItem] = Field(default_factory=list)
+    funding_rounds: list[FundingRound] = Field(default_factory=list)
+    debt: list[DebtInstrument] = Field(default_factory=list)
