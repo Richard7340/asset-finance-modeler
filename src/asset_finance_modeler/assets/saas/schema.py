@@ -49,3 +49,69 @@ class RevenueSource(BaseModel):
 
 class RevenueConfig(BaseModel):
     sources: conlist(RevenueSource, min_length=1)  # type: ignore[valid-type]
+
+
+class LLMTier(BaseModel):
+    model: str = Field(description="Model identifier (e.g. 'sonnet-4-7')")
+    eur_per_million_input: NonNegativeFloat
+    eur_per_million_output: NonNegativeFloat
+    avg_tokens_in_per_month: NonNegativeFloat
+    avg_tokens_out_per_month: NonNegativeFloat
+
+    def monthly_cost_eur(self) -> float:
+        return (
+            self.avg_tokens_in_per_month / 1_000_000 * self.eur_per_million_input
+            + self.avg_tokens_out_per_month / 1_000_000 * self.eur_per_million_output
+        )
+
+
+class VoiceProviderCost(BaseModel):
+    provider: str
+    eur_per_minute: float | None = Field(default=None, description="STT pricing")
+    eur_per_million_chars: float | None = Field(default=None, description="TTS pricing")
+    monthly_usage: NonNegativeFloat = Field(description="Minutes (STT) or chars (TTS) per month per active unit")
+
+    def monthly_cost_eur(self) -> float:
+        if self.eur_per_minute is not None:
+            return self.eur_per_minute * self.monthly_usage
+        if self.eur_per_million_chars is not None:
+            return self.monthly_usage / 1_000_000 * self.eur_per_million_chars
+        return 0.0
+
+
+class TwilioCost(BaseModel):
+    whatsapp_eur_per_msg: NonNegativeFloat = 0
+    voice_eur_per_min: NonNegativeFloat = 0
+    msgs_per_month: NonNegativeFloat = 0
+    min_per_month: NonNegativeFloat = 0
+
+    def monthly_cost_eur(self) -> float:
+        return self.whatsapp_eur_per_msg * self.msgs_per_month + self.voice_eur_per_min * self.min_per_month
+
+
+class PerActiveUnitCosts(BaseModel):
+    llm_tokens: list[LLMTier] = Field(default_factory=list)
+    stt: VoiceProviderCost | None = None
+    tts: VoiceProviderCost | None = None
+    twilio: TwilioCost | None = None
+    infra_eur: NonNegativeFloat = 0
+
+    def monthly_cost_eur(self) -> float:
+        total = sum(t.monthly_cost_eur() for t in self.llm_tokens) + self.infra_eur
+        if self.stt:
+            total += self.stt.monthly_cost_eur()
+        if self.tts:
+            total += self.tts.monthly_cost_eur()
+        if self.twilio:
+            total += self.twilio.monthly_cost_eur()
+        return total
+
+
+class PerActiveCustomerCosts(BaseModel):
+    support_eur: NonNegativeFloat = 0
+    onboarding_one_time_eur: NonNegativeFloat = 0
+
+
+class COGSConfig(BaseModel):
+    per_active_unit: PerActiveUnitCosts
+    per_active_customer: PerActiveCustomerCosts
