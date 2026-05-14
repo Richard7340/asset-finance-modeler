@@ -1,0 +1,65 @@
+id: runway_diagnosis
+name: "Diagnóstico de runway crítico"
+description: |
+  Si runway < 12 meses, explora 3 acciones: aumentar precio, reducir CAC, reducir burn fijo.
+  Devuelve el escenario más favorable para la caja.
+inputs:
+  - name: base_scenario_id
+    type: string
+    required: true
+steps:
+  - id: baseline_run
+    tool: finance.simulate.run
+    args:
+      scenario_id: "${base_scenario_id}"
+    capture: baseline
+  - id: higher_price
+    tool: finance.simulate.clone_scenario
+    args:
+      scenario_id: "${base_scenario_id}"
+      name: "diag-higher-price"
+      overrides:
+        "revenue.sources[0].pricing.per_unit_per_period": 350
+    capture: hp_scn
+  - id: hp_run
+    tool: finance.simulate.run
+    args:
+      scenario_id: "${hp_scn.scenario_id}"
+    capture: hp_result
+  - id: lower_cac
+    tool: finance.simulate.clone_scenario
+    args:
+      scenario_id: "${base_scenario_id}"
+      name: "diag-lower-cac"
+      overrides:
+        "revenue.sources[0].acquisition.cac_per_customer": 500
+    capture: lc_scn
+  - id: lc_run
+    tool: finance.simulate.run
+    args:
+      scenario_id: "${lc_scn.scenario_id}"
+    capture: lc_result
+  - id: lower_burn
+    tool: finance.simulate.clone_scenario
+    args:
+      scenario_id: "${base_scenario_id}"
+      name: "diag-lower-burn"
+      overrides:
+        "operating_expenses.infra_fixed_eur": 800
+        "operating_expenses.marketing_eur": 1000
+    capture: lb_scn
+  - id: lb_run
+    tool: finance.simulate.run
+    args:
+      scenario_id: "${lb_scn.scenario_id}"
+    capture: lb_result
+output:
+  baseline_runway: "${baseline.summary.runway_months}"
+  higher_price_runway: "${hp_result.summary.runway_months}"
+  lower_cac_runway: "${lc_result.summary.runway_months}"
+  lower_burn_runway: "${lb_result.summary.runway_months}"
+  scenario_ids:
+    baseline: "${base_scenario_id}"
+    higher_price: "${hp_scn.scenario_id}"
+    lower_cac: "${lc_scn.scenario_id}"
+    lower_burn: "${lb_scn.scenario_id}"

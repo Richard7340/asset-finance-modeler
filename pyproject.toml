@@ -38,6 +38,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "asset_finance_modeler.assets.saas.presets" = ["*.yaml"]
 "asset_finance_modeler.intelligence.knowledge.data" = ["*.yaml"]
+"asset_finance_modeler.intelligence.workflows.templates" = ["*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

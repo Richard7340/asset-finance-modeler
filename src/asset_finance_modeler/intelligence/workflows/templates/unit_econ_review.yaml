@@ -1,0 +1,36 @@
+id: unit_econ_review
+name: "Revisión de unit economics"
+description: |
+  Ejecuta scenario y devuelve métricas de unit economics con interpretación.
+inputs:
+  - name: scenario_id
+    type: string
+    required: true
+steps:
+  - id: run
+    tool: finance.simulate.run
+    args:
+      scenario_id: "${scenario_id}"
+  - id: fetch
+    tool: finance.simulate.get_results
+    args:
+      scenario_id: "${scenario_id}"
+      view: "unit_econ"
+    capture: ue
+  - id: summary
+    tool: finance.simulate.get_results
+    args:
+      scenario_id: "${scenario_id}"
+      view: "summary"
+    capture: sum
+output:
+  arpu_end: "${ue.unit_econ.arpu[-1]}"
+  cac_end: "${ue.unit_econ.cac[-1]}"
+  ltv_end: "${ue.unit_econ.ltv[-1]}"
+  ltv_cac_end: "${sum.summary.ltv_cac_end}"
+  payback_months_end: "${ue.unit_econ.payback_months[-1]}"
+  gross_margin_end: "${ue.unit_econ.gross_margin[-1]}"
+  interpretation_hint: |
+    LTV/CAC < 3 => problemático. >= 3 sano. >= 5 muy fuerte.
+    Payback > 18 meses => CAC alto o pricing bajo.
+    Gross margin < 70% en SaaS => revisar COGS variable.

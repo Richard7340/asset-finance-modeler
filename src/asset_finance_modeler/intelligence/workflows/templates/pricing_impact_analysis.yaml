@@ -1,0 +1,42 @@
+id: pricing_impact_analysis
+name: "Análisis de impacto de cambio de precio"
+description: |
+  Clona un scenario baseline a N variantes con diferentes precios, las ejecuta,
+  y devuelve una tabla comparativa de métricas clave.
+inputs:
+  - name: base_scenario_id
+    type: string
+    required: true
+    description: "ID del scenario baseline"
+  - name: prices
+    type: array
+    required: true
+    description: "Lista de precios a comparar (€/unidad/periodo)"
+steps:
+  - id: clone_variants
+    foreach: "${prices}"
+    as: price
+    tool: finance.simulate.clone_scenario
+    args:
+      scenario_id: "${base_scenario_id}"
+      name: "pricing-${price}"
+      overrides:
+        "revenue.sources[0].pricing.per_unit_per_period": "${price}"
+    capture: variants
+  - id: run_variants
+    foreach: "${variants}"
+    as: variant
+    tool: finance.simulate.run
+    args:
+      scenario_id: "${variant.scenario_id}"
+    capture: runs
+  - id: build_compare_ids
+    tool: noop.identity
+    args:
+      ids: "${variants}"
+    capture: variant_ids
+output:
+  variants: "${runs}"
+  variant_ids: "${variants}"
+  comparison: |
+    Run finance.simulate.compare with scenario_ids = [base + each variant.scenario_id] to get the delta table.

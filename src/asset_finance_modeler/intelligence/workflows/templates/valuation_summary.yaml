@@ -1,0 +1,39 @@
+id: valuation_summary
+name: "Resumen de valoración"
+description: |
+  Devuelve enterprise value + sensitivity grid si está disponible + key drivers.
+inputs:
+  - name: scenario_id
+    type: string
+    required: true
+steps:
+  - id: run
+    tool: finance.simulate.run
+    args:
+      scenario_id: "${scenario_id}"
+  - id: fetch_val
+    tool: finance.simulate.get_results
+    args:
+      scenario_id: "${scenario_id}"
+      view: "valuation"
+    capture: val
+  - id: fetch_sum
+    tool: finance.simulate.get_results
+    args:
+      scenario_id: "${scenario_id}"
+      view: "summary"
+    capture: sum
+  - id: fetch_sens
+    tool: finance.simulate.get_results
+    args:
+      scenario_id: "${scenario_id}"
+      view: "sensitivity"
+    capture: sens
+output:
+  enterprise_value: "${val.valuation.enterprise_value}"
+  pv_explicit: "${val.valuation.pv_explicit}"
+  pv_terminal: "${val.valuation.pv_terminal}"
+  terminal_value: "${val.valuation.terminal_value}"
+  revenue_y1: "${sum.summary.revenue_y1}"
+  ebitda_margin_end: "${sum.summary.ebitda_margin_end}"
+  sensitivity_grid: "${sens.sensitivity}"
