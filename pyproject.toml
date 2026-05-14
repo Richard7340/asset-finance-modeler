@@ -21,6 +21,9 @@ dev = [
     "types-PyYAML>=6.0",
 ]
 
+[project.scripts]
+asset-finance-modeler = "asset_finance_modeler.cli.main:main"
+
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
