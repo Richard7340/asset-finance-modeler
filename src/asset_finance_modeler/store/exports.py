@@ -3,6 +3,8 @@ import json as _json
 from pathlib import Path
 from typing import Any
 
+from openpyxl import Workbook
+
 from asset_finance_modeler.assets.saas.model import ModelResults
 
 _VIEW_KEYS: dict[str, tuple[str, list[str]]] = {
@@ -124,3 +126,45 @@ def to_json(results: ModelResults, path: str | None = None) -> str:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text)
     return text
+
+
+_XLSX_SHEETS: list[tuple[str, str, list[str]]] = [
+    ("PnL", "pnl", ["revenue", "cogs", "gross_profit", "opex", "ebitda", "depreciation", "ebit", "interest_expense", "ebt", "tax", "net_income"]),
+    ("CashFlow", "cashflow", ["cfo", "cfi", "cff", "cash", "delta_ar", "delta_ap"]),
+    ("Balance", "balance", ["cash", "ar", "fixed_assets_net", "total_assets", "debt", "ap", "total_liabilities", "equity"]),
+    ("UnitEcon", "unit_econ", ["arpu", "gross_margin", "cac", "ltv", "ltv_cac", "payback_months"]),
+    ("DebtMetrics", "debt_metrics", ["dscr", "icr", "leverage"]),
+    ("Revenue", "revenue_breakdown", ["active_units", "active_customers", "subscription_revenue", "setup_revenue", "total_revenue", "new_units", "new_customers"]),
+]
+
+
+def to_xlsx(results: ModelResults, path: str) -> None:
+    """Write multi-sheet workbook: Summary + each statement view + assumptions."""
+    wb = Workbook()
+
+    # Summary sheet (key/value)
+    summary_ws = wb.active
+    summary_ws.title = "Summary"
+    summary_ws.append(["metric", "value"])
+    for key, value in results.summary.items():
+        summary_ws.append([key, value])
+
+    # Time-series sheets
+    for sheet_name, attr, columns in _XLSX_SHEETS:
+        ws = wb.create_sheet(sheet_name)
+        data: dict[str, list[Any]] = getattr(results, attr)
+        header = ["period"] + columns
+        ws.append(header)
+        n = len(next(iter(data.values())))
+        for t in range(n):
+            row = [t] + [data[c][t] if c in data else None for c in columns]
+            ws.append(row)
+
+    # Valuation
+    val_ws = wb.create_sheet("Valuation")
+    val_ws.append(["metric", "value"])
+    for k, v in results.valuation.items():
+        val_ws.append([k, v])
+
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    wb.save(path)
