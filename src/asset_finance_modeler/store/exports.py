@@ -1,3 +1,6 @@
+import csv as _csv
+import json as _json
+from pathlib import Path
 from typing import Any
 
 from asset_finance_modeler.assets.saas.model import ModelResults
@@ -86,3 +89,38 @@ def to_markdown_report(results: ModelResults) -> str:
     sections.append("")
 
     return "\n".join(sections)
+
+
+def to_csv(results: ModelResults, view: str, path: str) -> None:
+    """Write a section to CSV file. Columns: period + view-specific keys."""
+    attr, columns = _section_for_view(view)
+    data: dict[str, list[Any]] = getattr(results, attr)
+    n = len(next(iter(data.values())))
+    out_path = Path(path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", newline="") as f:
+        writer = _csv.writer(f)
+        writer.writerow(["period"] + columns)
+        for t in range(n):
+            writer.writerow([t] + [data[c][t] for c in columns])
+
+
+def to_json(results: ModelResults, path: str | None = None) -> str:
+    """Return full results as JSON string. Optionally also write to file."""
+    payload = {
+        "summary": dict(results.summary),
+        "pnl": results.pnl,
+        "cashflow": results.cashflow,
+        "balance": results.balance,
+        "unit_econ": results.unit_econ,
+        "valuation": results.valuation,
+        "sensitivity": results.sensitivity,
+        "debt_metrics": results.debt_metrics,
+        "revenue_breakdown": results.revenue_breakdown,
+    }
+    text = _json.dumps(payload, default=str, indent=2)
+    if path is not None:
+        out = Path(path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text)
+    return text
