@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt, model_validator
@@ -206,3 +206,49 @@ class CapitalConfig(BaseModel):
     capex_schedule: list[CapExItem] = Field(default_factory=list)
     funding_rounds: list[FundingRound] = Field(default_factory=list)
     debt: list[DebtInstrument] = Field(default_factory=list)
+
+
+class TaxesConfig(BaseModel):
+    corporate_income_tax_rate: float = Field(default=0.25, ge=0, le=1)
+    vat_rate: float = Field(default=0.21, ge=0, le=1)
+    payroll_taxes_pct: float = Field(default=0.30, ge=0, le=1)
+    r_and_d_deduction_pct: float = Field(default=0, ge=0, le=1)
+    tax_loss_carryforward: bool = True
+
+
+class SensitivityGrid(BaseModel):
+    wacc: list[float]
+    growth: list[float]
+
+
+class ValuationConfig(BaseModel):
+    discount_rate_annual: float = Field(gt=0, description="WACC for DCF")
+    terminal_growth_rate: float = Field(default=0.025, ge=0)
+    exit_multiple_arr: float | None = None
+    exit_multiple_ebitda: float | None = None
+    terminal_method: Literal["gordon", "exit_multiple"] = "gordon"
+    sensitivity_grid: SensitivityGrid | None = None
+
+
+class ExternalValue(BaseModel):
+    value: float
+    source: str | None = None
+    fetched_at: datetime | None = None
+    confidence: Literal["low", "medium", "high"] = "medium"
+
+
+class ExternalDataConfig(BaseModel):
+    benchmarks: dict[str, ExternalValue] = Field(default_factory=dict)
+    fx_source: str | None = None
+    bond_yields_source: str | None = None
+
+
+class SaasModelConfig(BaseModel):
+    meta: ModelMeta
+    revenue: RevenueConfig
+    cost_of_revenue: COGSConfig
+    operating_expenses: OpexConfig
+    capital: CapitalConfig
+    taxes: TaxesConfig = Field(default_factory=TaxesConfig)
+    valuation: ValuationConfig
+    external_data: ExternalDataConfig = Field(default_factory=ExternalDataConfig)
