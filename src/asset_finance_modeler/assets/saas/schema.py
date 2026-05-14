@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt
+from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt, model_validator
 from pydantic import conlist
 
 
@@ -115,3 +115,43 @@ class PerActiveCustomerCosts(BaseModel):
 class COGSConfig(BaseModel):
     per_active_unit: PerActiveUnitCosts
     per_active_customer: PerActiveCustomerCosts
+
+
+class TeamRole(BaseModel):
+    role: str
+    monthly_cost: NonNegativeFloat = Field(description="Gross + employer SS per person")
+    headcount: int | None = Field(default=None, ge=0)
+    headcount_schedule: list[int] | None = Field(default=None, description="Per-period headcount (ramp)")
+    start_period: NonNegativeInt = 0
+    end_period: int | None = None
+
+    @model_validator(mode="after")
+    def _validate_headcount(self) -> "TeamRole":
+        if self.headcount is None and self.headcount_schedule is None:
+            raise ValueError("Either 'headcount' or 'headcount_schedule' must be set")
+        if self.headcount is not None and self.headcount_schedule is not None:
+            raise ValueError("'headcount' and 'headcount_schedule' are mutually exclusive")
+        return self
+
+    def headcount_at_period(self, period: int) -> int:
+        if period < self.start_period:
+            return 0
+        if self.end_period is not None and period >= self.end_period:
+            return 0
+        if self.headcount is not None:
+            return self.headcount
+        assert self.headcount_schedule is not None
+        idx = period - self.start_period
+        if idx < 0:
+            return 0
+        if idx >= len(self.headcount_schedule):
+            return self.headcount_schedule[-1]
+        return self.headcount_schedule[idx]
+
+
+class OpexConfig(BaseModel):
+    team: list[TeamRole]
+    infra_fixed_eur: NonNegativeFloat | list[NonNegativeFloat] = 0
+    marketing_eur: NonNegativeFloat | list[NonNegativeFloat] = 0
+    legal_admin_eur: NonNegativeFloat | list[NonNegativeFloat] = 0
+    other_eur: NonNegativeFloat | list[NonNegativeFloat] = 0
