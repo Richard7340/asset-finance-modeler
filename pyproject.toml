@@ -10,6 +10,7 @@ dependencies = [
     "openpyxl>=3.1",
     "PyYAML>=6.0",
     "jsonpath-ng>=1.6",
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]
