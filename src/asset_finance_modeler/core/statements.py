@@ -104,3 +104,71 @@ class CashFlowBuilder:
             "ar_balance": ar,
             "ap_balance": ap,
         }
+
+
+@dataclass
+class BalanceBuilder:
+    cash: list[float]
+    ar_balance: list[float]
+    fixed_assets_net: list[float]
+    debt_outstanding: list[float]
+    ap_balance: list[float]
+    equity_initial: float
+
+    def build(self) -> dict[str, list[float]]:
+        n = len(self.cash)
+        total_assets = [
+            self.cash[t] + self.ar_balance[t] + self.fixed_assets_net[t]
+            for t in range(n)
+        ]
+        total_liabilities = [self.debt_outstanding[t] + self.ap_balance[t] for t in range(n)]
+        equity = [total_assets[t] - total_liabilities[t] for t in range(n)]
+        return {
+            "cash": list(self.cash),
+            "ar": list(self.ar_balance),
+            "fixed_assets_net": list(self.fixed_assets_net),
+            "total_assets": total_assets,
+            "debt": list(self.debt_outstanding),
+            "ap": list(self.ap_balance),
+            "total_liabilities": total_liabilities,
+            "equity": equity,
+        }
+
+
+def compute_unit_economics(
+    revenue: list[float],
+    cogs: list[float],
+    cac_spend: list[float],
+    active_customers: list[float],
+    new_customers: list[float],
+    monthly_churn: float,
+    periods_per_year: int,
+) -> dict[str, list[float]]:
+    n = len(revenue)
+    arpu = [revenue[t] / active_customers[t] if active_customers[t] > 0 else 0 for t in range(n)]
+    gross_margin = [(revenue[t] - cogs[t]) / revenue[t] if revenue[t] > 0 else 0 for t in range(n)]
+    cac = [cac_spend[t] / new_customers[t] if new_customers[t] > 0 else 0 for t in range(n)]
+    ltv = [
+        (arpu[t] * gross_margin[t]) / monthly_churn if monthly_churn > 0 else math.inf
+        for t in range(n)
+    ]
+    ltv_cac = [ltv[t] / cac[t] if cac[t] > 0 else math.inf for t in range(n)]
+    payback = [
+        cac[t] / (arpu[t] * gross_margin[t]) if arpu[t] * gross_margin[t] > 0 else math.inf
+        for t in range(n)
+    ]
+    return {
+        "arpu": arpu,
+        "gross_margin": gross_margin,
+        "cac": cac,
+        "ltv": ltv,
+        "ltv_cac": ltv_cac,
+        "payback_months": payback,
+    }
+
+
+def compute_runway(cash_series: list[float]) -> float:
+    for t, c in enumerate(cash_series):
+        if c < 0:
+            return float(t)
+    return math.inf
