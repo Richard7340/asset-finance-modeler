@@ -1,5 +1,7 @@
 # Integration with Gestnova / Ian
 
+The modeler exposes **30 MCP tools** — 21 simulation/export tools (Plans 1-3) plus 9 intelligence tools (Plan 4): `finance.knowledge.*`, `finance.workflows.*`, `finance.context.*`. All tools are deterministic; Ian remains the only LLM in the chain.
+
 ## Bridge plan (3-4h)
 
 After the modeler MCP server is live, wire it into `livekit-voice-platform` (Ian) as follows:
@@ -25,13 +27,19 @@ Add an entry to the per-company MCP config (e.g. `config/companies/gestnova.json
 
 ### 2. Skill registry — `financial-analysis` skill
 
-Create `src/skills/core/financial-analysis.skill.ts` declaring the MCP tools with LLM-friendly descriptions. The 17 `finance.simulate.*` tools become Ian's surface.
+Create `src/skills/core/financial-analysis.skill.ts` declaring the MCP tools with LLM-friendly descriptions. The 30 tools become Ian's surface:
+- **Simulation** (`finance.simulate.*`): discover → load baseline → create scenario → run → compare → sensitivity → export
+- **Knowledge** (`finance.knowledge.*`): `search` before answering technical financial questions; `add` to save company-specific concepts
+- **Workflows** (`finance.workflows.*`): `list` available templates; `run` a workflow id with inputs to execute multi-step analysis in one call
+- **Context** (`finance.context.*`): `store` decisions/assumptions per tenant; `search` to recall previous discussions
 
 ### 3. Prompt update for Ian
 
 Ian needs to learn:
+- **Intelligence-first pattern**: call `finance.knowledge.search` before answering financial questions; call `finance.context.search` at session start to recall prior decisions
+- **Workflow shortcut**: for pricing/valuation/runway analysis, prefer `finance.workflows.run` over manual step-by-step tool calls
+- **Context hygiene**: `finance.context.store` key decisions and confirmed assumptions so they persist across sessions (multi-tenant isolation is automatic)
 - When to declare assumptions (user has no data) vs use real data (V2)
-- Conversational pattern: discover → load baseline → create scenario → run → compare → export
 - Output format choice based on channel: summary in WhatsApp, report by email, dashboard via artifact
 
 ### 4. `buildModelInputsFromCompanyData` helper (V2 / when ready)
