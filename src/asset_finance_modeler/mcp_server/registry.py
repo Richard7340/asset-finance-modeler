@@ -46,6 +46,7 @@ def build_registry(
     store: SQLiteScenarioStore | None,
     kb_db_path: str | None = None,
     kb_index_path: str | None = None,
+    ctx_db_path: str | None = None,
 ) -> dict[str, ToolSpec]:
     """Build the full tool registry. `store` is the shared SQLite store
     used by all stateful tools. Pass None for discovery-only tools."""
@@ -518,6 +519,76 @@ def build_registry(
             handler=make_workflows_run(_registry_provider),
         ),
     ])
+
+    # Context memory (optional)
+    if ctx_db_path is not None:
+        from asset_finance_modeler.intelligence.context.memory import ContextMemory
+        from asset_finance_modeler.intelligence.embeddings import LocalEmbeddingProvider
+        from .tools.context import (
+            make_context_recent,
+            make_context_search,
+            make_context_store,
+        )
+
+        ctx_mem = ContextMemory(
+            db_path=ctx_db_path,
+            embedding_provider=LocalEmbeddingProvider(),
+        )
+        ctx_mem.initialize()
+
+        specs.extend([
+            ToolSpec(
+                name="finance.context.store",
+                description=(
+                    "Store a piece of conversation context for later semantic retrieval. "
+                    "Use to remember decisions, supuestos del cliente, follow-ups."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "tenant_id": {"type": "string"},
+                        "key": {"type": "string"},
+                        "value": {"type": "string"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["tenant_id", "key", "value"],
+                    "additionalProperties": False,
+                },
+                handler=make_context_store(ctx_mem),
+            ),
+            ToolSpec(
+                name="finance.context.search",
+                description=(
+                    "Semantic search over stored context for a given tenant. "
+                    "Use to recall previous discussions or decisions."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "tenant_id": {"type": "string"},
+                        "query": {"type": "string"},
+                        "top_k": {"type": "integer", "default": 5},
+                    },
+                    "required": ["tenant_id", "query"],
+                    "additionalProperties": False,
+                },
+                handler=make_context_search(ctx_mem),
+            ),
+            ToolSpec(
+                name="finance.context.recent",
+                description="Return most recent context entries for a tenant (ordered by created_at desc).",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "tenant_id": {"type": "string"},
+                        "limit": {"type": "integer", "default": 10},
+                    },
+                    "required": ["tenant_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_context_recent(ctx_mem),
+            ),
+        ])
 
     final_registry = {s.name: s for s in specs}
     _registry_holder["registry"] = final_registry
