@@ -170,4 +170,70 @@ def build_registry(store: SQLiteScenarioStore | None) -> dict[str, ToolSpec]:
             ),
         ])
 
+        from .tools.execute import (
+            make_get_genealogy,
+            make_get_results,
+            make_run,
+        )
+
+        specs.extend([
+            ToolSpec(
+                name="finance.simulate.run",
+                description=(
+                    "Execute a Scenario through the financial model. "
+                    "Persists full results in the scenario. Returns the summary."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {"scenario_id": {"type": "string"}},
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_run(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.get_results",
+                description=(
+                    "Read the cached results of a Scenario. "
+                    "Use view to limit payload: summary, pnl, cashflow, balance, unit_econ, valuation, all."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "view": {
+                            "type": "string",
+                            "enum": [
+                                "summary",
+                                "pnl",
+                                "cashflow",
+                                "balance",
+                                "unit_econ",
+                                "valuation",
+                                "debt_metrics",
+                                "revenue_breakdown",
+                                "sensitivity",
+                                "all",
+                            ],
+                            "default": "summary",
+                        },
+                    },
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_get_results(store),
+            ),
+            ToolSpec(
+                name="finance.simulate.get_genealogy",
+                description="Return ancestor and descendant tree of a Scenario.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"scenario_id": {"type": "string"}},
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_get_genealogy(store),
+            ),
+        ])
+
     return {s.name: s for s in specs}
