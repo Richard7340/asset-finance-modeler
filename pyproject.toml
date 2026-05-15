@@ -14,6 +14,8 @@ dependencies = [
     "sentence-transformers>=2.6",
     "faiss-cpu>=1.8",
     "jinja2>=3",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +29,7 @@ dev = [
 
 [project.scripts]
 asset-finance-modeler = "asset_finance_modeler.cli.main:main"
+asset-finance-modeler-http = "asset_finance_modeler.mcp_server.http_server:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
