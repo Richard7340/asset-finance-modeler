@@ -8,3 +8,13 @@ __pycache__/
 dist/
 build/
 .DS_Store
+
+# Secrets + local data (Plan 29)
+.env
+.env.local
+.env.*.local
+.env.prod
+*.key
+*.pem
+credentials.json
+data/
