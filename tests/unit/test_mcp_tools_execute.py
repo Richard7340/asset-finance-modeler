@@ -72,3 +72,29 @@ def test_run_unknown_scenario_returns_error(reg_with_baseline):
     run = reg["finance.simulate.run"].handler
     out = run({"scenario_id": "nonexistent"})
     assert "error" in out
+
+
+def test_run_infra_scenario(tmp_path):
+    """Infrastructure scenarios can be run through MCP execute."""
+    from asset_finance_modeler.mcp_server.tools.execute import make_run, make_get_results
+    from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
+    from asset_finance_modeler.core.scenario import Scenario, new_scenario_id
+    from asset_finance_modeler.assets.infrastructure.loader import load_preset
+
+    store = SQLiteScenarioStore(str(tmp_path / "test.db"))
+    store.initialize()
+
+    # Create a solar scenario
+    cfg = load_preset("solar_pv_50mw_spain")
+    scenario = Scenario(
+        id=new_scenario_id(), name="solar-mcp-test",
+        base_model="solar_pv_50mw_spain", overrides={},
+        is_canonical=True,
+    )
+    store.save(scenario)
+
+    # Run it
+    run_handler = make_run(store)
+    result = run_handler({"scenario_id": scenario.id})
+    assert "summary" in result
+    assert "error" not in result

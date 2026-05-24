@@ -1,6 +1,6 @@
 from typing import Any
 
-from asset_finance_modeler.core.scenario import run_scenario_saas
+from asset_finance_modeler.core.scenario import run_scenario, run_scenario_saas  # noqa: F401
 from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
 
 _VIEWS = [
@@ -34,22 +34,38 @@ def make_run(store: SQLiteScenarioStore) -> Any:
         if scenario is None:
             return {"error": f"scenario_id {scenario_id!r} not found"}
 
-        results = run_scenario_saas(scenario)
+        results = run_scenario(scenario)
         full: dict[str, Any] = {
             "summary": dict(results.summary),
             "pnl": results.pnl,
             "cashflow": results.cashflow,
             "balance": results.balance,
-            "unit_econ": results.unit_econ,
+            "unit_econ": getattr(results, "unit_econ", None),
             "valuation": results.valuation,
             "debt_metrics": results.debt_metrics,
             "revenue_breakdown": results.revenue_breakdown,
             "sensitivity": results.sensitivity,
         }
 
+        if hasattr(results, "project_kpis") and results.project_kpis is not None:
+            kpis = results.project_kpis
+            full["project_kpis"] = {
+                "irr_project": kpis.irr_project,
+                "irr_equity": kpis.irr_equity,
+                "npv": kpis.npv,
+                "lcoe": kpis.lcoe,
+                "lcos": kpis.lcos,
+                "payback_years": kpis.payback_years,
+                "dscr_min": kpis.dscr_min,
+                "dscr_avg": kpis.dscr_avg,
+            }
+
         scenario.results_snapshot = full
         store.save(scenario)
-        return {"scenario_id": scenario_id, "summary": full["summary"]}
+        response_summary = dict(full["summary"])
+        if "project_kpis" in full:
+            response_summary["project_kpis"] = full["project_kpis"]
+        return {"scenario_id": scenario_id, "summary": response_summary}
 
     return _handle
 
