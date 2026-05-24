@@ -11,6 +11,7 @@ class PnLBuilder:
     interest_expense: list[float]
     corporate_tax_rate: float
     carryforward_enabled: bool = True
+    tax_depreciation: list[float] | None = None
 
     def build(self) -> dict[str, list[float]]:
         n = len(self.revenue)
@@ -19,13 +20,30 @@ class PnLBuilder:
         ebit = [ebitda[t] - self.depreciation[t] for t in range(n)]
         ebt = [ebit[t] - self.interest_expense[t] for t in range(n)]
 
+        # When tax_depreciation is provided, compute tax EBT using tax depreciation
+        # instead of book depreciation, and track DTA/DTL per period.
+        if self.tax_depreciation is not None:
+            tax_dep = self.tax_depreciation
+            dta_dtl = [
+                (tax_dep[t] - self.depreciation[t]) * self.corporate_tax_rate
+                for t in range(n)
+            ]
+            # Tax EBT replaces book depreciation with tax depreciation
+            tax_ebt = [
+                ebt[t] - (tax_dep[t] - self.depreciation[t])
+                for t in range(n)
+            ]
+        else:
+            dta_dtl = None
+            tax_ebt = ebt
+
         tax = [0.0] * n
         net_income = [0.0] * n
         loss_carry = 0.0
 
         for t in range(n):
-            if ebt[t] >= 0:
-                taxable = ebt[t]
+            if tax_ebt[t] >= 0:
+                taxable = tax_ebt[t]
                 if self.carryforward_enabled and loss_carry > 0:
                     used = min(loss_carry, taxable)
                     taxable -= used
@@ -36,9 +54,9 @@ class PnLBuilder:
                 tax[t] = 0
                 net_income[t] = ebt[t]
                 if self.carryforward_enabled:
-                    loss_carry += -ebt[t]
+                    loss_carry += -tax_ebt[t]
 
-        return {
+        result = {
             "revenue": list(self.revenue),
             "cogs": list(self.cogs),
             "gross_profit": gross_profit,
@@ -51,6 +69,12 @@ class PnLBuilder:
             "tax": tax,
             "net_income": net_income,
         }
+
+        if self.tax_depreciation is not None:
+            result["tax_depreciation"] = list(self.tax_depreciation)
+            result["dta_dtl"] = dta_dtl  # type: ignore[assignment]
+
+        return result
 
 
 @dataclass
@@ -114,16 +138,23 @@ class BalanceBuilder:
     debt_outstanding: list[float]
     ap_balance: list[float]
     equity_initial: float
+    dta_balance: list[float] | None = None
 
     def build(self) -> dict[str, list[float]]:
         n = len(self.cash)
-        total_assets = [
-            self.cash[t] + self.ar_balance[t] + self.fixed_assets_net[t]
-            for t in range(n)
-        ]
+        if self.dta_balance is not None:
+            total_assets = [
+                self.cash[t] + self.ar_balance[t] + self.fixed_assets_net[t] + self.dta_balance[t]
+                for t in range(n)
+            ]
+        else:
+            total_assets = [
+                self.cash[t] + self.ar_balance[t] + self.fixed_assets_net[t]
+                for t in range(n)
+            ]
         total_liabilities = [self.debt_outstanding[t] + self.ap_balance[t] for t in range(n)]
         equity = [total_assets[t] - total_liabilities[t] for t in range(n)]
-        return {
+        result = {
             "cash": list(self.cash),
             "ar": list(self.ar_balance),
             "fixed_assets_net": list(self.fixed_assets_net),
@@ -133,6 +164,9 @@ class BalanceBuilder:
             "total_liabilities": total_liabilities,
             "equity": equity,
         }
+        if self.dta_balance is not None:
+            result["dta"] = list(self.dta_balance)
+        return result
 
 
 def compute_unit_economics(

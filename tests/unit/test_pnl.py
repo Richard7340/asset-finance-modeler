@@ -48,3 +48,33 @@ def test_pnl_loss_carryforward_consumes_against_future_profit():
     assert pnl["tax"][0] == 0
     assert pnl["tax"][1] == pytest.approx(150)
     assert pnl["net_income"][1] == pytest.approx(550)
+
+
+def test_pnl_with_tax_depreciation_dta():
+    """When tax depreciation > book depreciation, DTA is created."""
+    pnl = PnLBuilder(
+        revenue=[100_000] * 12,
+        cogs=[20_000] * 12,
+        opex=[30_000] * 12,
+        depreciation=[5_000] * 12,
+        interest_expense=[2_000] * 12,
+        corporate_tax_rate=0.25,
+        tax_depreciation=[15_000] * 12,
+    ).build()
+    assert "tax_depreciation" in pnl
+    assert "dta_dtl" in pnl
+    assert pnl["dta_dtl"][0] > 0
+    assert pnl["tax"][0] < (100_000 - 20_000 - 30_000 - 5_000 - 2_000) * 0.25
+
+
+def test_pnl_without_tax_depreciation_unchanged():
+    """When no tax_depreciation provided, behavior is identical to original."""
+    pnl = PnLBuilder(
+        revenue=[100_000] * 6,
+        cogs=[20_000] * 6,
+        opex=[30_000] * 6,
+        depreciation=[5_000] * 6,
+        interest_expense=[2_000] * 6,
+        corporate_tax_rate=0.25,
+    ).build()
+    assert "dta_dtl" not in pnl or all(d == 0 for d in pnl.get("dta_dtl", []))

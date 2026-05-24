@@ -47,3 +47,17 @@ def test_runway_until_cash_zero():
     assert compute_runway([100, 80, 60, 40, 20, -10]) == 5
     assert compute_runway([100, 90, 80]) == math.inf
     assert compute_runway([-10]) == 0
+
+
+def test_balance_with_dta():
+    balance = BalanceBuilder(
+        cash=[100_000] * 6,
+        ar_balance=[10_000] * 6,
+        fixed_assets_net=[500_000] * 6,
+        debt_outstanding=[200_000] * 6,
+        ap_balance=[5_000] * 6,
+        equity_initial=100_000,
+        dta_balance=[50_000] * 6,
+    ).build()
+    assert "dta" in balance
+    assert balance["total_assets"][0] == 100_000 + 10_000 + 500_000 + 50_000
