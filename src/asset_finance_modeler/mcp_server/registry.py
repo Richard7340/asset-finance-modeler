@@ -612,6 +612,168 @@ def build_registry(
             ),
         ])
 
+    # Wizard tools
+    from asset_finance_modeler.wizard.engine import WizardEngine  # noqa: PLC0415
+    from asset_finance_modeler.mcp_server.tools.wizard import (  # noqa: PLC0415
+        make_wizard_start,
+        make_wizard_answer,
+        make_wizard_skip,
+        make_wizard_back,
+        make_wizard_adjust,
+        make_wizard_status,
+        make_wizard_cancel,
+        make_wizard_finalize,
+        make_wizard_run,
+    )
+
+    wizard_engine = WizardEngine()
+
+    wizard_specs = [
+        ToolSpec(
+            name="finance.wizard.start",
+            description="Start a wizard session for financial model configuration.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "asset_description": {"type": "string"},
+                    "region": {"type": "string"},
+                },
+                "required": ["asset_description"],
+            },
+            handler=make_wizard_start(wizard_engine),
+        ),
+        ToolSpec(
+            name="finance.wizard.answer",
+            description="Answer the current wizard question.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                    "value": {},
+                },
+                "required": ["session_id", "value"],
+            },
+            handler=make_wizard_answer(wizard_engine),
+        ),
+        ToolSpec(
+            name="finance.wizard.skip",
+            description="Skip current question — proposes benchmark value.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                },
+                "required": ["session_id"],
+            },
+            handler=make_wizard_skip(wizard_engine),
+        ),
+        ToolSpec(
+            name="finance.wizard.back",
+            description="Go back to previous question.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                },
+                "required": ["session_id"],
+            },
+            handler=make_wizard_back(wizard_engine),
+        ),
+        ToolSpec(
+            name="finance.wizard.adjust",
+            description="Adjust a specific input value.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                    "field_path": {"type": "string"},
+                    "new_value": {},
+                },
+                "required": ["session_id", "field_path", "new_value"],
+            },
+            handler=make_wizard_adjust(wizard_engine),
+        ),
+        ToolSpec(
+            name="finance.wizard.status",
+            description="Get wizard progress and current state.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                },
+                "required": ["session_id"],
+            },
+            handler=make_wizard_status(wizard_engine),
+        ),
+        ToolSpec(
+            name="finance.wizard.cancel",
+            description="Cancel and discard wizard session.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                },
+                "required": ["session_id"],
+            },
+            handler=make_wizard_cancel(wizard_engine),
+        ),
+        ToolSpec(
+            name="finance.wizard.finalize",
+            description="Finalize wizard — generates scenario spec with assumptions table.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                },
+                "required": ["session_id"],
+            },
+            handler=make_wizard_finalize(wizard_engine),
+        ),
+        ToolSpec(
+            name="finance.wizard.run",
+            description="Run finalized wizard scenario through the financial model.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                },
+                "required": ["session_id"],
+            },
+            handler=make_wizard_run(wizard_engine),
+        ),
+    ]
+    specs.extend(wizard_specs)
+
+    # Knowledge retrieve (always available — uses in-memory index from seeded KB)
+    from asset_finance_modeler.intelligence.knowledge.retriever import KBRetriever  # noqa: PLC0415
+    from asset_finance_modeler.mcp_server.tools.knowledge_retrieve import (  # noqa: PLC0415
+        make_knowledge_retrieve,
+    )
+
+    kb_retriever = KBRetriever()
+    kb_retriever.initialize()
+
+    specs.append(
+        ToolSpec(
+            name="finance.knowledge.retrieve",
+            description=(
+                "Search financial knowledge base — concepts, benchmarks, explanations. "
+                "Use to answer questions about financial concepts or get benchmarks."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string"},
+                    "asset_type": {"type": "string"},
+                    "top_k": {"type": "integer", "default": 5},
+                    "layer": {"type": "string"},
+                },
+                "required": ["topic"],
+            },
+            handler=make_knowledge_retrieve(kb_retriever),
+        )
+    )
+
     final_registry = {s.name: s for s in specs}
     _registry_holder["registry"] = final_registry
     return final_registry
