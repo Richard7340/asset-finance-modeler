@@ -25,6 +25,7 @@ from asset_finance_modeler.mcp_server.tools.execute import (
     make_get_results,
     make_run,
 )
+from asset_finance_modeler.mcp_server.tools.dashboard import make_generate_dashboard
 from asset_finance_modeler.mcp_server.tools.output import (
     make_export,
     make_fetch_external,
@@ -404,6 +405,27 @@ def build_registry(
                 description="V2 stub: variance analysis. Not implemented in v1.",
                 input_schema={"type": "object", "additionalProperties": True},
                 handler=make_track_stub("variance_report"),
+            ),
+            ToolSpec(
+                name="finance.dashboard.generate",
+                description=(
+                    "Generate an interactive HTML dashboard with Chart.js charts for a "
+                    "scenario's results. Returns the HTML and a list of chart ids. "
+                    "Pass output_path to write the file to disk."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "output_path": {
+                            "type": "string",
+                            "description": "Optional file path for the HTML output",
+                        },
+                    },
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_generate_dashboard(store),
             ),
         ])
 
