@@ -3,6 +3,10 @@ import pytest
 
 from asset_finance_modeler.core.valuation import (
     compute_dcf,
+    compute_discounted_payback,
+    compute_irr,
+    compute_lcoe,
+    compute_lcos,
     compute_sensitivity_grid,
 )
 
@@ -71,3 +75,37 @@ def test_sensitivity_grid_2d():
     assert len(grid[0]) == 2
     assert grid[0][0] > grid[1][0]
     assert grid[0][1] > grid[0][0]
+
+
+def test_compute_irr_basic():
+    cashflows = [-1_000_000] + [150_000] * 12
+    irr = compute_irr(cashflows, periods_per_year=1)
+    assert 0.05 < irr < 0.15
+
+
+def test_compute_irr_monthly():
+    cashflows = [-500_000] + [10_000] * 120
+    irr = compute_irr(cashflows, periods_per_year=12)
+    assert irr > 0
+
+
+def test_compute_lcoe():
+    lcoe = compute_lcoe(total_costs_pv=50_000_000, total_energy_pv=1_200_000)
+    assert lcoe == pytest.approx(41.67, abs=0.01)
+
+
+def test_compute_lcos():
+    lcos = compute_lcos(total_costs_pv=20_000_000, total_energy_discharged_pv=500_000)
+    assert lcos == pytest.approx(40.0)
+
+
+def test_discounted_payback():
+    cashflows = [-1_000_000] + [200_000] * 10
+    pb = compute_discounted_payback(cashflows, discount_rate=0.08, periods_per_year=1)
+    assert 5 < pb < 8
+
+
+def test_discounted_payback_never():
+    cashflows = [-1_000_000] + [10_000] * 10
+    pb = compute_discounted_payback(cashflows, discount_rate=0.10, periods_per_year=1)
+    assert pb == float("inf")

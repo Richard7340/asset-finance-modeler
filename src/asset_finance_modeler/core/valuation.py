@@ -1,5 +1,7 @@
 from typing import Literal
 
+import numpy_financial as npf
+
 
 def compute_dcf(
     fcf_series: list[float],
@@ -78,3 +80,34 @@ def compute_sensitivity_grid(
             row.append(ev)
         grid.append(row)
     return grid
+
+
+def compute_irr(cashflows: list[float], periods_per_year: int) -> float:
+    period_irr = npf.irr(cashflows)
+    if period_irr is None or not isinstance(period_irr, float):
+        return 0.0
+    return (1 + period_irr) ** periods_per_year - 1
+
+
+def compute_lcoe(total_costs_pv: float, total_energy_pv: float) -> float:
+    if total_energy_pv <= 0:
+        return float("inf")
+    return total_costs_pv / total_energy_pv
+
+
+def compute_lcos(total_costs_pv: float, total_energy_discharged_pv: float) -> float:
+    if total_energy_discharged_pv <= 0:
+        return float("inf")
+    return total_costs_pv / total_energy_discharged_pv
+
+
+def compute_discounted_payback(
+    cashflows: list[float], discount_rate: float, periods_per_year: int,
+) -> float:
+    period_rate = (1 + discount_rate) ** (1 / periods_per_year) - 1
+    cumulative = 0.0
+    for t, cf in enumerate(cashflows):
+        cumulative += cf / ((1 + period_rate) ** t)
+        if cumulative >= 0 and t > 0:
+            return float(t) / periods_per_year
+    return float("inf")
