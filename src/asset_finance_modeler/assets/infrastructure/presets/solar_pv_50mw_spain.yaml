@@ -1,0 +1,84 @@
+meta:
+  name: solar_pv_50mw_spain
+  horizon:
+    periods: 300
+    frequency: M
+  start_date: "2026-01-01"
+  initial_cash: 0
+  base_currency: EUR
+
+production:
+  type: solar_pv
+  capacity_mwp: 50
+  specific_yield_kwh_kwp: 1600
+  performance_ratio: 0.82
+
+revenue:
+  - type: ppa
+    name: PPA
+    price_eur_per_unit: 42.0
+    volume_fraction: 0.70
+    escalation_pct_yr: 0.02
+    tenor_years: 15
+  - type: merchant
+    name: Merchant
+    base_price_eur_per_unit: 55.0
+    volume_fraction: 0.30
+    capture_ratio: 0.85
+    escalation_pct_yr: 0.01
+
+capex:
+  items:
+    - name: EPC (modules + BOS + installation)
+      amount_per_unit: 0.42
+      unit: Wp
+      depreciation_years: 25
+      depreciation_method: straight_line
+  contingency_pct: 0.08
+  development_cost: 350000
+  grid_connection_cost: 800000
+
+opex:
+  om_fixed_eur_per_mw_yr: 11000
+  om_variable_eur_per_mwh: 1.5
+  insurance_pct_capex: 0.004
+  land_lease_eur_yr: 150000
+  management_fee_eur_yr: 50000
+  opex_escalation_pct_yr: 0.02
+  major_maintenance:
+    - name: Inverter replacement
+      period: 144
+      cost: 800000
+
+degradation:
+  type: time_based
+  annual_rate: 0.005
+
+timeline:
+  development_months: 6
+  permitting_months: 18
+  construction_months: 10
+  grid_connection_months: 4
+
+financing:
+  senior:
+    tenor_years: 18
+    interest_rate: 0.04
+    amortization: french
+    dscr_target: 1.30
+    dscr_mode: min
+    auto_size: true
+  equity:
+    target_irr: 0.10
+  reserves:
+    dsra_months: 6
+  max_leverage: 0.75
+
+taxes:
+  corporate_income_tax_rate: 0.25
+  tax_loss_carryforward: true
+
+valuation:
+  discount_rate_annual: 0.07
+  terminal_growth_rate: 0.0
+  terminal_method: gordon

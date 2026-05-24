@@ -1,0 +1,72 @@
+meta:
+  name: bess_20mw_4h
+  horizon:
+    periods: 180
+    frequency: M
+  start_date: "2026-01-01"
+  initial_cash: 0
+  base_currency: EUR
+
+production:
+  type: bess
+  power_mw: 20
+  duration_hours: 4
+  round_trip_efficiency: 0.88
+  depth_of_discharge: 0.90
+  cycles_per_day: 1.5
+
+revenue:
+  - type: ppa
+    name: Arbitrage-proxy
+    price_eur_per_unit: 38.0
+    volume_fraction: 1.0
+    escalation_pct_yr: 0.01
+    tenor_years: 15
+  - type: capacity
+    name: Capacity Market
+    eur_per_mw_yr: 32000
+
+capex:
+  items:
+    - name: Battery + BOS + Integration
+      amount_per_unit: 280
+      unit: kWh
+      depreciation_years: 15
+      depreciation_method: straight_line
+  contingency_pct: 0.08
+  grid_connection_cost: 400000
+
+opex:
+  om_fixed_eur_per_mw_yr: 8000
+  insurance_pct_capex: 0.004
+  opex_escalation_pct_yr: 0.02
+  major_maintenance:
+    - name: Battery augmentation
+      period: 96
+      cost: 1200000
+
+degradation:
+  type: cycle_based
+  capacity_fade_per_cycle: 0.00004
+  calendar_fade_annual: 0.015
+  eol_capacity_pct: 0.70
+
+timeline:
+  construction_months: 8
+  grid_connection_months: 3
+
+financing:
+  senior:
+    tenor_years: 12
+    interest_rate: 0.05
+    amortization: french
+    dscr_target: 1.25
+    auto_size: true
+  max_leverage: 0.70
+
+taxes:
+  corporate_income_tax_rate: 0.25
+
+valuation:
+  discount_rate_annual: 0.08
+  terminal_growth_rate: 0.0
