@@ -8,10 +8,10 @@ from asset_finance_modeler.core.scenario import Scenario, new_scenario_id
 
 _PRESET_INDEX = {
     "saas": ["gestnova"],
-    "infrastructure": ["solar_pv_50mw_spain", "bess_20mw_4h"],
+    "infrastructure": ["solar_pv_50mw_spain", "bess_20mw_4h", "wind_onshore_30mw_spain", "datacenter_10mw_tier3"],
 }
 
-_INFRA_PRESETS = {"solar_pv_50mw_spain", "bess_20mw_4h"}
+_INFRA_PRESETS = {"solar_pv_50mw_spain", "bess_20mw_4h", "wind_onshore_30mw_spain", "datacenter_10mw_tier3"}
 
 
 def handle_list_models(_args: dict[str, Any]) -> dict[str, Any]:
@@ -42,6 +42,16 @@ def handle_list_models(_args: dict[str, Any]) -> dict[str, Any]:
                     "cycle-based degradation."
                 ),
             },
+            {
+                "name": "wind_onshore_30mw_spain",
+                "asset_type": "infrastructure",
+                "description": "30 MW onshore wind farm in Spain — PPA + merchant + GOs, project finance.",
+            },
+            {
+                "name": "datacenter_10mw_tier3",
+                "asset_type": "infrastructure",
+                "description": "10 MW IT Tier 3 data center — SLA colocation, N+1 redundancy.",
+            },
         ],
     }
 
@@ -53,7 +63,8 @@ def handle_describe_schema(args: dict[str, Any]) -> dict[str, Any]:
     if model not in {"gestnova", "saas"}:
         raise ValueError(
             f"unknown model: {model!r}. Use 'gestnova', 'saas', "
-            "'solar_pv_50mw_spain', 'bess_20mw_4h', or 'infrastructure'."
+            "'solar_pv_50mw_spain', 'bess_20mw_4h', 'wind_onshore_30mw_spain', "
+            "'datacenter_10mw_tier3', or 'infrastructure'."
         )
     return {"schema": SaasModelConfig.model_json_schema()}
 

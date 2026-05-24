@@ -1,0 +1,79 @@
+meta:
+  name: datacenter_10mw_tier3
+  horizon:
+    periods: 240
+    frequency: M
+  start_date: "2026-01-01"
+  initial_cash: 0
+  base_currency: EUR
+
+production:
+  type: data_center
+  it_capacity_mw: 10
+  pue: 1.3
+  rack_density_kw: 10
+  redundancy: "N+1"
+  tier: 3
+
+revenue:
+  - type: sla
+    name: Colocation Hosting
+    price_per_mw_month: 120000
+    uptime_target: 0.999
+
+capex:
+  items:
+    - name: Facility (land + building + MEP)
+      amount_per_unit: 8000000
+      unit: MW
+      depreciation_years: 20
+      depreciation_method: straight_line
+  contingency_pct: 0.12
+  grid_connection_cost: 2000000
+
+opex:
+  om_fixed_eur_per_mw_yr: 250000
+  insurance_pct_capex: 0.003
+  land_lease_eur_yr: 300000
+  management_fee_eur_yr: 200000
+  opex_escalation_pct_yr: 0.025
+  major_maintenance:
+    - name: UPS battery replacement
+      period: 60
+      cost: 1500000
+      recurring_interval: 60
+    - name: Cooling system overhaul
+      period: 84
+      cost: 800000
+
+degradation:
+  type: none
+
+timeline:
+  development_months: 6
+  permitting_months: 12
+  construction_months: 18
+  grid_connection_months: 4
+
+financing:
+  senior:
+    tenor_years: 15
+    interest_rate: 0.05
+    amortization: french
+    dscr_target: 1.25
+    dscr_mode: min
+    auto_size: true
+  equity:
+    target_irr: 0.12
+  reserves:
+    dsra_months: 6
+  max_leverage: 0.65
+
+taxes:
+  corporate_income_tax_rate: 0.25
+  tax_loss_carryforward: true
+
+valuation:
+  discount_rate_annual: 0.09
+  terminal_growth_rate: 0.02
+  terminal_method: gordon

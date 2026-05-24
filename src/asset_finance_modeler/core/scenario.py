@@ -15,7 +15,7 @@ from asset_finance_modeler.assets.saas.schema import SaasModelConfig
 from asset_finance_modeler.core.protocols import FinancialOutput
 
 _SAAS_PRESETS = {"gestnova"}
-_INFRA_PRESETS = {"solar_pv_50mw_spain", "bess_20mw_4h"}
+_INFRA_PRESETS = {"solar_pv_50mw_spain", "bess_20mw_4h", "wind_onshore_30mw_spain", "datacenter_10mw_tier3"}
 
 
 def new_scenario_id() -> str:

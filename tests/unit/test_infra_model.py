@@ -304,3 +304,27 @@ def test_inputs_resolved_is_dict():
     assert isinstance(result.inputs_resolved, dict)
     assert "meta" in result.inputs_resolved
     assert "production" in result.inputs_resolved
+
+
+# ---------------------------------------------------------------------------
+# New tech-type presets: wind + data center
+# ---------------------------------------------------------------------------
+
+
+def test_preset_wind_loads_and_runs():
+    from asset_finance_modeler.assets.infrastructure.loader import load_preset
+
+    cfg = load_preset("wind_onshore_30mw_spain")
+    result = InfrastructureModel(cfg).run()
+    assert isinstance(result, FinancialOutput)
+    assert result.project_kpis is not None
+    assert result.summary["total_capex"] > 0
+
+
+def test_preset_datacenter_loads_and_runs():
+    from asset_finance_modeler.assets.infrastructure.loader import load_preset
+
+    cfg = load_preset("datacenter_10mw_tier3")
+    result = InfrastructureModel(cfg).run()
+    assert isinstance(result, FinancialOutput)
+    assert result.summary["total_capex"] > 0

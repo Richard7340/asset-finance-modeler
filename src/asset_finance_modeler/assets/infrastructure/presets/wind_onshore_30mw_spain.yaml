@@ -1,0 +1,94 @@
+meta:
+  name: wind_onshore_30mw_spain
+  horizon:
+    periods: 300
+    frequency: M
+  start_date: "2026-01-01"
+  initial_cash: 0
+  base_currency: EUR
+
+production:
+  type: wind_onshore
+  capacity_mw: 30
+  capacity_factor: 0.27
+  availability: 0.97
+  wake_losses: 0.04
+
+revenue:
+  - type: ppa
+    name: PPA
+    price_eur_per_unit: 48.0
+    volume_fraction: 0.80
+    escalation_pct_yr: 0.015
+    tenor_years: 12
+  - type: merchant
+    name: Merchant
+    base_price_eur_per_unit: 55.0
+    volume_fraction: 0.20
+    capture_ratio: 0.95
+    escalation_pct_yr: 0.01
+  - type: certificate
+    name: Guarantees of Origin
+    price_eur_per_unit: 2.5
+    eligible_fraction: 1.0
+    certificate_type: go
+
+capex:
+  items:
+    - name: Turbines + BOS + Installation
+      amount_per_unit: 1100000
+      unit: MW
+      depreciation_years: 25
+      depreciation_method: straight_line
+  contingency_pct: 0.10
+  development_cost: 500000
+  grid_connection_cost: 1200000
+
+opex:
+  om_fixed_eur_per_mw_yr: 18000
+  om_variable_eur_per_mwh: 3.0
+  insurance_pct_capex: 0.005
+  land_lease_eur_yr: 200000
+  management_fee_eur_yr: 80000
+  opex_escalation_pct_yr: 0.02
+  major_maintenance:
+    - name: Gearbox major overhaul
+      period: 120
+      cost: 1500000
+    - name: Blade inspection + repair
+      period: 60
+      cost: 300000
+      recurring_interval: 60
+
+degradation:
+  type: time_based
+  annual_rate: 0.003
+
+timeline:
+  development_months: 12
+  permitting_months: 36
+  construction_months: 18
+  grid_connection_months: 6
+
+financing:
+  senior:
+    tenor_years: 18
+    interest_rate: 0.042
+    amortization: french
+    dscr_target: 1.30
+    dscr_mode: min
+    auto_size: true
+  equity:
+    target_irr: 0.09
+  reserves:
+    dsra_months: 6
+  max_leverage: 0.75
+
+taxes:
+  corporate_income_tax_rate: 0.25
+  tax_loss_carryforward: true
+
+valuation:
+  discount_rate_annual: 0.065
+  terminal_growth_rate: 0.0
+  terminal_method: gordon
