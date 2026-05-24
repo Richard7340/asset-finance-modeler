@@ -1,0 +1,116 @@
+import pytest
+
+from asset_finance_modeler.assets.infrastructure.engines.revenue import compute_revenue
+from asset_finance_modeler.assets.infrastructure.schema import (
+    AncillaryStream,
+    CapacityStream,
+    CertificateStream,
+    MerchantStream,
+    PPAStream,
+    SLAStream,
+)
+
+
+def test_ppa_revenue():
+    streams = [PPAStream(price_eur_per_unit=45.0, volume_fraction=1.0, escalation_pct_yr=0)]
+    prod = {"production_mwh": [5000.0] * 12, "capacity_mw": 50}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] == pytest.approx(225_000)
+    assert "PPA" in out["streams"]
+
+
+def test_merchant_revenue_with_capture():
+    streams = [
+        MerchantStream(
+            base_price_eur_per_unit=50.0,
+            volume_fraction=1.0,
+            capture_ratio=0.85,
+            escalation_pct_yr=0,
+        )
+    ]
+    prod = {"production_mwh": [1000.0] * 12, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] == pytest.approx(42_500)
+
+
+def test_capacity_revenue():
+    streams = [CapacityStream(eur_per_mw_yr=35_000)]
+    prod = {"production_mwh": [0.0] * 12, "capacity_mw": 20}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] == pytest.approx(35_000 * 20 / 12, rel=0.01)
+
+
+def test_multiple_streams():
+    streams = [
+        PPAStream(price_eur_per_unit=45.0, volume_fraction=0.7, escalation_pct_yr=0),
+        MerchantStream(base_price_eur_per_unit=50.0, volume_fraction=0.3, capture_ratio=0.90, escalation_pct_yr=0),
+    ]
+    prod = {"production_mwh": [1000.0] * 12, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    ppa_rev = 1000 * 0.7 * 45
+    merchant_rev = 1000 * 0.3 * 50 * 0.90
+    assert out["total_revenue"][0] == pytest.approx(ppa_rev + merchant_rev)
+
+
+def test_escalation():
+    streams = [PPAStream(price_eur_per_unit=100.0, volume_fraction=1.0, escalation_pct_yr=0.02)]
+    prod = {"production_mwh": [1000.0] * 24, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=24, periods_per_year=12)
+    assert out["total_revenue"][12] > out["total_revenue"][0]
+
+
+# ---------------------------------------------------------------------------
+# Additional tests
+# ---------------------------------------------------------------------------
+
+
+def test_ppa_zero_production():
+    streams = [PPAStream(price_eur_per_unit=50.0, volume_fraction=1.0, escalation_pct_yr=0)]
+    prod = {"production_mwh": [0.0] * 12, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert all(v == 0.0 for v in out["total_revenue"])
+
+
+def test_streams_dict_keys():
+    streams = [
+        PPAStream(price_eur_per_unit=45.0),
+        AncillaryStream(fcr_eur_mw_yr=10_000),
+    ]
+    prod = {"production_mwh": [1000.0] * 12, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert "PPA" in out["streams"]
+    assert "Ancillary Services" in out["streams"]
+
+
+def test_capacity_stream_constant_per_period():
+    streams = [CapacityStream(eur_per_mw_yr=12_000)]
+    prod = {"production_mwh": [0.0] * 12, "capacity_mw": 5}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    # All periods should be equal (no escalation)
+    assert all(v == pytest.approx(out["total_revenue"][0]) for v in out["total_revenue"])
+
+
+def test_certificate_stream():
+    streams = [CertificateStream(price_eur_per_unit=5.0, eligible_fraction=0.8)]
+    prod = {"production_mwh": [1000.0] * 12, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] == pytest.approx(1000 * 0.8 * 5.0)
+
+
+def test_sla_stream_uses_capacity_mw_it():
+    streams = [SLAStream(price_per_mw_month=1000.0)]
+    prod = {"production_mwh": [0.0] * 12, "capacity_mw": 13.0, "capacity_mw_it": 10.0}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] == pytest.approx(1000.0 * 10.0)
+
+
+def test_total_revenue_is_sum_of_streams():
+    streams = [
+        PPAStream(price_eur_per_unit=45.0, volume_fraction=0.6, escalation_pct_yr=0),
+        CapacityStream(eur_per_mw_yr=20_000),
+    ]
+    prod = {"production_mwh": [500.0] * 12, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    for t in range(12):
+        stream_sum = sum(v[t] for v in out["streams"].values())
+        assert out["total_revenue"][t] == pytest.approx(stream_sum)
