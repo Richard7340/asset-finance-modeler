@@ -1,12 +1,17 @@
 from typing import Any
 
+from asset_finance_modeler.assets.infrastructure.loader import load_preset as load_infra_preset
+from asset_finance_modeler.assets.infrastructure.schema import InfrastructureModelConfig
 from asset_finance_modeler.assets.saas.loader import load_preset
 from asset_finance_modeler.assets.saas.schema import SaasModelConfig
 from asset_finance_modeler.core.scenario import Scenario, new_scenario_id
 
 _PRESET_INDEX = {
     "saas": ["gestnova"],
+    "infrastructure": ["solar_pv_50mw_spain", "bess_20mw_4h"],
 }
+
+_INFRA_PRESETS = {"solar_pv_50mw_spain", "bess_20mw_4h"}
 
 
 def handle_list_models(_args: dict[str, Any]) -> dict[str, Any]:
@@ -21,14 +26,35 @@ def handle_list_models(_args: dict[str, Any]) -> dict[str, Any]:
                     "team ramp, debt + funding modeling, DCF valuation."
                 ),
             },
+            {
+                "name": "solar_pv_50mw_spain",
+                "asset_type": "infrastructure",
+                "description": (
+                    "50 MWp solar PV plant in Spain — PPA + merchant revenue, "
+                    "project finance."
+                ),
+            },
+            {
+                "name": "bess_20mw_4h",
+                "asset_type": "infrastructure",
+                "description": (
+                    "20 MW / 4h BESS — arbitrage + capacity market, "
+                    "cycle-based degradation."
+                ),
+            },
         ],
     }
 
 
 def handle_describe_schema(args: dict[str, Any]) -> dict[str, Any]:
     model = args.get("model")
+    if model in _INFRA_PRESETS or model == "infrastructure":
+        return {"schema": InfrastructureModelConfig.model_json_schema()}
     if model not in {"gestnova", "saas"}:
-        raise ValueError(f"unknown model: {model!r}. Use 'gestnova' or 'saas'.")
+        raise ValueError(
+            f"unknown model: {model!r}. Use 'gestnova', 'saas', "
+            "'solar_pv_50mw_spain', 'bess_20mw_4h', or 'infrastructure'."
+        )
     return {"schema": SaasModelConfig.model_json_schema()}
 
 
@@ -46,8 +72,11 @@ def handle_list_presets(args: dict[str, Any]) -> dict[str, Any]:
 def make_handle_load_baseline(store: Any) -> Any:
     def _handle(args: dict[str, Any]) -> dict[str, Any]:
         preset = args.get("preset", "gestnova")
-        # Verify preset loads
-        load_preset(preset)
+        # Verify preset loads (routing by type)
+        if preset in _INFRA_PRESETS:
+            load_infra_preset(preset)
+        else:
+            load_preset(preset)
         scenario = Scenario(
             id=new_scenario_id(),
             name=f"{preset}-baseline",
