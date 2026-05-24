@@ -3,10 +3,13 @@ import pytest
 from asset_finance_modeler.assets.infrastructure.engines.revenue import compute_revenue
 from asset_finance_modeler.assets.infrastructure.schema import (
     AncillaryStream,
+    ArbitrageStream,
     CapacityStream,
     CertificateStream,
     MerchantStream,
+    OfftakeStream,
     PPAStream,
+    RentalStream,
     SLAStream,
 )
 
@@ -114,3 +117,51 @@ def test_total_revenue_is_sum_of_streams():
     for t in range(12):
         stream_sum = sum(v[t] for v in out["streams"].values())
         assert out["total_revenue"][t] == pytest.approx(stream_sum)
+
+
+# ---------------------------------------------------------------------------
+# Tests for previously uncovered stream types
+# ---------------------------------------------------------------------------
+
+
+def test_arbitrage_stream():
+    streams = [ArbitrageStream(avg_spread_eur_mwh=40, cycles_per_day=1.5, spread_capture_ratio=0.75)]
+    prod = {"production_mwh": [5000.0] * 12, "capacity_mw": 20, "energy_capacity_mwh": 80}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] > 0
+
+
+def test_ancillary_stream():
+    streams = [AncillaryStream(fcr_eur_mw_yr=25000, afrr_eur_mw_yr=10000)]
+    prod = {"production_mwh": [0.0] * 12, "capacity_mw": 20}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    expected_monthly = (25000 + 10000) * 20 / 12
+    assert out["total_revenue"][0] == pytest.approx(expected_monthly, rel=0.05)
+
+
+def test_offtake_stream_with_kg():
+    streams = [OfftakeStream(price_eur_per_unit=5.0, volume_fraction=1.0, escalation_pct_yr=0)]
+    prod = {"production_mwh": [0.0] * 12, "production_kg": [10000.0] * 12, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] == pytest.approx(50000)
+
+
+def test_certificate_stream_new():
+    streams = [CertificateStream(price_eur_per_unit=3.0, eligible_fraction=0.8)]
+    prod = {"production_mwh": [10000.0] * 12, "capacity_mw": 50}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] == pytest.approx(24000)
+
+
+def test_sla_stream():
+    streams = [SLAStream(price_per_mw_month=150000)]
+    prod = {"production_mwh": [0.0] * 12, "capacity_mw": 13, "capacity_mw_it": 10}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] == pytest.approx(1500000)
+
+
+def test_rental_stream():
+    streams = [RentalStream(price_per_unit_period=5000, occupancy_rate=0.95, escalation_pct_yr=0)]
+    prod = {"production_mwh": [0.0] * 12, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
+    assert out["total_revenue"][0] == pytest.approx(47500)

@@ -51,3 +51,40 @@ def test_multiple_incentives():
 def test_no_incentives():
     result = compute_incentives(items=[], periods=12, periods_per_year=12)
     assert result["total"] == [0.0] * 12
+
+
+# ---------------------------------------------------------------------------
+# Tests for previously uncovered incentive types
+# ---------------------------------------------------------------------------
+
+
+def test_feed_in_tariff():
+    production = [1000.0] * 60
+    result = compute_incentives(
+        items=[{"type": "feed_in_tariff", "value": 30.0, "duration_years": 3, "start_year": 0}],
+        periods=60, periods_per_year=12,
+        production_per_period=production,
+    )
+    assert result["subsidies"][0] == pytest.approx(30000)
+    assert result["subsidies"][36] == 0
+
+
+def test_carbon_credit():
+    production = [500.0] * 24
+    result = compute_incentives(
+        items=[{"type": "carbon_credit", "value": 50.0, "duration_years": 2, "start_year": 0}],
+        periods=24, periods_per_year=12,
+        production_per_period=production,
+    )
+    assert result["subsidies"][0] == pytest.approx(25000)
+
+
+def test_rfnbo_premium():
+    production = [200.0] * 24
+    result = compute_incentives(
+        items=[{"type": "rfnbo_premium", "value": 2.0, "duration_years": None, "start_year": 0}],
+        periods=24, periods_per_year=12,
+        production_per_period=production,
+    )
+    assert result["subsidies"][0] == pytest.approx(400)
+    assert result["subsidies"][23] == pytest.approx(400)
