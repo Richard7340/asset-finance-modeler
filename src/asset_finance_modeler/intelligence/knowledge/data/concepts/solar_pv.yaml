@@ -1,0 +1,29 @@
+- id: solar-specific-yield
+  title: "Specific Yield (kWh/kWp)"
+  content: "Annual energy production per unit of installed peak capacity. Spain: 1400-1800 kWh/kWp. Germany: 900-1100."
+  asset_types: [solar_pv]
+  category: production
+
+- id: solar-performance-ratio
+  title: "Performance Ratio (PR)"
+  content: "Ratio of actual to theoretical energy output. Accounts for inverter, cable, temperature losses. Range: 0.75-0.85."
+  asset_types: [solar_pv]
+  category: production
+
+- id: solar-degradation
+  title: "Panel Degradation"
+  content: "Solar panels lose ~0.4-0.6% efficiency per year. Over 25 years: ~10-15% total loss."
+  asset_types: [solar_pv]
+  category: production
+
+- id: solar-ppa
+  title: "Power Purchase Agreement (PPA)"
+  content: "Long-term contract (10-20 years) to sell electricity at fixed or indexed price. Banks prefer >60% PPA coverage."
+  asset_types: [solar_pv, wind_onshore, bess]
+  category: revenue
+
+- id: solar-lcoe
+  title: "Levelized Cost of Energy (LCOE)"
+  content: "Total lifecycle cost / total energy produced, discounted. Solar PV LCOE 2025: 25-50 EUR/MWh utility-scale."
+  asset_types: [solar_pv, wind_onshore]
+  category: metrics

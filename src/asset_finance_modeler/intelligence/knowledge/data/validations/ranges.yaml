@@ -1,0 +1,23 @@
+- field_path: production.capacity_mwp
+  rule_id: capacity_mwp.utility_scale_range
+  min_value: 0.01
+  max_value: 5000
+  message: "Capacity must be 0.01-5000 MWp"
+
+- field_path: production.capacity_mw
+  rule_id: capacity_mw.range
+  min_value: 0.1
+  max_value: 2000
+  message: "Capacity must be 0.1-2000 MW"
+
+- field_path: financing.max_leverage
+  rule_id: leverage.range
+  min_value: 0
+  max_value: 0.95
+  message: "Leverage must be 0-95%"
+
+- field_path: valuation.discount_rate_annual
+  rule_id: wacc.range
+  min_value: 0.01
+  max_value: 0.30
+  message: "WACC must be 1-30%"

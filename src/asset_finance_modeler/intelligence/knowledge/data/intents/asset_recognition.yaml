@@ -1,0 +1,14 @@
+- patterns: ["planta solar", "paneles fotovoltaicos", "FV", "PV", "solar", "fotovoltaica"]
+  asset_type: solar_pv
+- patterns: ["batería", "BESS", "almacenamiento eléctrico", "storage", "baterías"]
+  asset_type: bess
+- patterns: ["eólica", "viento", "wind", "aerogeneradores", "parque eólico"]
+  asset_type: wind_onshore
+- patterns: ["hidrógeno", "H2", "electrolizador", "green hydrogen"]
+  asset_type: hydrogen
+- patterns: ["data center", "centro de datos", "datacenter", "colocation"]
+  asset_type: data_center
+- patterns: ["inmobiliario", "vivienda", "edificio", "real estate", "alquiler"]
+  asset_type: real_estate
+- patterns: ["empresa", "negocio", "M&A", "adquisición", "fusión", "corporate"]
+  asset_type: corporate_ma

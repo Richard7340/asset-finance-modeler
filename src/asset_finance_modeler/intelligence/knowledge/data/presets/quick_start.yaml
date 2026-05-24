@@ -1,0 +1,20 @@
+- asset_type: solar_pv
+  region: ES
+  size_bracket: [10, 100]
+  defaults:
+    production.capacity_mwp: 50
+    production.specific_yield_kwh_kwp: 1600
+    production.performance_ratio: 0.82
+    capex.items[0].amount_per_unit: 0.45
+    capex.items[0].unit: Wp
+    capex.items[0].depreciation_years: 25
+    capex.contingency_pct: 0.08
+    opex.om_fixed_eur_per_mw_yr: 11000
+    opex.insurance_pct_capex: 0.004
+    degradation.type: time_based
+    degradation.annual_rate: 0.005
+    financing.max_leverage: 0.75
+    financing.senior.dscr_target: 1.30
+    financing.senior.interest_rate: 0.04
+    valuation.discount_rate_annual: 0.07
+    taxes.corporate_income_tax_rate: 0.25

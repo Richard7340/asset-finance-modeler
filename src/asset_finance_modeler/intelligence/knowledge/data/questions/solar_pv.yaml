@@ -1,0 +1,87 @@
+- field_path: production.capacity_mwp
+  question: "¿Qué capacidad tiene la planta solar?"
+  help_text: "Potencia pico instalada. Utility-scale: 10-200 MWp."
+  options:
+    - label: "10 MWp (pequeña)"
+      value: 10
+    - label: "50 MWp (media)"
+      value: 50
+    - label: "100 MWp (utility-scale)"
+      value: 100
+  required: true
+  order: 1
+  group: production
+
+- field_path: production.specific_yield_kwh_kwp
+  question: "¿Irradiación esperada (kWh/kWp/año)?"
+  help_text: "España sur: 1600-1800. Norte: 1300-1500."
+  options:
+    - label: "1400 (norte España)"
+      value: 1400
+    - label: "1600 (centro)"
+      value: 1600
+    - label: "1800 (sur/Canarias)"
+      value: 1800
+  required: true
+  order: 2
+  benchmark_key: specific_yield_solar
+  group: production
+
+- field_path: revenue[0].type
+  question: "¿Cómo se venderá la energía?"
+  help_text: "PPA = precio fijo. Merchant = mercado."
+  options:
+    - label: "PPA (contrato fijo)"
+      value: ppa
+    - label: "Merchant (mercado)"
+      value: merchant
+    - label: "Mixto PPA + Merchant"
+      value: mixed
+  required: true
+  order: 3
+  group: revenue
+
+- field_path: revenue[0].price_eur_per_unit
+  question: "¿Precio PPA (€/MWh)?"
+  help_text: "España 2025-2026: 35-55 €/MWh típico."
+  options:
+    - label: "35 €/MWh (competitivo)"
+      value: 35
+    - label: "42 €/MWh (mercado)"
+      value: 42
+    - label: "50 €/MWh (premium)"
+      value: 50
+  required: true
+  order: 4
+  depends_on: "revenue[0].type"
+  benchmark_key: ppa_price_solar_es
+  group: revenue
+
+- field_path: capex.items[0].amount_per_unit
+  question: "¿CAPEX (€/Wp)?"
+  help_text: "España 2026: 0.40-0.60 €/Wp típico."
+  options:
+    - label: "0.42 €/Wp (competitivo)"
+      value: 0.42
+    - label: "0.50 €/Wp (mercado)"
+      value: 0.50
+    - label: "0.58 €/Wp (premium)"
+      value: 0.58
+  required: true
+  order: 5
+  benchmark_key: capex_per_kwp_eur
+  group: capex
+
+- field_path: financing.max_leverage
+  question: "¿Ratio deuda/equity?"
+  help_text: "Project finance típico: 70-80% deuda."
+  options:
+    - label: "Sin deuda (100% equity)"
+      value: 0
+    - label: "70% deuda"
+      value: 0.70
+    - label: "80% deuda"
+      value: 0.80
+  required: true
+  order: 6
+  group: financing

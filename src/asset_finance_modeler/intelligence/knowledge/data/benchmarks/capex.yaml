@@ -1,0 +1,47 @@
+- field: capex_per_kwp_eur
+  asset_type: solar_pv
+  region: ES
+  value: 550
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "Lazard LCOE v17.0"
+  confidence: 0.92
+  unit: EUR/kWp
+  methodology: "EPC + grid connection, excludes land and dev costs"
+  assumptions: ["utility-scale (>10 MWp)", "fixed-tilt, no tracker"]
+
+- field: capex_per_mw_eur
+  asset_type: wind_onshore
+  region: ES
+  value: 1100000
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "IRENA Renewable Power Generation Costs 2024"
+  confidence: 0.90
+  unit: EUR/MW
+  methodology: "Turnkey including turbines, BOS, installation"
+  assumptions: ["onshore, 3-5 MW turbines"]
+
+- field: capex_per_kwh_eur
+  asset_type: bess
+  region: EU
+  value: 280
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "BloombergNEF Energy Storage Outlook 2025"
+  confidence: 0.85
+  unit: EUR/kWh
+  methodology: "Li-ion NMC, 4h duration, includes BOS and integration"
+  assumptions: ["utility-scale (>10 MW)"]
+
+- field: capex_per_mw_eur
+  asset_type: data_center
+  region: EU
+  value: 8000000
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "Turner & Townsend Data Centre Cost Index 2025"
+  confidence: 0.80
+  unit: EUR/MW_IT
+  methodology: "Shell + MEP, Tier 3, excludes land"
+  assumptions: ["N+1 redundancy", "PUE 1.3"]

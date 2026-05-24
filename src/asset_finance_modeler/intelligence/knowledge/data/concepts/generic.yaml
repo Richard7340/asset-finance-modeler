@@ -1,0 +1,23 @@
+- id: dscr
+  title: "Debt Service Coverage Ratio (DSCR)"
+  content: "EBITDA / total debt service. Banks require 1.20-1.40 minimum. Below 1.0 = cannot service debt."
+  asset_types: []
+  category: debt_metrics
+
+- id: irr-project
+  title: "Project IRR (Unlevered)"
+  content: "IRR on total project cash flows, ignoring financing. Measures inherent profitability. Good: >8% for infra."
+  asset_types: []
+  category: valuation
+
+- id: irr-equity
+  title: "Equity IRR (Levered)"
+  content: "IRR on equity cash flows after debt service. Always higher than project IRR due to leverage. Target: 10-15%."
+  asset_types: []
+  category: valuation
+
+- id: wacc
+  title: "WACC"
+  content: "Weighted Average Cost of Capital. Blended cost of debt and equity. Used as discount rate in DCF."
+  asset_types: []
+  category: valuation

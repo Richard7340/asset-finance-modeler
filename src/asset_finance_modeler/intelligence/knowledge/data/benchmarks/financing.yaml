@@ -1,0 +1,11 @@
+- field: senior_debt_rate
+  asset_type: solar_pv
+  region: ES
+  value: 0.04
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "Market observation"
+  confidence: 0.75
+  unit: annual_rate
+  methodology: "Fixed rate, 18yr tenor, project finance"
+  assumptions: ["DSCR 1.30x", "75% leverage"]

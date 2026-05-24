@@ -1,0 +1,42 @@
+- field_path: meta.horizon.periods
+  question: "¿A cuántos años el modelo?"
+  help_text: "Horizonte temporal del análisis."
+  options:
+    - label: "10 años"
+      value: 120
+    - label: "20 años"
+      value: 240
+    - label: "25 años"
+      value: 300
+  required: true
+  order: 0
+  group: meta
+
+- field_path: taxes.corporate_income_tax_rate
+  question: "¿Tipo impositivo de sociedades?"
+  help_text: "España: 25%. USA: 21%. Alemania: ~30%."
+  options:
+    - label: "25% (España)"
+      value: 0.25
+    - label: "21% (USA)"
+      value: 0.21
+    - label: "30% (Alemania)"
+      value: 0.30
+  required: true
+  order: 100
+  group: taxes
+
+- field_path: valuation.discount_rate_annual
+  question: "¿WACC para la valoración?"
+  help_text: "Renovables: 5-8%. Real estate: 6-10%."
+  options:
+    - label: "6% (bajo riesgo)"
+      value: 0.06
+    - label: "8% (medio)"
+      value: 0.08
+    - label: "12% (alto riesgo)"
+      value: 0.12
+  required: true
+  order: 101
+  group: valuation
+  expert_only: true

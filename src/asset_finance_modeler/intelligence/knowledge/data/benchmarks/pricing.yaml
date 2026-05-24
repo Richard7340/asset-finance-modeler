@@ -1,0 +1,11 @@
+- field: ppa_price_eur_mwh
+  asset_type: solar_pv
+  region: ES
+  value: 42
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "LevelTen Energy PPA Index Q4 2025"
+  confidence: 0.85
+  unit: EUR/MWh
+  methodology: "Median PPA price, 10-year tenor, fixed"
+  assumptions: ["utility-scale", "corporate PPA"]

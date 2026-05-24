@@ -17,4 +17,5 @@ build/
 *.key
 *.pem
 credentials.json
-data/
+/data/
+!src/**/knowledge/data/

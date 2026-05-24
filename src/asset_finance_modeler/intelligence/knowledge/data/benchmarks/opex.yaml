@@ -1,0 +1,23 @@
+- field: opex_fixed_per_mw_yr
+  asset_type: solar_pv
+  region: ES
+  value: 11000
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "IRENA 2024"
+  confidence: 0.88
+  unit: EUR/MW/yr
+  methodology: "Fixed O&M excluding insurance and land"
+  assumptions: ["utility-scale"]
+
+- field: opex_fixed_per_mw_yr
+  asset_type: wind_onshore
+  region: ES
+  value: 18000
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "IRENA 2024"
+  confidence: 0.85
+  unit: EUR/MW/yr
+  methodology: "Fixed O&M excluding insurance"
+  assumptions: ["onshore"]
