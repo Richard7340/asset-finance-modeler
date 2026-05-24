@@ -1,6 +1,6 @@
 import pytest
 
-from asset_finance_modeler.assets.saas.engines import DebtEngine
+from asset_finance_modeler.core.financing import DebtEngine
 from asset_finance_modeler.assets.saas.schema import DebtInstrument
 
 
