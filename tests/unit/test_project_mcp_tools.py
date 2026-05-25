@@ -34,9 +34,9 @@ def test_project_create(stores):
 
 def test_project_list(stores):
     proj_store, _ = stores
-    make_project_create(proj_store)({"name": "P1", "tenant_id": "t1"})
-    make_project_create(proj_store)({"name": "P2", "tenant_id": "t1"})
-    result = make_project_list(proj_store)({"tenant_id": "t1"})
+    make_project_create(proj_store)({"name": "P1", "user_id": "t1"})
+    make_project_create(proj_store)({"name": "P2", "user_id": "t1"})
+    result = make_project_list(proj_store)({"user_id": "t1"})
     assert len(result["projects"]) == 2
 
 
@@ -57,7 +57,7 @@ def test_project_archive(stores):
     proj_store, _ = stores
     created = make_project_create(proj_store)({"name": "Old"})
     make_project_archive(proj_store)({"project_id": created["project_id"]})
-    result = make_project_list(proj_store)({"tenant_id": "default"})
+    result = make_project_list(proj_store)({"user_id": "default"})
     assert len(result["projects"]) == 0
 
 
@@ -65,7 +65,7 @@ def test_project_archive_visible_with_flag(stores):
     proj_store, _ = stores
     created = make_project_create(proj_store)({"name": "Old"})
     make_project_archive(proj_store)({"project_id": created["project_id"]})
-    result = make_project_list(proj_store)({"tenant_id": "default", "include_archived": True})
+    result = make_project_list(proj_store)({"user_id": "default", "include_archived": True})
     assert len(result["projects"]) == 1
     assert result["projects"][0]["archived"] is True
 

@@ -14,7 +14,7 @@ from .session import WizardSession
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS wizard_sessions (
     session_id TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
     asset_type TEXT NOT NULL,
     mode TEXT NOT NULL,
     questions_json TEXT NOT NULL,
@@ -22,9 +22,11 @@ CREATE TABLE IF NOT EXISTS wizard_sessions (
     current_idx INTEGER NOT NULL DEFAULT 0,
     history_json TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    workspace_id TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_wizard_tenant ON wizard_sessions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_wizard_user ON wizard_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_wizard_user_workspace ON wizard_sessions(user_id, workspace_id);
 """
 
 
@@ -34,20 +36,30 @@ class WizardSessionStore:
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(db_path) as conn:
             conn.executescript(_SCHEMA)
+            # Migration: rename tenant_id -> user_id if upgrading existing DB
+            try:
+                conn.execute('ALTER TABLE wizard_sessions RENAME COLUMN tenant_id TO user_id')
+            except Exception:
+                pass
+            # Migration: add workspace_id column if it doesn't exist
+            try:
+                conn.execute('ALTER TABLE wizard_sessions ADD COLUMN workspace_id TEXT')
+            except Exception:
+                pass
 
-    def save(self, session: WizardSession, tenant_id: str = "default") -> None:
+    def save(self, session: WizardSession, user_id: str = "default", workspace_id: str | None = None) -> None:
         questions_data = [q.model_dump() for q in session.questions]
         resolved_data = {k: v.to_dict() for k, v in session.resolved.items()}
         now = datetime.now(UTC).isoformat()
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO wizard_sessions
-                   (session_id, tenant_id, asset_type, mode, questions_json,
-                    resolved_json, current_idx, history_json, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (session_id, user_id, asset_type, mode, questions_json,
+                    resolved_json, current_idx, history_json, created_at, updated_at, workspace_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session.session_id,
-                    tenant_id,
+                    user_id,
                     session.asset_type,
                     session.mode,
                     json.dumps(questions_data),
@@ -56,6 +68,7 @@ class WizardSessionStore:
                     json.dumps(session._history),
                     now,
                     now,
+                    workspace_id,
                 ),
             )
 
@@ -90,12 +103,19 @@ class WizardSessionStore:
                 "DELETE FROM wizard_sessions WHERE session_id = ?", (session_id,)
             )
 
-    def list_by_tenant(self, tenant_id: str) -> list[dict]:
+    def list_by_tenant(self, user_id: str, workspace_id: str | None = None) -> list[dict]:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT session_id, asset_type, mode, updated_at FROM wizard_sessions "
-                "WHERE tenant_id = ? ORDER BY updated_at DESC",
-                (tenant_id,),
-            ).fetchall()
+            if workspace_id:
+                rows = conn.execute(
+                    "SELECT session_id, asset_type, mode, updated_at FROM wizard_sessions "
+                    "WHERE user_id = ? AND workspace_id = ? ORDER BY updated_at DESC",
+                    (user_id, workspace_id),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT session_id, asset_type, mode, updated_at FROM wizard_sessions "
+                    "WHERE user_id = ? ORDER BY updated_at DESC",
+                    (user_id,),
+                ).fetchall()
         return [dict(r) for r in rows]

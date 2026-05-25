@@ -60,7 +60,7 @@ def test_intelligence_full_workflow(tmp_path):
 
     # 5. Store decision in context memory
     reg["finance.context.store"].handler({
-        "tenant_id": "gestnova",
+        "user_id": "gestnova",
         "key": "decision-pricing-2026-05",
         "value": "Decidimos mantener pricing 300€/agente tras analizar 200/300/400. EV óptimo en 300.",
         "tags": ["pricing", "decision"],
@@ -68,7 +68,7 @@ def test_intelligence_full_workflow(tmp_path):
 
     # 6. Recall context later
     recall = reg["finance.context.search"].handler({
-        "tenant_id": "gestnova",
+        "user_id": "gestnova",
         "query": "qué decidimos sobre el precio",
         "top_k": 3,
     })
@@ -77,12 +77,12 @@ def test_intelligence_full_workflow(tmp_path):
 
     # 7. Multi-tenant isolation
     reg["finance.context.store"].handler({
-        "tenant_id": "otra_empresa",
+        "user_id": "otra_empresa",
         "key": "secreto",
         "value": "Información privada de otra empresa",
     })
     leaked = reg["finance.context.search"].handler({
-        "tenant_id": "gestnova",
+        "user_id": "gestnova",
         "query": "información privada",
         "top_k": 5,
     })

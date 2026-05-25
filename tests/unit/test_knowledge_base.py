@@ -75,11 +75,11 @@ def test_list_categories(kb):
 
 
 def test_multi_tenant_isolation(kb):
-    kb.add(KnowledgeEntry(title="Tenant A info", content="proprietary A", tenant_id="company-a"))
-    kb.add(KnowledgeEntry(title="Tenant B info", content="proprietary B", tenant_id="company-b"))
-    kb.add(KnowledgeEntry(title="Global info", content="shared", tenant_id=None))
+    kb.add(KnowledgeEntry(title="Tenant A info", content="proprietary A", user_id="company-a"))
+    kb.add(KnowledgeEntry(title="Tenant B info", content="proprietary B", user_id="company-b"))
+    kb.add(KnowledgeEntry(title="Global info", content="shared", user_id=None))
 
-    results_a = kb.search("proprietary", top_k=10, tenant_id="company-a")
+    results_a = kb.search("proprietary", top_k=10, user_id="company-a")
     titles_a = {r.entry.title for r in results_a}
     assert "Tenant A info" in titles_a
     assert "Tenant B info" not in titles_a

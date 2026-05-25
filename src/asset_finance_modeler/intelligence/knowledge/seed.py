@@ -18,7 +18,7 @@ def seed_default_knowledge(kb: KnowledgeBase) -> int:
             content=raw["content"],
             category=raw.get("category", "general"),
             tags=raw.get("tags", []),
-            tenant_id=None,  # global knowledge
+            user_id=None,  # global knowledge
         ))
         added += 1
     return added

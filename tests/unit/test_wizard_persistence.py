@@ -17,7 +17,7 @@ def test_save_and_load(tmp_path):
     store = WizardSessionStore(str(tmp_path / "wiz.db"))
     session = WizardSession.create("solar_pv", _sample_questions())
     session.answer(50.0, source="user", provenance="User", confidence=1.0)
-    store.save(session, tenant_id="tenant-1")
+    store.save(session, user_id="user-1")
     loaded = store.load(session.session_id)
     assert loaded is not None
     assert loaded.session_id == session.session_id
@@ -54,8 +54,8 @@ def test_list_by_tenant(tmp_path):
     store = WizardSessionStore(str(tmp_path / "wiz.db"))
     s1 = WizardSession.create("solar_pv", _sample_questions())
     s2 = WizardSession.create("bess", _sample_questions())
-    store.save(s1, tenant_id="t1")
-    store.save(s2, tenant_id="t1")
+    store.save(s1, user_id="t1")
+    store.save(s2, user_id="t1")
     sessions = store.list_by_tenant("t1")
     assert len(sessions) == 2
 

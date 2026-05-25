@@ -18,12 +18,14 @@ CREATE TABLE IF NOT EXISTS knowledge_entries (
     content TEXT NOT NULL,
     category TEXT NOT NULL,
     tags_json TEXT NOT NULL DEFAULT '[]',
-    tenant_id TEXT,
+    user_id TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    vector_offset INTEGER
+    vector_offset INTEGER,
+    workspace_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_kb_category ON knowledge_entries(category);
-CREATE INDEX IF NOT EXISTS idx_kb_tenant ON knowledge_entries(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_kb_user ON knowledge_entries(user_id);
+CREATE INDEX IF NOT EXISTS idx_kb_user_workspace ON knowledge_entries(user_id, workspace_id);
 """
 
 
@@ -33,8 +35,9 @@ class KnowledgeEntry:
     content: str
     category: str = "general"
     tags: list[str] = field(default_factory=list)
-    tenant_id: str | None = None
+    user_id: str | None = None
     id: str = ""
+    workspace_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -69,6 +72,16 @@ class KnowledgeBase:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
+            # Migration: rename tenant_id -> user_id if upgrading existing DB
+            try:
+                conn.execute('ALTER TABLE knowledge_entries RENAME COLUMN tenant_id TO user_id')
+            except Exception:
+                pass
+            # Migration: add workspace_id column if it doesn't exist
+            try:
+                conn.execute('ALTER TABLE knowledge_entries ADD COLUMN workspace_id TEXT')
+            except Exception:
+                pass
         self._load_index()
 
     def _load_index(self) -> None:
@@ -91,13 +104,15 @@ class KnowledgeBase:
 
     @staticmethod
     def _row_to_entry(row: sqlite3.Row) -> KnowledgeEntry:
+        keys = row.keys()
         return KnowledgeEntry(
             id=row["id"],
             title=row["title"],
             content=row["content"],
             category=row["category"],
             tags=json.loads(row["tags_json"]),
-            tenant_id=row["tenant_id"],
+            user_id=row["user_id"] if "user_id" in keys else None,
+            workspace_id=row["workspace_id"] if "workspace_id" in keys else None,
         )
 
     def add(self, entry: KnowledgeEntry) -> str:
@@ -113,10 +128,10 @@ class KnowledgeBase:
         with self._conn() as conn:
             conn.execute(
                 """INSERT INTO knowledge_entries
-                   (id, title, content, category, tags_json, tenant_id, vector_offset)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   (id, title, content, category, tags_json, user_id, vector_offset, workspace_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (entry.id, entry.title, entry.content, entry.category,
-                 json.dumps(entry.tags), entry.tenant_id, offset),
+                 json.dumps(entry.tags), entry.user_id, offset, entry.workspace_id),
             )
         return entry.id
 
@@ -132,7 +147,8 @@ class KnowledgeBase:
         query: str,
         top_k: int = 5,
         category: str | None = None,
-        tenant_id: str | None = None,
+        user_id: str | None = None,
+        workspace_id: str | None = None,
     ) -> list[SearchResult]:
         assert self._index is not None
         if self._index.ntotal == 0:
@@ -151,7 +167,7 @@ class KnowledgeBase:
                 continue
             if category is not None and entry.category != category:
                 continue
-            if tenant_id is not None and entry.tenant_id not in (None, tenant_id):
+            if user_id is not None and entry.user_id not in (None, user_id):
                 continue
             results.append(SearchResult(entry=entry, score=float(score)))
             if len(results) >= top_k:

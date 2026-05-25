@@ -9,7 +9,8 @@ def make_knowledge_search(kb: KnowledgeBase) -> Any:
             query=args["query"],
             top_k=args.get("top_k", 5),
             category=args.get("category"),
-            tenant_id=args.get("tenant_id"),
+            user_id=args.get("user_id"),
+            workspace_id=args.get("workspace_id"),
         )
         return {
             "results": [
@@ -19,7 +20,8 @@ def make_knowledge_search(kb: KnowledgeBase) -> Any:
                     "content": r.entry.content,
                     "category": r.entry.category,
                     "tags": r.entry.tags,
-                    "tenant_id": r.entry.tenant_id,
+                    "user_id": r.entry.user_id,
+                    "workspace_id": r.entry.workspace_id,
                     "score": r.score,
                 }
                 for r in results
@@ -35,7 +37,8 @@ def make_knowledge_add(kb: KnowledgeBase) -> Any:
             content=args["content"],
             category=args.get("category", "general"),
             tags=args.get("tags", []),
-            tenant_id=args.get("tenant_id"),
+            user_id=args.get("user_id"),
+            workspace_id=args.get("workspace_id"),
         ))
         return {"id": entry_id}
     return _handle

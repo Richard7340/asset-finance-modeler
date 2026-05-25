@@ -9,12 +9,13 @@ def make_project_create(store: SQLiteProjectStore) -> Any:
     def _handle(args: dict[str, Any]) -> dict[str, Any]:
         project = Project(
             id=new_project_id(),
-            tenant_id=args.get("tenant_id", "default"),
+            user_id=args.get("user_id", "default"),
             name=args["name"],
             description=args.get("description", ""),
             asset_type=args.get("asset_type"),
             region=args.get("region"),
             tags=args.get("tags", []),
+            workspace_id=args.get("workspace_id"),
         )
         store.save(project)
         return {"project_id": project.id, "name": project.name}
@@ -24,8 +25,8 @@ def make_project_create(store: SQLiteProjectStore) -> Any:
 
 def make_project_list(store: SQLiteProjectStore) -> Any:
     def _handle(args: dict[str, Any]) -> dict[str, Any]:
-        tenant_id = args.get("tenant_id", "default")
-        projects = store.list_by_tenant(tenant_id, include_archived=args.get("include_archived", False))
+        user_id = args.get("user_id", "default")
+        projects = store.list_by_tenant(user_id, include_archived=args.get("include_archived", False), workspace_id=args.get("workspace_id"))
         return {
             "projects": [
                 {

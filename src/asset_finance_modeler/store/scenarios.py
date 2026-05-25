@@ -23,12 +23,14 @@ CREATE TABLE IF NOT EXISTS scenarios (
     notes TEXT NOT NULL DEFAULT '',
     is_canonical INTEGER NOT NULL DEFAULT 0,
     is_deleted INTEGER NOT NULL DEFAULT 0,
-    tenant_id TEXT NOT NULL DEFAULT 'default',
+    user_id TEXT NOT NULL DEFAULT 'default',
+    workspace_id TEXT,
     FOREIGN KEY (parent_scenario_id) REFERENCES scenarios(id)
 );
 CREATE INDEX IF NOT EXISTS idx_parent ON scenarios(parent_scenario_id);
 CREATE INDEX IF NOT EXISTS idx_base_model ON scenarios(base_model);
-CREATE INDEX IF NOT EXISTS idx_tenant ON scenarios(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_user ON scenarios(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_workspace ON scenarios(user_id, workspace_id);
 """
 
 
@@ -40,7 +42,8 @@ class ScenarioStore(Protocol):
         self,
         base_model: str | None = None,
         include_deleted: bool = False,
-        tenant_id: str | None = None,
+        user_id: str | None = None,
+        workspace_id: str | None = None,
     ) -> list[Scenario]: ...
     def delete(self, scenario_id: str) -> None: ...
     def set_canonical(self, scenario_id: str, name: str | None = None) -> None: ...
@@ -59,6 +62,16 @@ class SQLiteScenarioStore:
     def initialize(self) -> None:
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
+            # Migration: rename tenant_id -> user_id if upgrading existing DB
+            try:
+                conn.execute('ALTER TABLE scenarios RENAME COLUMN tenant_id TO user_id')
+            except Exception:
+                pass
+            # Migration: add workspace_id column if it doesn't exist
+            try:
+                conn.execute('ALTER TABLE scenarios ADD COLUMN workspace_id TEXT')
+            except Exception:
+                pass
 
     @staticmethod
     def _to_row(s: Scenario) -> dict[str, object]:
@@ -76,7 +89,8 @@ class SQLiteScenarioStore:
             "notes": s.notes,
             "is_canonical": int(s.is_canonical),
             "is_deleted": int(s.is_deleted),
-            "tenant_id": s.tenant_id,
+            "user_id": s.user_id,
+            "workspace_id": s.workspace_id,
         }
 
     @staticmethod
@@ -96,7 +110,8 @@ class SQLiteScenarioStore:
             notes=row["notes"],
             is_canonical=bool(row["is_canonical"]),
             is_deleted=bool(row["is_deleted"]),
-            tenant_id=row["tenant_id"] if "tenant_id" in keys else "default",
+            user_id=row["user_id"] if "user_id" in keys else "default",
+            workspace_id=row["workspace_id"] if "workspace_id" in keys else None,
         )
 
     def save(self, scenario: Scenario) -> None:
@@ -107,11 +122,11 @@ class SQLiteScenarioStore:
                 INSERT INTO scenarios (
                     id, name, description, base_model, parent_scenario_id,
                     overrides_json, inputs_snapshot_json, results_snapshot_json,
-                    created_at, tags_json, notes, is_canonical, is_deleted, tenant_id
+                    created_at, tags_json, notes, is_canonical, is_deleted, user_id, workspace_id
                 ) VALUES (
                     :id, :name, :description, :base_model, :parent_scenario_id,
                     :overrides_json, :inputs_snapshot_json, :results_snapshot_json,
-                    :created_at, :tags_json, :notes, :is_canonical, :is_deleted, :tenant_id
+                    :created_at, :tags_json, :notes, :is_canonical, :is_deleted, :user_id, :workspace_id
                 )
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
@@ -123,7 +138,8 @@ class SQLiteScenarioStore:
                     notes = excluded.notes,
                     is_canonical = excluded.is_canonical,
                     is_deleted = excluded.is_deleted,
-                    tenant_id = excluded.tenant_id
+                    user_id = excluded.user_id,
+                    workspace_id = excluded.workspace_id
                 """,
                 row,
             )
@@ -139,7 +155,8 @@ class SQLiteScenarioStore:
         self,
         base_model: str | None = None,
         include_deleted: bool = False,
-        tenant_id: str | None = None,
+        user_id: str | None = None,
+        workspace_id: str | None = None,
     ) -> list[Scenario]:
         clauses = []
         params: list[object] = []
@@ -148,9 +165,12 @@ class SQLiteScenarioStore:
             params.append(base_model)
         if not include_deleted:
             clauses.append("is_deleted = 0")
-        if tenant_id is not None:
-            clauses.append("tenant_id = ?")
-            params.append(tenant_id)
+        if user_id is not None:
+            clauses.append("user_id = ?")
+            params.append(user_id)
+        if workspace_id is not None:
+            clauses.append("workspace_id = ?")
+            params.append(workspace_id)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         sql = f"SELECT * FROM scenarios {where} ORDER BY created_at DESC"
         with self._conn() as conn:

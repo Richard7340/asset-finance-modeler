@@ -505,7 +505,8 @@ def build_registry(
                         "query": {"type": "string"},
                         "top_k": {"type": "integer", "default": 5},
                         "category": {"type": "string"},
-                        "tenant_id": {"type": "string"},
+                        "user_id": {"type": "string"},
+                        "workspace_id": {"type": "string"},
                     },
                     "required": ["query"],
                     "additionalProperties": False,
@@ -514,7 +515,7 @@ def build_registry(
             ),
             ToolSpec(
                 name="finance.knowledge.add",
-                description="Add a new knowledge entry. Optional tenant_id for company-specific knowledge.",
+                description="Add a new knowledge entry. Optional user_id for company-specific knowledge.",
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -522,7 +523,8 @@ def build_registry(
                         "content": {"type": "string"},
                         "category": {"type": "string", "default": "general"},
                         "tags": {"type": "array", "items": {"type": "string"}},
-                        "tenant_id": {"type": "string"},
+                        "user_id": {"type": "string"},
+                        "workspace_id": {"type": "string"},
                     },
                     "required": ["title", "content"],
                     "additionalProperties": False,
@@ -613,12 +615,13 @@ def build_registry(
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "tenant_id": {"type": "string"},
+                        "user_id": {"type": "string"},
                         "key": {"type": "string"},
                         "value": {"type": "string"},
                         "tags": {"type": "array", "items": {"type": "string"}},
+                        "workspace_id": {"type": "string"},
                     },
-                    "required": ["tenant_id", "key", "value"],
+                    "required": ["user_id", "key", "value"],
                     "additionalProperties": False,
                 },
                 handler=make_context_store(ctx_mem),
@@ -626,31 +629,33 @@ def build_registry(
             ToolSpec(
                 name="finance.context.search",
                 description=(
-                    "Semantic search over stored context for a given tenant. "
+                    "Semantic search over stored context for a given user. "
                     "Use to recall previous discussions or decisions."
                 ),
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "tenant_id": {"type": "string"},
+                        "user_id": {"type": "string"},
                         "query": {"type": "string"},
                         "top_k": {"type": "integer", "default": 5},
+                        "workspace_id": {"type": "string"},
                     },
-                    "required": ["tenant_id", "query"],
+                    "required": ["user_id", "query"],
                     "additionalProperties": False,
                 },
                 handler=make_context_search(ctx_mem),
             ),
             ToolSpec(
                 name="finance.context.recent",
-                description="Return most recent context entries for a tenant (ordered by created_at desc).",
+                description="Return most recent context entries for a user (ordered by created_at desc).",
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "tenant_id": {"type": "string"},
+                        "user_id": {"type": "string"},
                         "limit": {"type": "integer", "default": 10},
+                        "workspace_id": {"type": "string"},
                     },
-                    "required": ["tenant_id"],
+                    "required": ["user_id"],
                     "additionalProperties": False,
                 },
                 handler=make_context_recent(ctx_mem),
@@ -840,7 +845,8 @@ def build_registry(
                     "type": "object",
                     "properties": {
                         "name": {"type": "string"},
-                        "tenant_id": {"type": "string"},
+                        "user_id": {"type": "string"},
+                        "workspace_id": {"type": "string"},
                         "description": {"type": "string"},
                         "asset_type": {"type": "string"},
                         "region": {"type": "string"},
@@ -852,11 +858,12 @@ def build_registry(
             ),
             ToolSpec(
                 name="finance.project.list",
-                description="List projects for a tenant.",
+                description="List projects for a user.",
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "tenant_id": {"type": "string"},
+                        "user_id": {"type": "string"},
+                        "workspace_id": {"type": "string"},
                         "include_archived": {"type": "boolean"},
                     },
                 },

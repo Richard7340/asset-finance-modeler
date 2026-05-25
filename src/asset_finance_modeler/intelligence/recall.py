@@ -101,14 +101,14 @@ class ScenarioRecall:
         self,
         query: str,
         top_k: int = 5,
-        tenant_id: str | None = None,  # reserved for future multi-tenant filtering
+        user_id: str | None = None,  # reserved for future multi-user filtering
     ) -> list[RecallResult]:
         """Return the *top_k* scenarios most semantically similar to *query*.
 
         Args:
             query: Natural-language description of the desired scenario.
             top_k: Maximum number of results to return.
-            tenant_id: Reserved — not used in the current implementation.
+            user_id: Reserved — not used in the current implementation.
 
         Returns:
             Ordered list of :class:`RecallResult`, best match first.

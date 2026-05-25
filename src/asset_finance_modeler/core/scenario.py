@@ -41,7 +41,8 @@ class Scenario(BaseModel):
     notes: str = ""
     is_canonical: bool = False
     is_deleted: bool = False
-    tenant_id: str = "default"
+    user_id: str = "default"
+    workspace_id: str | None = None
 
 
 def _set_by_path(d: dict[str, Any], path: str, value: Any) -> None:

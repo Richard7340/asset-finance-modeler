@@ -21,12 +21,12 @@ def test_context_store_and_recent(reg):
     recent_tool = reg["finance.context.recent"].handler
 
     store_tool({
-        "tenant_id": "gestnova",
+        "user_id": "gestnova",
         "key": "session-2026-05-15",
         "value": "Cliente Pedro pidió analisis pricing 250",
         "tags": ["pricing", "pedro"],
     })
-    out = recent_tool({"tenant_id": "gestnova", "limit": 5})
+    out = recent_tool({"user_id": "gestnova", "limit": 5})
     assert len(out["entries"]) == 1
     assert out["entries"][0]["value"].startswith("Cliente Pedro")
 
@@ -35,6 +35,6 @@ def test_context_search(reg):
     store_tool = reg["finance.context.store"].handler
     search_tool = reg["finance.context.search"].handler
 
-    store_tool({"tenant_id": "t", "key": "k", "value": "Discussion about reducing customer acquisition cost"})
-    out = search_tool({"tenant_id": "t", "query": "how to reduce CAC", "top_k": 1})
+    store_tool({"user_id": "t", "key": "k", "value": "Discussion about reducing customer acquisition cost"})
+    out = search_tool({"user_id": "t", "query": "how to reduce CAC", "top_k": 1})
     assert len(out["results"]) == 1
