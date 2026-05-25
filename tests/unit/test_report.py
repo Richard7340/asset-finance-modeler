@@ -1,5 +1,5 @@
 """Tests for the professional financial report generator."""
-from asset_finance_modeler.mcp_server.tools.report import generate_report
+from asset_finance_modeler.mcp_server.tools.report import generate_pdf, generate_report
 
 
 def _mock_results():
@@ -149,3 +149,43 @@ def test_report_has_annual_tables():
     result = generate_report(_mock_results(), "Test")
     html = result["html"]
     assert "table" in html.lower()
+
+
+# ---------------------------------------------------------------------------
+# PDF generation tests
+# ---------------------------------------------------------------------------
+
+
+def test_generate_pdf_fallback_to_html(tmp_path):
+    """When weasyprint is not installed, falls back to HTML."""
+    path = str(tmp_path / "report.pdf")
+    result = generate_pdf(_mock_results(), "Test Project", path)
+    # Without weasyprint, should fall back to HTML; with it, PDF is produced.
+    assert result["format"] in ("pdf", "html")
+    if result["format"] == "html":
+        assert result["path"].endswith(".html")
+        import os
+        assert os.path.exists(result["path"])
+
+
+def test_generate_pdf_creates_file(tmp_path):
+    path = str(tmp_path / "report.pdf")
+    result = generate_pdf(_mock_results(), "Solar PV", path)
+    assert "path" in result
+    assert result["format"] in ("pdf", "html")
+    import os
+    assert os.path.exists(result["path"])
+
+
+def test_generate_pdf_returns_message(tmp_path):
+    path = str(tmp_path / "report.pdf")
+    result = generate_pdf(_mock_results(), "Solar PV", path)
+    assert "message" in result
+    assert len(result["message"]) > 0
+
+
+def test_report_print_css():
+    """Report HTML includes print-friendly CSS."""
+    result = generate_report(_mock_results(), "Test")
+    assert "@media print" in result["html"]
+    assert "page-break" in result["html"]

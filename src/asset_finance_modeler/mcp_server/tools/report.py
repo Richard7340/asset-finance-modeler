@@ -890,12 +890,18 @@ canvas { width: 100% !important; }
 
 /* Print */
 @media print {
-    body { padding: 20px; }
-    .chart-grid { grid-template-columns: repeat(2, 1fr); }
-    .kpi-grid { grid-template-columns: repeat(4, 1fr); }
-    .section { page-break-inside: avoid; }
-    .cover { page-break-after: always; }
-    .charts-section { page-break-before: always; }
+    body { padding: 15px; font-size: 11px; }
+    .cover { page-break-after: always; padding: 80px 20px; }
+    .section { page-break-inside: avoid; margin-bottom: 24px; }
+    .chart-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .chart-card { page-break-inside: avoid; }
+    .chart-card.full { page-break-before: auto; }
+    .kpi-grid { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .kpi-card { padding: 10px; }
+    .kpi-value { font-size: 16px; }
+    table { font-size: 10px; }
+    .disclaimer { page-break-before: always; }
+    canvas { max-height: 250px; }
 }
 
 @media (max-width: 768px) {
@@ -1023,6 +1029,69 @@ def generate_report(
 # ---------------------------------------------------------------------------
 # MCP factory
 # ---------------------------------------------------------------------------
+
+
+def generate_pdf(
+    results: dict[str, Any],
+    scenario_name: str,
+    output_path: str,
+) -> dict[str, Any]:
+    """Generate a PDF report. Uses weasyprint if available, otherwise enhanced HTML for print.
+
+    Args:
+        results: Full scenario results.
+        scenario_name: Project name for the cover page.
+        output_path: Target file path (should end in .pdf).
+
+    Returns:
+        {"path": str, "format": "pdf"|"html", "message": str}
+    """
+    # First generate the HTML report
+    report = generate_report(results, scenario_name)
+    html_content = report["html"]
+
+    # Try weasyprint
+    try:
+        import weasyprint  # type: ignore[import-untyped]
+
+        doc = weasyprint.HTML(string=html_content)
+        doc.write_pdf(output_path)
+        return {
+            "path": output_path,
+            "format": "pdf",
+            "message": f"PDF report generated at {output_path}",
+        }
+    except ImportError:
+        pass
+
+    # Fallback: save enhanced HTML with print instructions
+    html_path = output_path.replace(".pdf", ".html")
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    return {
+        "path": html_path,
+        "format": "html",
+        "message": (
+            f"weasyprint not installed. HTML report saved to {html_path}. "
+            "Open in browser and use File → Print → Save as PDF."
+        ),
+    }
+
+
+def make_generate_pdf(store: Any) -> Any:
+    """MCP factory for PDF report generation."""
+
+    def _handle(args: dict[str, Any]) -> dict[str, Any]:
+        scenario_id = args["scenario_id"]
+        output_path = args.get("output_path", f"/tmp/report_{scenario_id}.pdf")
+        scenario = store.get(scenario_id)
+        if scenario is None:
+            return {"error": f"Scenario {scenario_id} not found"}
+        if not scenario.results_snapshot:
+            return {"error": f"Scenario {scenario_id} has no results"}
+        return generate_pdf(scenario.results_snapshot, scenario.name, output_path)
+
+    return _handle
 
 
 def make_generate_report(store: SQLiteScenarioStore) -> Any:
