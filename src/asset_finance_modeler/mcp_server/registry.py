@@ -26,7 +26,7 @@ from asset_finance_modeler.mcp_server.tools.execute import (
     make_run,
 )
 from asset_finance_modeler.mcp_server.tools.dashboard import make_generate_dashboard
-from asset_finance_modeler.mcp_server.tools.report import make_generate_report
+from asset_finance_modeler.mcp_server.tools.report import make_generate_pdf, make_generate_report
 from asset_finance_modeler.mcp_server.tools.output import (
     make_export,
     make_fetch_external,
@@ -450,6 +450,28 @@ def build_registry(
                 },
                 handler=make_generate_report(store),
             ),
+            ToolSpec(
+                name="finance.report.pdf",
+                description=(
+                    "Generate a PDF financial report (requires weasyprint) or "
+                    "print-ready HTML as fallback. "
+                    "When weasyprint is installed, writes a real PDF to output_path. "
+                    "Otherwise saves an enhanced HTML file and returns browser-print instructions."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "output_path": {
+                            "type": "string",
+                            "description": "Target file path (e.g. /tmp/report.pdf). Defaults to /tmp/report_<id>.pdf",
+                        },
+                    },
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_generate_pdf(store),
+            ),
         ])
 
     # Knowledge base (optional)
@@ -862,6 +884,16 @@ def build_registry(
             ),
         ]
         specs.extend(project_specs)
+
+        from asset_finance_modeler.mcp_server.tools.portfolio import make_portfolio_analyze  # noqa: PLC0415
+        specs.append(ToolSpec(
+            name="finance.portfolio.analyze",
+            description="Analyze a portfolio of scenarios — aggregated metrics, comparison table, narrative.",
+            input_schema={"type": "object", "properties": {
+                "scenario_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            }, "required": ["scenario_ids"]},
+            handler=make_portfolio_analyze(store),
+        ))
 
         # Scenario recall + diff tools
         from asset_finance_modeler.intelligence.recall import ScenarioRecall  # noqa: PLC0415
