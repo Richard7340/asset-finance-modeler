@@ -33,6 +33,12 @@ from asset_finance_modeler.mcp_server.tools.output import (
     make_set_external,
     make_track_stub,
 )
+from asset_finance_modeler.mcp_server.tools.vdr_sharing import (
+    handle_explain_vdr,
+    handle_import_from_vdr,
+    handle_list_workspace_shared,
+    handle_share_to_vdr,
+)
 from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
 
 
@@ -952,6 +958,78 @@ def build_registry(
                 handler=make_recall_project_context(project_store, store),
             ),
         ])
+
+    # VDR sharing tools (always available — graceful degradation when token absent)
+    specs.extend([
+        ToolSpec(
+            name="financial.share_to_vdr",
+            description=(
+                "Export a financial scenario/project report to the Gestnova VDR "
+                "for sharing with workspace members."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "scenario_id": {"type": "string", "description": "Scenario ID to export"},
+                    "project_id": {"type": "string", "description": "Project ID to export"},
+                    "format": {
+                        "type": "string",
+                        "enum": ["json", "markdown", "html"],
+                        "default": "json",
+                    },
+                    "workspace_id": {
+                        "type": "string",
+                        "description": "Target workspace ID in Gestnova VDR",
+                    },
+                },
+            },
+            handler=handle_share_to_vdr,
+        ),
+        ToolSpec(
+            name="financial.import_from_vdr",
+            description="Import financial data from a Gestnova VDR file.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "vdr_path": {"type": "string", "description": "Path inside the VDR"},
+                    "workspace_id": {"type": "string"},
+                },
+                "required": ["vdr_path"],
+            },
+            handler=handle_import_from_vdr,
+        ),
+        ToolSpec(
+            name="financial.list_workspace_shared",
+            description="List financial reports shared in a workspace VDR folder.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "workspace_id": {
+                        "type": "string",
+                        "default": "default",
+                        "description": "Workspace ID to list reports for",
+                    },
+                },
+            },
+            handler=handle_list_workspace_shared,
+        ),
+        ToolSpec(
+            name="financial.explain_vdr",
+            description=(
+                "Explain a financial report from VDR in natural language. "
+                "Returns a suggested flow to import and analyze the data."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "vdr_path": {"type": "string", "description": "VDR file path to explain"},
+                    "question": {"type": "string", "description": "Question about the report"},
+                },
+                "required": ["vdr_path"],
+            },
+            handler=handle_explain_vdr,
+        ),
+    ])
 
     final_registry = {s.name: s for s in specs}
     _registry_holder["registry"] = final_registry
