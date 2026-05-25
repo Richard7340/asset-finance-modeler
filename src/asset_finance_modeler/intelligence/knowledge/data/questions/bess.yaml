@@ -1,0 +1,279 @@
+- field_path: meta.horizon.periods
+  question: "¿Vida útil del sistema de almacenamiento (años)?"
+  help_text: "BESS (baterías de litio): 15-20 años. Después suele requerirse sustitución de baterías (augmentation)."
+  options:
+    - label: "15 años (ciclo estándar)"
+      value: 180
+    - label: "20 años (con augmentation)"
+      value: 240
+    - label: "25 años (con reemplazo completo)"
+      value: 300
+  required: true
+  order: 0
+  group: meta
+
+- field_path: production.power_mw
+  question: "¿Potencia del sistema BESS (MW)?"
+  help_text: "Potencia máxima de carga/descarga. Proyectos standalone España: 10-100 MW."
+  options:
+    - label: "10 MW"
+      value: 10
+    - label: "25 MW"
+      value: 25
+    - label: "50 MW"
+      value: 50
+    - label: "100 MW"
+      value: 100
+  required: true
+  order: 1
+  group: production
+
+- field_path: production.duration_hours
+  question: "¿Duración del almacenamiento (horas)?"
+  help_text: "Energía total = Potencia × Duración. 1h = arbitraje de pico. 2h = servicios de red. 4h+ = desplazamiento solar."
+  options:
+    - label: "1 hora (servicios ancilares)"
+      value: 1
+    - label: "2 horas (arbitraje + servicios)"
+      value: 2
+    - label: "4 horas (desplazamiento solar)"
+      value: 4
+    - label: "6 horas (almacenamiento largo)"
+      value: 6
+  required: true
+  order: 2
+  group: production
+
+- field_path: production.round_trip_efficiency_pct
+  question: "¿Eficiencia de ida y vuelta (round-trip efficiency, %)?"
+  help_text: "Energía recuperada vs. energía cargada. Li-NMC: 88-92%. LFP: 90-94%."
+  options:
+    - label: "88% (Li-NMC conservador)"
+      value: 88
+    - label: "91% (LFP estándar)"
+      value: 91
+    - label: "94% (tecnología premium)"
+      value: 94
+  required: true
+  order: 3
+  benchmark_key: rte_bess
+  group: production
+
+- field_path: production.depth_of_discharge_pct
+  question: "¿Profundidad de descarga máxima (DoD, %)?"
+  help_text: "Porcentaje de la capacidad utilizable. Limitar el DoD prolonga la vida útil. LFP: 90-95% habitual."
+  options:
+    - label: "80% (vida útil máxima)"
+      value: 80
+    - label: "90% (equilibrio rendimiento/vida)"
+      value: 90
+    - label: "95% (máximo rendimiento)"
+      value: 95
+  required: true
+  order: 4
+  group: production
+
+- field_path: production.cycles_per_day
+  question: "¿Ciclos de carga/descarga por día?"
+  help_text: "Más ciclos = más ingresos pero más degradación. Estrategia típica: 1-2 ciclos/día."
+  options:
+    - label: "0.5 ciclos/día (operación conservadora)"
+      value: 0.5
+    - label: "1 ciclo/día (arbitraje simple)"
+      value: 1
+    - label: "1.5 ciclos/día (arbitraje + ancilares)"
+      value: 1.5
+    - label: "2 ciclos/día (operación agresiva)"
+      value: 2
+  required: true
+  order: 5
+  group: production
+
+- field_path: revenue.arbitrage_spread_eur_mwh
+  question: "¿Spread de arbitraje esperado (€/MWh)?"
+  help_text: "Diferencial precio compra (valle) - venta (pico). España MIBEL 2025-2026: 20-60 €/MWh en días buenos."
+  options:
+    - label: "20 €/MWh (spread bajo, mercado estable)"
+      value: 20
+    - label: "35 €/MWh (spread medio)"
+      value: 35
+    - label: "50 €/MWh (spread alto, mucha volatilidad)"
+      value: 50
+  required: true
+  order: 6
+  benchmark_key: arbitrage_spread_bess_es
+  group: revenue
+
+- field_path: revenue.capacity_market_eur_mw_year
+  question: "¿Ingresos por mercado de capacidad (€/MW/año)?"
+  help_text: "España todavía en desarrollo (mecanismo de pagos por capacidad). Europa: 50-200 €/MW/año según mercado."
+  options:
+    - label: "0 (no aplica / pendiente regulación)"
+      value: 0
+    - label: "50,000 €/MW/año (capacidad básica)"
+      value: 50000
+    - label: "100,000 €/MW/año (mercado activo)"
+      value: 100000
+  required: false
+  order: 7
+  group: revenue
+
+- field_path: revenue.ancillary_services_eur_mw_year
+  question: "¿Ingresos por servicios ancilares (FCR/aFRR) en €/MW/año?"
+  help_text: "Regulación de frecuencia (FCR) y reserva de regulación (aFRR). España Red Eléctrica 2025: 20,000-80,000 €/MW/año."
+  options:
+    - label: "0 (sin servicios ancilares)"
+      value: 0
+    - label: "30,000 €/MW/año (FCR básico)"
+      value: 30000
+    - label: "60,000 €/MW/año (FCR + aFRR)"
+      value: 60000
+    - label: "80,000 €/MW/año (full stack ancilares)"
+      value: 80000
+  required: false
+  order: 8
+  group: revenue
+
+- field_path: capex.items[0].amount_per_kwh
+  question: "¿CAPEX del sistema BESS (€/kWh de capacidad)?"
+  help_text: "España 2025-2026: 200-350 €/kWh (incluye baterías, inversores, BOS, conexión red y EPC)."
+  options:
+    - label: "200 €/kWh (tecnología madura, LFP)"
+      value: 200
+    - label: "270 €/kWh (mercado estándar)"
+      value: 270
+    - label: "350 €/kWh (con redundancias / tier premium)"
+      value: 350
+  required: true
+  order: 9
+  benchmark_key: capex_per_kwh_bess
+  group: capex
+
+- field_path: opex.om_annual_pct_capex
+  question: "¿O&M anual como % del CAPEX?"
+  help_text: "Mantenimiento, monitorización, seguros. BESS: 1.5-2.5% del CAPEX anual."
+  options:
+    - label: "1.5% (contrato O&M básico)"
+      value: 0.015
+    - label: "2.0% (O&M estándar con seguro)"
+      value: 0.020
+    - label: "2.5% (O&M completo + contingencias)"
+      value: 0.025
+  required: true
+  order: 10
+  group: opex
+
+- field_path: opex.augmentation_year
+  question: "¿En qué año se realiza el augmentation (reposición parcial de baterías)?"
+  help_text: "Para mantener la capacidad al superar el EOL threshold. Típicamente año 8-12. Coste: 30-50% del CAPEX baterías."
+  options:
+    - label: "Sin augmentation planificado"
+      value: 0
+    - label: "Año 8"
+      value: 8
+    - label: "Año 10"
+      value: 10
+    - label: "Año 12"
+      value: 12
+  required: false
+  order: 11
+  group: opex
+
+- field_path: opex.eol_capacity_threshold_pct
+  question: "¿Umbral de capacidad de fin de vida (EOL, %)?"
+  help_text: "Capacidad mínima aceptable antes de augmentation o sustitución. Típico: 70-80% de capacidad original."
+  options:
+    - label: "70% (agresivo, máximo uso)"
+      value: 70
+    - label: "75% (estándar)"
+      value: 75
+    - label: "80% (conservador)"
+      value: 80
+  required: false
+  order: 12
+  group: opex
+  expert_only: true
+
+- field_path: financing.max_leverage
+  question: "¿Ratio deuda/equity?"
+  help_text: "BESS es activo relativamente nuevo: bancos típicamente financian 50-70% con PPA/contrato ancilares. Sin contrato: 0-50%."
+  options:
+    - label: "Sin deuda (100% equity)"
+      value: 0
+    - label: "50% deuda"
+      value: 0.50
+    - label: "60% deuda (con contrato revenue)"
+      value: 0.60
+    - label: "70% deuda (PPA + ancilares firmados)"
+      value: 0.70
+  required: true
+  order: 13
+  group: financing
+
+- field_path: financing.debt_tenor_years
+  question: "¿Plazo de la deuda (años)?"
+  help_text: "BESS: tenor más corto que solar/eólico. Típico: 10-15 años por vida útil del activo."
+  options:
+    - label: "10 años"
+      value: 10
+    - label: "12 años"
+      value: 12
+    - label: "15 años"
+      value: 15
+  required: true
+  order: 14
+  group: financing
+
+- field_path: financing.interest_rate_annual
+  question: "¿Tipo de interés de la deuda (% anual)?"
+  help_text: "BESS España 2025-2026: 5-7% anual. Prima de riesgo mayor que solar/eólico por tecnología más nueva."
+  options:
+    - label: "5% (proyecto con contratos sólidos)"
+      value: 0.05
+    - label: "6% (estándar mercado)"
+      value: 0.06
+    - label: "7% (proyecto con riesgo merchant)"
+      value: 0.07
+  required: true
+  order: 15
+  group: financing
+  expert_only: true
+
+- field_path: taxes.corporate_income_tax_rate
+  question: "¿Tipo impositivo de sociedades?"
+  help_text: "España: 25% estándar. Algunas estructuras de project finance pueden optimizar vía Entidades de Tenencia de Valores Extranjeros (ETVE)."
+  options:
+    - label: "25% (España estándar)"
+      value: 0.25
+    - label: "21% (USA)"
+      value: 0.21
+  required: true
+  order: 16
+  group: taxes
+
+- field_path: valuation.discount_rate_annual
+  question: "¿WACC para la valoración del proyecto BESS?"
+  help_text: "BESS con contratos: 7-9%. BESS merchant (sin contratos): 10-14%."
+  options:
+    - label: "7% (con contratos de revenue sólidos)"
+      value: 0.07
+    - label: "9% (mixto contratos + merchant)"
+      value: 0.09
+    - label: "12% (merchant, mayor incertidumbre)"
+      value: 0.12
+  required: true
+  order: 17
+  group: valuation
+  expert_only: true
+
+- field_path: custom_notes
+  question: "¿Quieres añadir algún input adicional o nota especial?"
+  help_text: "Puedes mencionar cualquier factor especial: subvenciones, restricciones, condiciones de mercado, etc."
+  options:
+    - label: "No, todo está definido"
+      value: "none"
+    - label: "Sí, quiero añadir algo"
+      value: "custom"
+  required: false
+  order: 99
+  group: custom

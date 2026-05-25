@@ -1,0 +1,293 @@
+- field_path: meta.horizon.periods
+  question: "¿Vida útil del proyecto eólico (años)?"
+  help_text: "Eólico onshore moderno: 25-30 años. Con repowering puede extenderse a 35-40 años."
+  options:
+    - label: "25 años (estándar)"
+      value: 300
+    - label: "30 años (turbinas modernas)"
+      value: 360
+    - label: "35 años (con repowering)"
+      value: 420
+  required: true
+  order: 0
+  group: meta
+
+- field_path: production.capacity_mw
+  question: "¿Qué capacidad tiene el parque eólico?"
+  help_text: "Potencia nominal instalada en megavatios. Onshore típico: 10-100 MW."
+  options:
+    - label: "10 MW (pequeño)"
+      value: 10
+    - label: "30 MW (mediano)"
+      value: 30
+    - label: "50 MW (grande)"
+      value: 50
+    - label: "100 MW (utility-scale)"
+      value: 100
+  required: true
+  order: 1
+  group: production
+
+- field_path: production.capacity_factor_pct
+  question: "¿Factor de capacidad esperado (%)?"
+  help_text: "España onshore: 25-35% en zonas interiores, 35-45% en zonas costeras/meseta. Depende mucho del emplazamiento."
+  options:
+    - label: "25% (zona baja viento)"
+      value: 25
+    - label: "30% (zona media)"
+      value: 30
+    - label: "35% (buena localización)"
+      value: 35
+    - label: "42% (excelente, zona costera)"
+      value: 42
+  required: true
+  order: 2
+  benchmark_key: capacity_factor_wind_es
+  group: production
+
+- field_path: production.availability_pct
+  question: "¿Disponibilidad técnica del parque (%)?"
+  help_text: "Tiempo que las turbinas están operativas. Contrato O&M estándar: 97-98%."
+  options:
+    - label: "95% (sin contrato O&M garantizado)"
+      value: 95
+    - label: "97% (O&M estándar)"
+      value: 97
+    - label: "98% (O&M premium)"
+      value: 98
+  required: true
+  order: 3
+  group: production
+
+- field_path: production.wake_losses_pct
+  question: "¿Pérdidas por efecto estela entre turbinas (%)?"
+  help_text: "Depende del layout del parque. Parques bien diseñados: 3-8%. Parques densos: 10-15%."
+  options:
+    - label: "3% (parque pequeño / bien espaciado)"
+      value: 3
+    - label: "6% (layout típico)"
+      value: 6
+    - label: "10% (parque denso)"
+      value: 10
+  required: true
+  order: 4
+  group: production
+
+- field_path: production.degradation_rate_annual_pct
+  question: "¿Tasa de degradación anual de producción (%)?"
+  help_text: "Reducción anual de producción por desgaste. Eólico: 0.2-0.5% anual."
+  options:
+    - label: "0.2% (turbinas nuevas, buen O&M)"
+      value: 0.2
+    - label: "0.35% (referencia estándar)"
+      value: 0.35
+    - label: "0.5% (conservador)"
+      value: 0.5
+  required: false
+  order: 5
+  group: production
+
+- field_path: revenue[0].type
+  question: "¿Cómo se venderá la energía?"
+  help_text: "PPA = precio fijo con comprador corporativo. Merchant = precio de mercado. Mixto = combinación."
+  options:
+    - label: "PPA (contrato fijo)"
+      value: ppa
+    - label: "Merchant (mercado eléctrico)"
+      value: merchant
+    - label: "Mixto PPA + Merchant"
+      value: mixed
+  required: true
+  order: 6
+  group: revenue
+
+- field_path: revenue[0].price_eur_per_unit
+  question: "¿Precio PPA (€/MWh)?"
+  help_text: "España 2025-2026 eólico onshore: 38-58 €/MWh. PPA 10+ años suelen estar en 40-50 €/MWh."
+  options:
+    - label: "38 €/MWh (competitivo)"
+      value: 38
+    - label: "45 €/MWh (mercado)"
+      value: 45
+    - label: "52 €/MWh (premium / largo plazo)"
+      value: 52
+    - label: "58 €/MWh (con GOs incluidos)"
+      value: 58
+  required: true
+  order: 7
+  depends_on: "revenue[0].type"
+  benchmark_key: ppa_price_wind_es
+  group: revenue
+
+- field_path: revenue.green_certificates_eur_per_mwh
+  question: "¿Ingresos por certificados verdes (GOs) en €/MWh?"
+  help_text: "Garantías de Origen (GOs) en España: 0.5-2 €/MWh. A veces incluidos ya en el PPA."
+  options:
+    - label: "0 €/MWh (incluidos en PPA o no aplica)"
+      value: 0
+    - label: "0.5 €/MWh (GOs mercado bajo)"
+      value: 0.5
+    - label: "1.5 €/MWh (GOs con prima verde)"
+      value: 1.5
+  required: false
+  order: 8
+  group: revenue
+
+- field_path: capex.items[0].amount_per_unit
+  question: "¿CAPEX total (€/kW instalado)?"
+  help_text: "España 2025-2026: 900-1200 €/kW instalado (incluye turbinas, BOS, conexión red, desarrollo). Turbinas solas: 600-800 €/kW."
+  options:
+    - label: "900 €/kW (competitivo)"
+      value: 900
+    - label: "1050 €/kW (mercado)"
+      value: 1050
+    - label: "1200 €/kW (con infraestructura compleja)"
+      value: 1200
+  required: true
+  order: 9
+  benchmark_key: capex_per_kw_wind_es
+  group: capex
+
+- field_path: capex.grid_connection_eur
+  question: "¿Coste de conexión a la red eléctrica (€)?"
+  help_text: "Depende de la distancia a la subestación. Típico: 500K-5M €. Incluir en CAPEX total si ya está sumado."
+  options:
+    - label: "Incluido en CAPEX/kW"
+      value: 0
+    - label: "500,000 € (cerca de subestación)"
+      value: 500000
+    - label: "2,000,000 € (distancia media)"
+      value: 2000000
+    - label: "5,000,000 € (línea larga)"
+      value: 5000000
+  required: false
+  order: 10
+  group: capex
+
+- field_path: opex.om_per_kw_year
+  question: "¿Coste O&M anual (€/kW/año)?"
+  help_text: "España eólico onshore: 20-35 €/kW/año todo incluido (mantenimiento, seguro, arrendamiento terreno, administración)."
+  options:
+    - label: "20 €/kW/año (contrato O&M básico)"
+      value: 20
+    - label: "27 €/kW/año (O&M completo + seguro)"
+      value: 27
+    - label: "35 €/kW/año (full-service + contingencias)"
+      value: 35
+  required: true
+  order: 11
+  benchmark_key: opex_per_kw_wind_es
+  group: opex
+
+- field_path: opex.land_lease_eur_mwh
+  question: "¿Canon de arrendamiento de terreno (€/MWh producido)?"
+  help_text: "Arrendamiento a propietarios del terreno. España: 3-8 €/MWh o ~2-5% de ingresos."
+  options:
+    - label: "3 €/MWh (acuerdo favorable)"
+      value: 3
+    - label: "5 €/MWh (mercado)"
+      value: 5
+    - label: "8 €/MWh (zona competida)"
+      value: 8
+  required: false
+  order: 12
+  group: opex
+
+- field_path: financing.max_leverage
+  question: "¿Ratio deuda/equity (apalancamiento)?"
+  help_text: "Project finance eólico: 70-80% deuda habitual con PPA firmado."
+  options:
+    - label: "Sin deuda (100% equity)"
+      value: 0
+    - label: "70% deuda"
+      value: 0.70
+    - label: "75% deuda"
+      value: 0.75
+    - label: "80% deuda (máximo habitual)"
+      value: 0.80
+  required: true
+  order: 13
+  group: financing
+
+- field_path: financing.debt_tenor_years
+  question: "¿Plazo de la deuda (años)?"
+  help_text: "Deuda project finance eólico: típicamente 15-20 años. DSCR mínimo exigido: 1.20-1.30x."
+  options:
+    - label: "15 años"
+      value: 15
+    - label: "18 años"
+      value: 18
+    - label: "20 años"
+      value: 20
+  required: true
+  order: 14
+  group: financing
+
+- field_path: financing.interest_rate_annual
+  question: "¿Tipo de interés de la deuda (% anual)?"
+  help_text: "España 2025-2026: Euribor + 150-250 pb. Referencia total: 4.5-6.5% anual."
+  options:
+    - label: "4.5% (proyecto prime con PPA largo)"
+      value: 0.045
+    - label: "5.5% (mercado estándar)"
+      value: 0.055
+    - label: "6.5% (proyecto con más riesgo)"
+      value: 0.065
+  required: true
+  order: 15
+  group: financing
+  expert_only: true
+
+- field_path: financing.dscr_target
+  question: "¿DSCR mínimo objetivo (ratio cobertura deuda)?"
+  help_text: "Debt Service Coverage Ratio mínimo exigido por el banco. Eólico: 1.20-1.30x típico."
+  options:
+    - label: "1.20x (mínimo estándar)"
+      value: 1.20
+    - label: "1.25x (recomendado)"
+      value: 1.25
+    - label: "1.30x (conservador)"
+      value: 1.30
+  required: false
+  order: 16
+  group: financing
+  expert_only: true
+
+- field_path: taxes.corporate_income_tax_rate
+  question: "¿Tipo impositivo de sociedades?"
+  help_text: "España: 25% estándar. Algunos regímenes especiales para proyectos renovables pueden aplicar."
+  options:
+    - label: "25% (España estándar)"
+      value: 0.25
+    - label: "21% (USA)"
+      value: 0.21
+  required: true
+  order: 17
+  group: taxes
+
+- field_path: valuation.discount_rate_annual
+  question: "¿WACC para la valoración del proyecto?"
+  help_text: "Eólico onshore con PPA: 5-8%. Sin PPA (merchant): 8-12%."
+  options:
+    - label: "5.5% (con PPA largo plazo)"
+      value: 0.055
+    - label: "7% (mixto PPA + merchant)"
+      value: 0.07
+    - label: "10% (merchant / mayor riesgo)"
+      value: 0.10
+  required: true
+  order: 18
+  group: valuation
+  expert_only: true
+
+- field_path: custom_notes
+  question: "¿Quieres añadir algún input adicional o nota especial?"
+  help_text: "Puedes mencionar cualquier factor especial: subvenciones, restricciones, condiciones de mercado, etc."
+  options:
+    - label: "No, todo está definido"
+      value: "none"
+    - label: "Sí, quiero añadir algo"
+      value: "custom"
+  required: false
+  order: 99
+  group: custom

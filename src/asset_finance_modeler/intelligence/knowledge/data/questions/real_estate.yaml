@@ -1,0 +1,347 @@
+- field_path: meta.horizon.periods
+  question: "¿Horizonte de análisis del activo inmobiliario (años)?"
+  help_text: "Análisis buy-to-let: 10-20 años. Promoción/desarrollo: 2-5 años. Para el modelo base usa el horizonte de tenencia esperado."
+  options:
+    - label: "5 años (inversión corto/medio plazo)"
+      value: 60
+    - label: "10 años (inversión media)"
+      value: 120
+    - label: "20 años (inversión largo plazo)"
+      value: 240
+    - label: "30 años (hipoteca completa)"
+      value: 360
+  required: true
+  order: 0
+  group: meta
+
+- field_path: production.asset_type
+  question: "¿Tipo de activo inmobiliario?"
+  help_text: "Define el perfil de ingresos, riesgos y tratamiento fiscal del activo."
+  options:
+    - label: "Residencial (vivienda)"
+      value: "residential"
+    - label: "Comercial (oficinas / retail)"
+      value: "commercial"
+    - label: "Industrial / logístico"
+      value: "industrial"
+    - label: "Desarrollo / promoción"
+      value: "development"
+  required: true
+  order: 1
+  group: production
+
+- field_path: production.area_sqm
+  question: "¿Superficie del inmueble (m²)?"
+  help_text: "Metros cuadrados útiles. Vivienda media España: 80-120 m². Local comercial: 50-500 m². Nave logística: 1,000-50,000 m²."
+  options:
+    - label: "80 m² (piso estándar)"
+      value: 80
+    - label: "150 m² (vivienda grande / local pequeño)"
+      value: 150
+    - label: "500 m² (local comercial / oficina)"
+      value: 500
+    - label: "5,000 m² (nave logística)"
+      value: 5000
+  required: true
+  order: 2
+  group: production
+
+- field_path: production.num_units
+  question: "¿Número de unidades / inmuebles en el portafolio?"
+  help_text: "Si inviertes en varios activos del mismo tipo, indica el número. Para un único activo: 1."
+  options:
+    - label: "1 (activo único)"
+      value: 1
+    - label: "3 (pequeño portafolio)"
+      value: 3
+    - label: "10 (portafolio mediano)"
+      value: 10
+    - label: "50 (build-to-rent / fondo)"
+      value: 50
+  required: true
+  order: 3
+  group: production
+
+- field_path: revenue[0].price_eur_per_unit
+  question: "¿Alquiler por m² al mes (€/m²/mes)?"
+  help_text: "España 2025: Madrid residencial 16-22 €/m²/mes. Barcelona: 18-25 €/m²/mes. Ciudades medianas: 8-14 €/m²/mes. Oficinas prime Madrid: 30-40 €/m²/mes."
+  options:
+    - label: "8 €/m²/mes (ciudad pequeña / periferia)"
+      value: 8
+    - label: "14 €/m²/mes (ciudad mediana)"
+      value: 14
+    - label: "20 €/m²/mes (Madrid/Barcelona residencial)"
+      value: 20
+    - label: "35 €/m²/mes (oficinas prime Madrid)"
+      value: 35
+  required: true
+  order: 4
+  benchmark_key: rental_price_sqm_month_es
+  group: revenue
+
+- field_path: revenue.occupancy_rate_pct
+  question: "¿Tasa de ocupación esperada (%)?"
+  help_text: "Porcentaje del tiempo que el inmueble está alquilado. Residencial bien gestionado: 90-95%. Comercial: 80-90%. Incluir período de vacío entre inquilinos."
+  options:
+    - label: "80% (rotación alta / mercado difícil)"
+      value: 80
+    - label: "90% (estándar)"
+      value: 90
+    - label: "95% (zona prime / alta demanda)"
+      value: 95
+    - label: "98% (alquiler a largo plazo garantizado)"
+      value: 98
+  required: true
+  order: 5
+  group: revenue
+
+- field_path: revenue.rental_escalation_annual_pct
+  question: "¿Escalación anual del alquiler (%)?"
+  help_text: "Actualización anual de rentas. En España suele estar ligado al IPC. 2024-2026: contratos limitados al 3% anual (Ley de Vivienda)."
+  options:
+    - label: "2% anual (IPC bajo)"
+      value: 2
+    - label: "3% anual (límite Ley de Vivienda)"
+      value: 3
+    - label: "4% anual (comercial sin restricciones)"
+      value: 4
+    - label: "5% anual (cláusula de mercado)"
+      value: 5
+  required: true
+  order: 6
+  group: revenue
+
+- field_path: capex.acquisition_cost_eur_sqm
+  question: "¿Precio de adquisición / construcción (€/m²)?"
+  help_text: "España 2025: Madrid residencial 4,000-8,000 €/m². Barcelona: 4,500-9,000 €/m². Ciudades medianas: 1,500-3,500 €/m². Naves: 400-1,200 €/m²."
+  options:
+    - label: "1,500 €/m² (ciudad pequeña / industrial)"
+      value: 1500
+    - label: "3,500 €/m² (ciudad mediana)"
+      value: 3500
+    - label: "6,000 €/m² (Madrid/Barcelona)"
+      value: 6000
+    - label: "9,000 €/m² (zona prime capital)"
+      value: 9000
+  required: true
+  order: 7
+  benchmark_key: acquisition_price_sqm_es
+  group: capex
+
+- field_path: capex.renovation_budget_eur
+  question: "¿Presupuesto de reforma/rehabilitación (€)?"
+  help_text: "Coste de acondicionar el inmueble antes de alquilar. Reforma básica: 500-1,000 €/m². Reforma completa: 1,500-3,000 €/m²."
+  options:
+    - label: "0 € (inmueble listo para alquilar)"
+      value: 0
+    - label: "10,000 € (reforma cosmética)"
+      value: 10000
+    - label: "50,000 € (reforma parcial)"
+      value: 50000
+    - label: "150,000 € (reforma integral)"
+      value: 150000
+  required: false
+  order: 8
+  group: capex
+
+- field_path: capex.acquisition_taxes_pct
+  question: "¿Impuestos y gastos de adquisición (% del precio)?"
+  help_text: "Segunda mano: ITP (6-10% según CCAA) + notaría + registro (~1%). Obra nueva: IVA (10%) + AJD (1-2%). Total típico: 8-13%."
+  options:
+    - label: "8% (obra nueva con IVA reducido)"
+      value: 0.08
+    - label: "10% (ITP segunda mano media)"
+      value: 0.10
+    - label: "12% (ITP alta + AJD + gastos)"
+      value: 0.12
+    - label: "13% (CCAA con ITP alto, ej. Comunidad Valenciana)"
+      value: 0.13
+  required: true
+  order: 9
+  group: capex
+
+- field_path: opex.maintenance_annual_pct_value
+  question: "¿Mantenimiento anual (% del valor del inmueble)?"
+  help_text: "Regla general: 1-2% del valor del inmueble. Incluye reparaciones, pintura, instalaciones. Edificio antiguo: 2-3%."
+  options:
+    - label: "0.5% (inmueble nuevo)"
+      value: 0.005
+    - label: "1.0% (estándar)"
+      value: 0.010
+    - label: "1.5% (edificio con 10-20 años)"
+      value: 0.015
+    - label: "2.5% (edificio antiguo)"
+      value: 0.025
+  required: true
+  order: 10
+  group: opex
+
+- field_path: opex.property_management_fee_pct
+  question: "¿Comisión de gestión inmobiliaria (% del alquiler bruto)?"
+  help_text: "Agencia o property manager. España: 5-10% del alquiler mensual. Si gestionas tú mismo: 0%."
+  options:
+    - label: "0% (gestión propia)"
+      value: 0
+    - label: "5% (gestión básica)"
+      value: 0.05
+    - label: "8% (gestión completa)"
+      value: 0.08
+    - label: "10% (gestión premium con garantía)"
+      value: 0.10
+  required: true
+  order: 11
+  group: opex
+
+- field_path: opex.ibi_annual_eur
+  question: "¿IBI anual (Impuesto de Bienes Inmuebles, €)?"
+  help_text: "España: varía mucho por municipio y valor catastral. Vivienda media: 300-1,500 €/año. Local comercial: 1,000-5,000 €/año."
+  options:
+    - label: "300 €/año (vivienda pequeña)"
+      value: 300
+    - label: "800 €/año (vivienda media)"
+      value: 800
+    - label: "2,000 €/año (inmueble grande / comercial)"
+      value: 2000
+    - label: "10,000 €/año (nave / local grande)"
+      value: 10000
+  required: true
+  order: 12
+  group: opex
+
+- field_path: opex.insurance_annual_eur
+  question: "¿Seguro anual del inmueble (€/año)?"
+  help_text: "Seguro multirriesgo de propietario. Vivienda: 200-600 €/año. Local: 500-2,000 €/año. Incluir seguro de impago si aplica."
+  options:
+    - label: "200 €/año (vivienda pequeña)"
+      value: 200
+    - label: "500 €/año (vivienda media)"
+      value: 500
+    - label: "1,500 €/año (local / nave pequeña)"
+      value: 1500
+    - label: "5,000 €/año (nave grande)"
+      value: 5000
+  required: false
+  order: 13
+  group: opex
+
+- field_path: financing.ltv
+  question: "¿Loan-to-Value (LTV) de la hipoteca (%)?"
+  help_text: "Porcentaje financiado. Bancos en España para inversión: hasta 70-80% LTV. Residencia habitual: hasta 80-90%."
+  options:
+    - label: "0% (compra al contado)"
+      value: 0
+    - label: "60% (inversión conservadora)"
+      value: 0.60
+    - label: "70% (inversión estándar)"
+      value: 0.70
+    - label: "80% (máximo para inversión)"
+      value: 0.80
+  required: true
+  order: 14
+  group: financing
+
+- field_path: financing.interest_rate_annual
+  question: "¿Tipo de interés hipotecario (% anual)?"
+  help_text: "España 2025-2026: tipo fijo 3.5-5%. Variable: Euribor (3.8%) + diferencial (0.5-1.5%). Para inversión el tipo suele ser más alto que residencia habitual."
+  options:
+    - label: "3.5% (tipo fijo competitivo)"
+      value: 0.035
+    - label: "4.5% (tipo fijo estándar)"
+      value: 0.045
+    - label: "5.5% (inversión / perfil elevado)"
+      value: 0.055
+  required: true
+  order: 15
+  group: financing
+
+- field_path: financing.mortgage_tenor_years
+  question: "¿Plazo de la hipoteca (años)?"
+  help_text: "España: máximo 30 años. Para inversión: 15-25 años. Más plazo = menor cuota mensual pero más intereses totales."
+  options:
+    - label: "15 años"
+      value: 15
+    - label: "20 años"
+      value: 20
+    - label: "25 años"
+      value: 25
+    - label: "30 años"
+      value: 30
+  required: true
+  order: 16
+  group: financing
+
+- field_path: taxes.income_tax_regime
+  question: "¿Régimen fiscal del inversor?"
+  help_text: "Persona física: IRPF (19-47% según tramo). Sociedad: IS 25%. Sociedad patrimonial puede tener ventajas con múltiples activos."
+  options:
+    - label: "IRPF persona física (19-47%)"
+      value: "irpf"
+    - label: "Impuesto de Sociedades 25%"
+      value: "is_25"
+    - label: "IS startup / primeros años 15%"
+      value: "is_15"
+  required: true
+  order: 17
+  group: taxes
+
+- field_path: taxes.irpf_marginal_rate
+  question: "¿Tipo marginal de IRPF aplicable?"
+  help_text: "Se aplica a los rendimientos de capital inmobiliario (alquiler). España 2025: 19%, 21%, 23%, 27%, 47% según base imponible."
+  options:
+    - label: "19% (base imponible hasta 6,000 €)"
+      value: 0.19
+    - label: "21% (hasta 50,000 €)"
+      value: 0.21
+    - label: "23% (hasta 200,000 €)"
+      value: 0.23
+    - label: "27% (hasta 300,000 €)"
+      value: 0.27
+    - label: "47% (más de 300,000 €)"
+      value: 0.47
+  required: false
+  order: 18
+  depends_on: "taxes.income_tax_regime"
+  group: taxes
+
+- field_path: valuation.residual_value_growth_annual_pct
+  question: "¿Revalorización anual esperada del inmueble (%)?"
+  help_text: "España largo plazo histórico: 2-4% nominal. Madrid/Barcelona zonas prime: 4-6%. Ciudades medianas: 1-3%."
+  options:
+    - label: "1% (mercado estable / ciudad pequeña)"
+      value: 0.01
+    - label: "3% (crecimiento moderado)"
+      value: 0.03
+    - label: "5% (zona prime, alta demanda)"
+      value: 0.05
+  required: true
+  order: 19
+  group: valuation
+
+- field_path: valuation.discount_rate_annual
+  question: "¿Tasa de descuento para la valoración (WACC)?"
+  help_text: "Rentabilidad exigida al activo. Residencial apalancado: 6-10%. Comercial: 7-12%."
+  options:
+    - label: "6% (residencial prime apalancado)"
+      value: 0.06
+    - label: "8% (inversión estándar)"
+      value: 0.08
+    - label: "10% (inmueble con más riesgo)"
+      value: 0.10
+    - label: "12% (comercial / desarrollo)"
+      value: 0.12
+  required: true
+  order: 20
+  group: valuation
+  expert_only: true
+
+- field_path: custom_notes
+  question: "¿Quieres añadir algún input adicional o nota especial?"
+  help_text: "Puedes mencionar cualquier factor especial: subvenciones, restricciones, condiciones de mercado, etc."
+  options:
+    - label: "No, todo está definido"
+      value: "none"
+    - label: "Sí, quiero añadir algo"
+      value: "custom"
+  required: false
+  order: 99
+  group: custom

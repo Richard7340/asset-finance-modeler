@@ -1,0 +1,317 @@
+- field_path: meta.horizon.periods
+  question: "¿Vida útil del proyecto de biometano (años)?"
+  help_text: "Plantas de biometano: 20-25 años. Los equipos de upgrading (membranas/PSA) se renuevan a los 10-15 años."
+  options:
+    - label: "20 años (ciclo estándar)"
+      value: 240
+    - label: "25 años (con renovación de equipos)"
+      value: 300
+  required: true
+  order: 0
+  group: meta
+
+- field_path: production.plant_capacity_nm3h
+  question: "¿Capacidad de producción de biometano (Nm³/h)?"
+  help_text: "Caudal de biometano inyectado a red. Pequeñas plantas agrícolas: 100-500 Nm³/h. Plantas grandes EDAR/RSU: 500-3,000 Nm³/h."
+  options:
+    - label: "100 Nm³/h (planta pequeña agrícola)"
+      value: 100
+    - label: "300 Nm³/h (planta mediana)"
+      value: 300
+    - label: "1,000 Nm³/h (planta grande)"
+      value: 1000
+    - label: "3,000 Nm³/h (planta industrial/EDAR)"
+      value: 3000
+  required: true
+  order: 1
+  group: production
+
+- field_path: production.feedstock_type
+  question: "¿Tipo de sustrato/feedstock principal?"
+  help_text: "El sustrato determina el rendimiento de biogás, el coste de aprovisionamiento y la certificación del biometano (RFNBO/avanzado)."
+  options:
+    - label: "Residuos agrícolas y ganaderos (purines)"
+      value: "agricultural_waste"
+    - label: "EDAR (lodos de depuradora)"
+      value: "wwtp_sludge"
+    - label: "Fracción orgánica RSU (FORSU)"
+      value: "msw_organic"
+    - label: "Cultivos energéticos"
+      value: "energy_crops"
+    - label: "Residuos industriales orgánicos"
+      value: "industrial_organic"
+  required: true
+  order: 2
+  group: production
+
+- field_path: production.biogas_yield_nm3_per_ton
+  question: "¿Rendimiento de biogás por tonelada de sustrato (Nm³/ton)?"
+  help_text: "Purines: 15-30 Nm³/ton. Lodos EDAR: 50-80 Nm³/ton. FORSU: 80-120 Nm³/ton. Cultivos energéticos: 150-250 Nm³/ton."
+  options:
+    - label: "25 Nm³/ton (purines / bajo rendimiento)"
+      value: 25
+    - label: "70 Nm³/ton (lodos EDAR)"
+      value: 70
+    - label: "100 Nm³/ton (FORSU / mixto)"
+      value: 100
+    - label: "200 Nm³/ton (cultivos energéticos)"
+      value: 200
+  required: true
+  order: 3
+  benchmark_key: biogas_yield_feedstock
+  group: production
+
+- field_path: production.methane_content_pct
+  question: "¿Contenido de metano en el biogás bruto (%)?"
+  help_text: "Antes del upgrading. Digestión anaerobia típica: 50-65% CH4. Determina la eficiencia del proceso de upgrading."
+  options:
+    - label: "50% CH4 (bajo, residuos heterogéneos)"
+      value: 50
+    - label: "58% CH4 (estándar)"
+      value: 58
+    - label: "65% CH4 (alto, sustrato optimizado)"
+      value: 65
+  required: true
+  order: 4
+  group: production
+
+- field_path: production.upgrading_technology
+  question: "¿Tecnología de upgrading (purificación a biometano)?"
+  help_text: "PSA: maduro, bajo coste operativo. Membranas: compacto, buena eficiencia. Water scrubbing: sencillo. Amine: mayor captura CO2."
+  options:
+    - label: "PSA (Pressure Swing Adsorption)"
+      value: "psa"
+    - label: "Membranas (membrane separation)"
+      value: "membranes"
+    - label: "Water scrubbing"
+      value: "water_scrubbing"
+    - label: "Amine scrubbing"
+      value: "amine_scrubbing"
+  required: true
+  order: 5
+  group: production
+
+- field_path: production.operating_hours_year
+  question: "¿Horas de operación al año?"
+  help_text: "Plantas de biometano: 7,500-8,500 horas/año. Disponibilidad ~85-97%. Paradas por mantenimiento y limpieza."
+  options:
+    - label: "7,500 h/año (85% disponibilidad)"
+      value: 7500
+    - label: "8,000 h/año (91% disponibilidad)"
+      value: 8000
+    - label: "8,500 h/año (97% disponibilidad)"
+      value: 8500
+  required: true
+  order: 6
+  group: production
+
+- field_path: revenue.injection_tariff_eur_mwh
+  question: "¿Tarifa de inyección a red de gas natural (€/MWh)?"
+  help_text: "España: tarifa regulada en desarrollo. Europa: 80-150 €/MWh. Con certificados y primas de biometano avanzado puede superar 150 €/MWh."
+  options:
+    - label: "80 €/MWh (tarifa base)"
+      value: 80
+    - label: "110 €/MWh (con prima biometano avanzado)"
+      value: 110
+    - label: "140 €/MWh (certificación RFNBO)"
+      value: 140
+    - label: "160 €/MWh (biometano agrícola premium)"
+      value: 160
+  required: true
+  order: 7
+  benchmark_key: biomethane_injection_tariff_es
+  group: revenue
+
+- field_path: revenue.green_gas_certificates_eur_mwh
+  question: "¿Ingresos por certificados de gas verde (€/MWh)?"
+  help_text: "Garantías de Origen de Gas Renovable (GORe). España: mercado en desarrollo. Europa: 5-30 €/MWh. A veces incluidos en la tarifa de inyección."
+  options:
+    - label: "0 (incluidos en tarifa o no aplica)"
+      value: 0
+    - label: "10 €/MWh (mercado incipiente)"
+      value: 10
+    - label: "20 €/MWh (GORe maduro)"
+      value: 20
+    - label: "30 €/MWh (biometano avanzado premium)"
+      value: 30
+  required: false
+  order: 8
+  group: revenue
+
+- field_path: revenue.digestate_sales_eur_ton
+  question: "¿Precio de venta del digestato (€/ton)?"
+  help_text: "Subproducto del proceso: fertilizante orgánico. Puede ser ingreso o coste según mercado local. España: -5 a +20 €/ton."
+  options:
+    - label: "-5 €/ton (coste de gestión)"
+      value: -5
+    - label: "0 €/ton (cesión gratuita a agricultores)"
+      value: 0
+    - label: "10 €/ton (como fertilizante)"
+      value: 10
+    - label: "20 €/ton (digestato certificado premium)"
+      value: 20
+  required: false
+  order: 9
+  group: revenue
+
+- field_path: capex.plant_construction_eur_nm3h
+  question: "¿CAPEX de la planta (€ por Nm³/h de capacidad)?"
+  help_text: "España 2025-2026: 3,000-7,000 €/(Nm³/h). Incluye digestor, upgrading, inyección red y equipos auxiliares."
+  options:
+    - label: "3,000 €/(Nm³/h) (planta gran escala)"
+      value: 3000
+    - label: "5,000 €/(Nm³/h) (escala media)"
+      value: 5000
+    - label: "7,000 €/(Nm³/h) (planta pequeña / piloto)"
+      value: 7000
+  required: true
+  order: 10
+  benchmark_key: capex_per_nm3h_biomethane
+  group: capex
+
+- field_path: capex.grid_injection_connection_eur
+  question: "¿Coste de conexión a la red de gas (€)?"
+  help_text: "Punto de inyección a la red de transporte/distribución. Depende de la presión y distancia. Típico: 200K-2M €."
+  options:
+    - label: "200,000 € (conexión red distribución)"
+      value: 200000
+    - label: "600,000 € (media distancia)"
+      value: 600000
+    - label: "2,000,000 € (conexión red transporte)"
+      value: 2000000
+  required: false
+  order: 11
+  group: capex
+
+- field_path: opex.feedstock_cost_eur_ton
+  question: "¿Coste del feedstock (€/ton)?"
+  help_text: "Puede ser NEGATIVO (gate fee = cobras por recibir el residuo). Purines: -5 a 0 €/ton. FORSU: -30 a -10 €/ton. Cultivos energéticos: 30-80 €/ton."
+  options:
+    - label: "-30 €/ton (residuo con gate fee alta)"
+      value: -30
+    - label: "-10 €/ton (FORSU / residuo moderado)"
+      value: -10
+    - label: "0 €/ton (residuo agrícola propio)"
+      value: 0
+    - label: "50 €/ton (cultivos energéticos)"
+      value: 50
+  required: true
+  order: 12
+  benchmark_key: feedstock_cost_biomethane
+  group: opex
+
+- field_path: opex.electricity_consumption_kwh_nm3
+  question: "¿Consumo eléctrico del proceso (kWh/Nm³ biometano)?"
+  help_text: "Bomba, compresor, upgrading. Típico: 0.25-0.5 kWh/Nm³. Depende de la tecnología de upgrading."
+  options:
+    - label: "0.25 kWh/Nm³ (muy eficiente)"
+      value: 0.25
+    - label: "0.35 kWh/Nm³ (estándar)"
+      value: 0.35
+    - label: "0.50 kWh/Nm³ (amine scrubbing)"
+      value: 0.50
+  required: true
+  order: 13
+  group: opex
+
+- field_path: opex.maintenance_annual_pct_capex
+  question: "¿O&M anual como % del CAPEX?"
+  help_text: "Plantas biometano: 3-5% del CAPEX anual (incluye mantenimiento mecánico, análisis laboratorio, gestión digestato)."
+  options:
+    - label: "3% (planta nueva con garantía)"
+      value: 0.03
+    - label: "4% (operación estable)"
+      value: 0.04
+    - label: "5% (planta con más complejidad)"
+      value: 0.05
+  required: true
+  order: 14
+  group: opex
+
+- field_path: financing.max_leverage
+  question: "¿Ratio deuda/equity?"
+  help_text: "Biometano con tarifas reguladas: 60-75% deuda. Sin tarifa garantizada: 50-65%."
+  options:
+    - label: "Sin deuda (100% equity / subsidios)"
+      value: 0
+    - label: "60% deuda"
+      value: 0.60
+    - label: "70% deuda (tarifa regulada)"
+      value: 0.70
+    - label: "75% deuda (proyecto sólido)"
+      value: 0.75
+  required: true
+  order: 15
+  group: financing
+
+- field_path: financing.debt_tenor_years
+  question: "¿Plazo de la deuda (años)?"
+  help_text: "Biometano: 15-20 años, alineado con vida del proyecto y tarifa regulada."
+  options:
+    - label: "12 años"
+      value: 12
+    - label: "15 años"
+      value: 15
+    - label: "18 años"
+      value: 18
+    - label: "20 años"
+      value: 20
+  required: true
+  order: 16
+  group: financing
+
+- field_path: financing.interest_rate_annual
+  question: "¿Tipo de interés de la deuda (% anual)?"
+  help_text: "España 2025-2026: 5-7.5% para biometano con contrato. Con garantías ICO/BEI puede bajar a 4-5%."
+  options:
+    - label: "4.5% (con garantías públicas)"
+      value: 0.045
+    - label: "6% (mercado estándar)"
+      value: 0.06
+    - label: "7.5% (sin subsidios / más riesgo)"
+      value: 0.075
+  required: true
+  order: 17
+  group: financing
+  expert_only: true
+
+- field_path: taxes.corporate_income_tax_rate
+  question: "¿Tipo impositivo de sociedades?"
+  help_text: "España: 25%. Proyectos agrícolas pueden aplicar a regímenes especiales de cooperativas o estimación objetiva."
+  options:
+    - label: "25% (España estándar)"
+      value: 0.25
+    - label: "20% (cooperativa agrícola)"
+      value: 0.20
+    - label: "15% (startup / primeros años)"
+      value: 0.15
+  required: true
+  order: 18
+  group: taxes
+
+- field_path: valuation.discount_rate_annual
+  question: "¿WACC para la valoración del proyecto?"
+  help_text: "Biometano con tarifa regulada: 6-9%. Sin tarifa / merchant: 9-13%."
+  options:
+    - label: "6% (tarifa regulada sólida)"
+      value: 0.06
+    - label: "8% (mixto tarifa + mercado)"
+      value: 0.08
+    - label: "11% (biometano merchant / más riesgo)"
+      value: 0.11
+  required: true
+  order: 19
+  group: valuation
+  expert_only: true
+
+- field_path: custom_notes
+  question: "¿Quieres añadir algún input adicional o nota especial?"
+  help_text: "Puedes mencionar cualquier factor especial: subvenciones, restricciones, condiciones de mercado, etc."
+  options:
+    - label: "No, todo está definido"
+      value: "none"
+    - label: "Sí, quiero añadir algo"
+      value: "custom"
+  required: false
+  order: 99
+  group: custom

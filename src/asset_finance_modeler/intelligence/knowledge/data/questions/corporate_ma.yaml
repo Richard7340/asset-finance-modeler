@@ -1,0 +1,358 @@
+- field_path: meta.horizon.periods
+  question: "¿A cuántos años se proyecta el modelo corporativo?"
+  help_text: "M&A y valoración estándar: 5-10 años. Modelo LBO: 5-7 años (horizonte salida PE). Startup growth: 3-5 años."
+  options:
+    - label: "3 años (startup / visibilidad limitada)"
+      value: 36
+    - label: "5 años (estándar M&A / LBO)"
+      value: 60
+    - label: "7 años (PE / growth equity)"
+      value: 84
+    - label: "10 años (DCF corporativo conservador)"
+      value: 120
+  required: true
+  order: 0
+  group: meta
+
+- field_path: production.company_stage
+  question: "¿En qué etapa se encuentra la empresa?"
+  help_text: "Define el perfil de riesgo, múltiplos de valoración y estructura financiera apropiada."
+  options:
+    - label: "Startup / pre-revenue"
+      value: "startup"
+    - label: "Early-stage (revenue < 1M €)"
+      value: "early"
+    - label: "Growth (1-10M € revenue)"
+      value: "growth"
+    - label: "Scale-up (10-50M € revenue)"
+      value: "scaleup"
+    - label: "Madura / SME (50M+ €)"
+      value: "mature"
+  required: true
+  order: 1
+  group: production
+
+- field_path: production.revenue_model
+  question: "¿Cuál es el modelo de ingresos principal?"
+  help_text: "Define la visibilidad, predictibilidad y valoración de los ingresos."
+  options:
+    - label: "Suscripción recurrente (SaaS / ARR)"
+      value: "subscription"
+    - label: "Transaccional / por proyecto"
+      value: "transactional"
+    - label: "Marketplace (comisiones)"
+      value: "marketplace"
+    - label: "Servicios / consultoría"
+      value: "services"
+    - label: "Producto físico / hardware"
+      value: "product"
+  required: true
+  order: 2
+  group: production
+
+- field_path: revenue[0].current_arr_eur
+  question: "¿ARR o ingresos anuales actuales (€/año)?"
+  help_text: "Annual Recurring Revenue para SaaS. Revenue anual total para modelos transaccionales. Base de partida del modelo."
+  options:
+    - label: "0 € (pre-revenue)"
+      value: 0
+    - label: "500,000 € (early traction)"
+      value: 500000
+    - label: "2,000,000 € (growth)"
+      value: 2000000
+    - label: "10,000,000 € (scale-up)"
+      value: 10000000
+    - label: "50,000,000 € (empresa madura)"
+      value: 50000000
+  required: true
+  order: 3
+  group: revenue
+
+- field_path: revenue[0].growth_rate_annual_pct
+  question: "¿Tasa de crecimiento anual de ingresos esperada (%)?"
+  help_text: "Sé realista. SaaS early: 100-200%. Growth: 50-100%. Mature: 10-30%. Regla 40 = growth + margen EBITDA >= 40%."
+  options:
+    - label: "10% (empresa madura)"
+      value: 10
+    - label: "30% (growth moderado)"
+      value: 30
+    - label: "60% (high-growth)"
+      value: 60
+    - label: "100% (hypergrowth / duplicar)"
+      value: 100
+    - label: "150% (early-stage con tracción)"
+      value: 150
+  required: true
+  order: 4
+  benchmark_key: revenue_growth_rate_saas
+  group: revenue
+
+- field_path: revenue.gross_margin_pct
+  question: "¿Margen bruto (% sobre ingresos)?"
+  help_text: "Ingresos - COGS. SaaS puro: 70-85%. Marketplace: 50-70%. Servicios: 30-50%. Hardware: 20-40%."
+  options:
+    - label: "30% (hardware / manufactura)"
+      value: 0.30
+    - label: "50% (servicios / mixto)"
+      value: 0.50
+    - label: "70% (SaaS con COGS moderados)"
+      value: 0.70
+    - label: "80% (SaaS puro software)"
+      value: 0.80
+  required: true
+  order: 5
+  benchmark_key: gross_margin_saas
+  group: revenue
+
+- field_path: operating_expenses.ebitda_margin_pct
+  question: "¿Margen EBITDA objetivo en estado estacionario (%)?"
+  help_text: "SaaS maduro: 20-30%. Empresas de alto crecimiento sacrifican EBITDA por growth. SME maduras: 10-20%. Top SaaS: 30-40%."
+  options:
+    - label: "-20% (inversión fuerte en crecimiento)"
+      value: -0.20
+    - label: "0% (breakeven, crecimiento moderado)"
+      value: 0
+    - label: "15% (rentable, crecimiento equilibrado)"
+      value: 0.15
+    - label: "25% (empresa madura eficiente)"
+      value: 0.25
+  required: true
+  order: 6
+  group: operating_expenses
+
+- field_path: operating_expenses.team_monthly_eur
+  question: "¿Coste mensual de equipo (€/mes)?"
+  help_text: "Total nóminas + Seguridad Social (coste empresa). Incluir todos los empleados actuales."
+  options:
+    - label: "5,000 €/mes (fundadores sólo)"
+      value: 5000
+    - label: "20,000 €/mes (equipo 4-6 personas)"
+      value: 20000
+    - label: "80,000 €/mes (equipo 15-20 personas)"
+      value: 80000
+    - label: "300,000 €/mes (empresa 50+ personas)"
+      value: 300000
+  required: true
+  order: 7
+  group: operating_expenses
+
+- field_path: operating_expenses.marketing_pct_revenue
+  question: "¿Gasto en marketing y ventas (% de ingresos)?"
+  help_text: "SaaS high-growth: 30-50% de revenue. SaaS maduro: 15-25%. Empresas industriales: 5-15%."
+  options:
+    - label: "10% (marketing conservador)"
+      value: 0.10
+    - label: "20% (gasto estándar)"
+      value: 0.20
+    - label: "35% (growth agresivo)"
+      value: 0.35
+    - label: "50% (hypergrowth)"
+      value: 0.50
+  required: false
+  order: 8
+  group: operating_expenses
+
+- field_path: operating_expenses.rd_pct_revenue
+  question: "¿Gasto en I+D (% de ingresos)?"
+  help_text: "SaaS: 15-25%. Biotech/deeptech: 40-60%. Industrial maduro: 2-5%."
+  options:
+    - label: "5% (empresa madura)"
+      value: 0.05
+    - label: "15% (tech company)"
+      value: 0.15
+    - label: "25% (heavy R&D)"
+      value: 0.25
+  required: false
+  order: 9
+  group: operating_expenses
+
+- field_path: working_capital.dso_days
+  question: "¿Días de cobro a clientes (DSO - Days Sales Outstanding)?"
+  help_text: "SaaS con pago anticipado: 0-15 días. B2B enterprise: 45-90 días. Factura a administración pública: 60-120 días."
+  options:
+    - label: "0 días (pago por adelantado)"
+      value: 0
+    - label: "30 días (cobro estándar)"
+      value: 30
+    - label: "60 días (B2B enterprise)"
+      value: 60
+    - label: "90 días (administración pública)"
+      value: 90
+  required: false
+  order: 10
+  group: working_capital
+  expert_only: true
+
+- field_path: working_capital.dpo_days
+  question: "¿Días de pago a proveedores (DPO - Days Payable Outstanding)?"
+  help_text: "Cuánto tiempo tardas en pagar a tus proveedores. PYMES España: 30-60 días. Grandes empresas: 60-90 días."
+  options:
+    - label: "15 días (pago rápido)"
+      value: 15
+    - label: "30 días (estándar)"
+      value: 30
+    - label: "60 días (optimización cash)"
+      value: 60
+  required: false
+  order: 11
+  group: working_capital
+  expert_only: true
+
+- field_path: financing.equity_raised_eur
+  question: "¿Capital equity captado o disponible (€)?"
+  help_text: "Inversión actual de accionistas + inversores. Para M&A: precio de compra en equity."
+  options:
+    - label: "0 € (bootstrapped)"
+      value: 0
+    - label: "500,000 € (pre-seed / FFF)"
+      value: 500000
+    - label: "2,000,000 € (seed)"
+      value: 2000000
+    - label: "10,000,000 € (serie A)"
+      value: 10000000
+    - label: "50,000,000 € (serie B+)"
+      value: 50000000
+  required: true
+  order: 12
+  group: financing
+
+- field_path: financing.debt_eur
+  question: "¿Deuda bancaria o financiación ajena (€)?"
+  help_text: "Préstamos, líneas de crédito, deuda convertible. Para LBO: la deuda es el instrumento principal."
+  options:
+    - label: "0 € (sin deuda)"
+      value: 0
+    - label: "500,000 € (ICO / línea pyme)"
+      value: 500000
+    - label: "3,000,000 € (deuda growth)"
+      value: 3000000
+    - label: "20,000,000 € (LBO medio)"
+      value: 20000000
+  required: false
+  order: 13
+  group: financing
+
+- field_path: valuation.method
+  question: "¿Método de valoración principal?"
+  help_text: "EV/Revenue para high-growth. EV/EBITDA para empresas maduras. DCF para flujos estables. Comparables de mercado como sanity check."
+  options:
+    - label: "Múltiplo de Revenue (EV/ARR)"
+      value: "revenue_multiple"
+    - label: "Múltiplo de EBITDA (EV/EBITDA)"
+      value: "ebitda_multiple"
+    - label: "DCF (descuento de flujos)"
+      value: "dcf"
+  required: true
+  order: 14
+  group: valuation
+
+- field_path: valuation.revenue_multiple
+  question: "¿Múltiplo de revenue (EV/ARR o EV/Revenue)?"
+  help_text: "SaaS high-growth (>50%): 8-15x ARR. SaaS growth (30-50%): 5-8x. SaaS maduro: 3-5x. Servicios: 1-2x."
+  options:
+    - label: "2x (empresa madura / servicios)"
+      value: 2
+    - label: "5x (SaaS con tracción)"
+      value: 5
+    - label: "8x (high-growth SaaS)"
+      value: 8
+    - label: "15x (hypergrowth / líder de categoría)"
+      value: 15
+  required: false
+  order: 15
+  depends_on: "valuation.method"
+  benchmark_key: ev_arr_multiple_saas
+  group: valuation
+
+- field_path: valuation.ebitda_multiple
+  question: "¿Múltiplo de EBITDA (EV/EBITDA)?"
+  help_text: "España SME: 4-8x EBITDA. Tech europeo: 10-20x. Industrial maduro: 5-10x. Depende del sector y crecimiento."
+  options:
+    - label: "5x (empresa tradicional / SME)"
+      value: 5
+    - label: "8x (empresa tech / diferenciada)"
+      value: 8
+    - label: "12x (high-growth con escala)"
+      value: 12
+    - label: "18x (líder de mercado)"
+      value: 18
+  required: false
+  order: 16
+  depends_on: "valuation.method"
+  benchmark_key: ev_ebitda_multiple_corporate
+  group: valuation
+
+- field_path: valuation.ma_transaction_price_eur
+  question: "¿Precio de transacción M&A (€)?"
+  help_text: "Enterprise Value acordado en la compraventa. Base para calcular retornos, sinergias y ajuste de precio."
+  options:
+    - label: "1,000,000 € (micro-cap)"
+      value: 1000000
+    - label: "5,000,000 € (small cap)"
+      value: 5000000
+    - label: "20,000,000 € (mid-market)"
+      value: 20000000
+    - label: "100,000,000 € (large mid-market)"
+      value: 100000000
+  required: false
+  order: 17
+  group: valuation
+
+- field_path: valuation.synergies_annual_eur
+  question: "¿Sinergias anuales esperadas post-M&A (€/año)?"
+  help_text: "Ahorro de costes + revenue adicional por la integración. Regla: 5-15% del EBITDA combinado. Sé conservador, las sinergias siempre tardan más."
+  options:
+    - label: "0 € (sin sinergias cuantificadas)"
+      value: 0
+    - label: "200,000 €/año (sinergias menores)"
+      value: 200000
+    - label: "1,000,000 €/año (sinergias significativas)"
+      value: 1000000
+    - label: "5,000,000 €/año (fusión estratégica)"
+      value: 5000000
+  required: false
+  order: 18
+  group: valuation
+
+- field_path: taxes.corporate_income_tax_rate
+  question: "¿Tipo impositivo de sociedades?"
+  help_text: "España: 25% general. Startup primeros 2 años: 15%. En estructuras M&A pueden aplicar deducciones y exenciones."
+  options:
+    - label: "15% (startup / primeros años con beneficio)"
+      value: 0.15
+    - label: "25% (España estándar)"
+      value: 0.25
+    - label: "21% (USA)"
+      value: 0.21
+  required: true
+  order: 19
+  group: taxes
+
+- field_path: valuation.discount_rate_annual
+  question: "¿WACC para el DCF de valoración?"
+  help_text: "SaaS early-stage: 20-30%. SaaS con tracción: 12-18%. Empresa madura tech: 8-12%. SME: 10-15%."
+  options:
+    - label: "10% (empresa madura, poco riesgo)"
+      value: 0.10
+    - label: "15% (growth con tracción)"
+      value: 0.15
+    - label: "20% (early-stage)"
+      value: 0.20
+    - label: "30% (pre-revenue / muy alto riesgo)"
+      value: 0.30
+  required: true
+  order: 20
+  group: valuation
+  expert_only: true
+
+- field_path: custom_notes
+  question: "¿Quieres añadir algún input adicional o nota especial?"
+  help_text: "Puedes mencionar cualquier factor especial: subvenciones, restricciones, condiciones de mercado, etc."
+  options:
+    - label: "No, todo está definido"
+      value: "none"
+    - label: "Sí, quiero añadir algo"
+      value: "custom"
+  required: false
+  order: 99
+  group: custom

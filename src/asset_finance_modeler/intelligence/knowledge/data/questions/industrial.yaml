@@ -1,0 +1,327 @@
+- field_path: meta.horizon.periods
+  question: "¿Horizonte de análisis del activo industrial (años)?"
+  help_text: "Equipamiento industrial: 15-20 años. Edificio/nave: 30-40 años. El modelo se adapta al activo con vida más corta."
+  options:
+    - label: "10 años (equipos específicos)"
+      value: 120
+    - label: "15 años (ciclo industrial típico)"
+      value: 180
+    - label: "20 años (planta completa)"
+      value: 240
+    - label: "30 años (inmueble industrial)"
+      value: 360
+  required: true
+  order: 0
+  group: meta
+
+- field_path: production.facility_type
+  question: "¿Tipo de instalación industrial?"
+  help_text: "Define el perfil de inversión, riesgos operativos y estructura de costes del activo."
+  options:
+    - label: "Fábrica / planta de manufactura"
+      value: "factory"
+    - label: "Nave logística / almacén"
+      value: "logistics"
+    - label: "Planta de procesamiento / refinería"
+      value: "processing"
+    - label: "Planta agroindustrial"
+      value: "agro_industrial"
+    - label: "Planta de tratamiento de residuos"
+      value: "waste_treatment"
+  required: true
+  order: 1
+  group: production
+
+- field_path: production.production_capacity_units_year
+  question: "¿Capacidad de producción máxima (unidades/año)?"
+  help_text: "Unidades del producto principal al año a capacidad plena. Adaptar a la unidad relevante (ton, m³, unidades, etc.)."
+  options:
+    - label: "1,000 u/año (pequeña escala)"
+      value: 1000
+    - label: "10,000 u/año (escala media)"
+      value: 10000
+    - label: "100,000 u/año (escala industrial)"
+      value: 100000
+    - label: "1,000,000 u/año (gran escala)"
+      value: 1000000
+  required: true
+  order: 2
+  group: production
+
+- field_path: production.utilization_rate_pct
+  question: "¿Tasa de utilización de la capacidad instalada (%)?"
+  help_text: "Porcentaje de la capacidad máxima que se usa. Plantas nuevas: ramp-up de 50-70% los primeros años. Estabilizado: 75-90%."
+  options:
+    - label: "60% (arranque / mercado en desarrollo)"
+      value: 60
+    - label: "75% (utilización estándar)"
+      value: 75
+    - label: "85% (buena utilización)"
+      value: 85
+    - label: "95% (capacidad casi plena)"
+      value: 95
+  required: true
+  order: 3
+  group: production
+
+- field_path: revenue[0].price_eur_per_unit
+  question: "¿Precio de venta del producto (€/unidad)?"
+  help_text: "Precio medio por unidad vendida. Adaptar a la unidad del producto (€/ton, €/m³, €/pieza, etc.)."
+  options:
+    - label: "50 €/u (producto commodity)"
+      value: 50
+    - label: "200 €/u (producto semi-elaborado)"
+      value: 200
+    - label: "1,000 €/u (producto con valor añadido)"
+      value: 1000
+    - label: "5,000 €/u (producto especializado)"
+      value: 5000
+  required: true
+  order: 4
+  group: revenue
+
+- field_path: revenue.contract_type
+  question: "¿Tipo de contrato de ventas?"
+  help_text: "Contratos a largo plazo reducen el riesgo de mercado y mejoran el acceso a financiación."
+  options:
+    - label: "Spot / mercado abierto"
+      value: "spot"
+    - label: "Contratos anuales renovables"
+      value: "annual"
+    - label: "Contratos multi-año (3-5 años)"
+      value: "multi_year"
+    - label: "Offtake largo plazo (10+ años)"
+      value: "long_term_offtake"
+  required: true
+  order: 5
+  group: revenue
+
+- field_path: capex.equipment_eur
+  question: "¿CAPEX de maquinaria y equipos (€)?"
+  help_text: "Equipamiento productivo principal (sin instalaciones). Línea de producción pequeña: 500K-2M €. Industrial grande: 5-50M €."
+  options:
+    - label: "500,000 € (equipos pequeños)"
+      value: 500000
+    - label: "2,000,000 € (línea de producción media)"
+      value: 2000000
+    - label: "10,000,000 € (planta industrial)"
+      value: 10000000
+    - label: "50,000,000 € (gran planta)"
+      value: 50000000
+  required: true
+  order: 6
+  group: capex
+
+- field_path: capex.building_eur
+  question: "¿CAPEX de edificio / nave industrial (€)?"
+  help_text: "Construcción o adquisición de la instalación. Nave industrial España: 400-800 €/m² (construcción nueva). Alquiler como alternativa."
+  options:
+    - label: "0 € (instalación en alquiler)"
+      value: 0
+    - label: "1,000,000 € (nave pequeña)"
+      value: 1000000
+    - label: "5,000,000 € (nave media)"
+      value: 5000000
+    - label: "20,000,000 € (planta grande)"
+      value: 20000000
+  required: false
+  order: 7
+  group: capex
+
+- field_path: capex.installation_commissioning_pct_equipment
+  question: "¿Instalación, montaje y commissioning (% del CAPEX equipos)?"
+  help_text: "Coste de instalar y poner en marcha los equipos. Típico: 15-30% del coste de los equipos."
+  options:
+    - label: "10% (equipos modulares, montaje simple)"
+      value: 0.10
+    - label: "20% (instalación estándar)"
+      value: 0.20
+    - label: "30% (instalación compleja)"
+      value: 0.30
+    - label: "40% (planta de proceso, mucha ingeniería)"
+      value: 0.40
+  required: true
+  order: 8
+  group: capex
+
+- field_path: opex.raw_materials_pct_revenue
+  question: "¿Materias primas como % de los ingresos?"
+  help_text: "El mayor coste variable en manufactura. Industria ligera: 20-40%. Procesamiento intensivo: 50-70%. Logística: 5-15%."
+  options:
+    - label: "10% (servicios industriales / bajo material)"
+      value: 0.10
+    - label: "30% (manufactura moderada)"
+      value: 0.30
+    - label: "50% (producción intensiva en materias)"
+      value: 0.50
+    - label: "65% (procesamiento de commodities)"
+      value: 0.65
+  required: true
+  order: 9
+  group: opex
+
+- field_path: opex.labor_monthly_eur
+  question: "¿Coste mensual de personal (€/mes)?"
+  help_text: "Total nóminas + Seguridad Social empresa. Planta pequeña 10-20 personas: 30-60K €/mes. Grande: 200-500K €/mes."
+  options:
+    - label: "20,000 €/mes (5-10 operarios)"
+      value: 20000
+    - label: "60,000 €/mes (15-25 personas)"
+      value: 60000
+    - label: "200,000 €/mes (50+ personas)"
+      value: 200000
+    - label: "500,000 €/mes (100+ personas)"
+      value: 500000
+  required: true
+  order: 10
+  group: opex
+
+- field_path: opex.energy_cost_eur_year
+  question: "¿Coste energético anual (electricidad + gas, €/año)?"
+  help_text: "Varía enormemente según el proceso. Industria ligera: 3-8% de OPEX. Industria pesada / electrointensiva: 20-40% de OPEX."
+  options:
+    - label: "50,000 €/año (industria ligera)"
+      value: 50000
+    - label: "300,000 €/año (manufactura estándar)"
+      value: 300000
+    - label: "1,500,000 €/año (industria intensiva)"
+      value: 1500000
+    - label: "5,000,000 €/año (gran industria / electrointensiva)"
+      value: 5000000
+  required: true
+  order: 11
+  group: opex
+
+- field_path: opex.maintenance_annual_pct_capex
+  question: "¿Mantenimiento anual de equipos (% del CAPEX equipos)?"
+  help_text: "Mantenimiento preventivo + correctivo. Maquinaria estándar: 2-4% anual. Equipos de alta precisión: 4-8%."
+  options:
+    - label: "2% (equipos nuevos con garantía)"
+      value: 0.02
+    - label: "3.5% (estándar industrial)"
+      value: 0.035
+    - label: "5% (equipos complejos / proceso continuo)"
+      value: 0.05
+    - label: "8% (equipos intensivos en uso)"
+      value: 0.08
+  required: true
+  order: 12
+  group: opex
+
+- field_path: opex.logistics_pct_revenue
+  question: "¿Costes logísticos (transporte, distribución) como % de ingresos?"
+  help_text: "Logística interna y distribución. Manufactura local: 3-8%. Exportación: 8-15%. Logística pura: 20-30%."
+  options:
+    - label: "3% (venta local / autorecogida)"
+      value: 0.03
+    - label: "8% (distribución nacional)"
+      value: 0.08
+    - label: "15% (exportación)"
+      value: 0.15
+  required: false
+  order: 13
+  group: opex
+
+- field_path: financing.max_leverage
+  question: "¿Ratio deuda/equity?"
+  help_text: "Activos industriales con contratos: 60-70% deuda. Sin contratos / especulativo: 40-55%. Leasing de equipos: alternativa al 100%."
+  options:
+    - label: "Sin deuda (100% equity)"
+      value: 0
+    - label: "50% deuda (conservador)"
+      value: 0.50
+    - label: "65% deuda (project finance con contratos)"
+      value: 0.65
+    - label: "70% deuda (offtake largo plazo)"
+      value: 0.70
+  required: true
+  order: 14
+  group: financing
+
+- field_path: financing.financing_type
+  question: "¿Tipo de financiación preferida?"
+  help_text: "Project finance para proyectos autónomos con SPV. Corporate debt para empresa existente. Leasing para equipos específicos."
+  options:
+    - label: "Corporate debt (deuda corporativa)"
+      value: "corporate"
+    - label: "Project finance (financiación de proyectos)"
+      value: "project_finance"
+    - label: "Leasing de equipos"
+      value: "leasing"
+    - label: "Mixto corporate + leasing"
+      value: "mixed"
+  required: true
+  order: 15
+  group: financing
+
+- field_path: financing.debt_tenor_years
+  question: "¿Plazo de la deuda (años)?"
+  help_text: "Corporate debt: 5-10 años. Project finance industrial: 10-15 años. Leasing equipos: 5-7 años."
+  options:
+    - label: "5 años (deuda corporativa / leasing)"
+      value: 5
+    - label: "10 años (project finance mediano)"
+      value: 10
+    - label: "15 años (project finance largo)"
+      value: 15
+  required: true
+  order: 16
+  group: financing
+
+- field_path: financing.interest_rate_annual
+  question: "¿Tipo de interés de la deuda (% anual)?"
+  help_text: "España 2025-2026: 5-7% para activos industriales sólidos. Sin contratos: 7-9%."
+  options:
+    - label: "5% (empresa sólida con contratos)"
+      value: 0.05
+    - label: "6.5% (estándar industrial)"
+      value: 0.065
+    - label: "8% (mayor riesgo / sin contratos)"
+      value: 0.08
+  required: true
+  order: 17
+  group: financing
+  expert_only: true
+
+- field_path: taxes.corporate_income_tax_rate
+  question: "¿Tipo impositivo de sociedades?"
+  help_text: "España: 25%. Empresas con alta inversión pueden aplicar deducciones fiscales por I+D o inversiones medioambientales."
+  options:
+    - label: "25% (España estándar)"
+      value: 0.25
+    - label: "15% (startup o primeros años)"
+      value: 0.15
+    - label: "21% (USA / otra jurisdicción)"
+      value: 0.21
+  required: true
+  order: 18
+  group: taxes
+
+- field_path: valuation.discount_rate_annual
+  question: "¿WACC para la valoración del activo industrial?"
+  help_text: "Industrial con contratos largos: 8-10%. Sin contratos / mayor riesgo de mercado: 12-16%."
+  options:
+    - label: "8% (contratos estables, activo prime)"
+      value: 0.08
+    - label: "10% (industrial estándar)"
+      value: 0.10
+    - label: "13% (sin contratos / mercado volátil)"
+      value: 0.13
+    - label: "16% (alta incertidumbre)"
+      value: 0.16
+  required: true
+  order: 19
+  group: valuation
+  expert_only: true
+
+- field_path: custom_notes
+  question: "¿Quieres añadir algún input adicional o nota especial?"
+  help_text: "Puedes mencionar cualquier factor especial: subvenciones, restricciones, condiciones de mercado, etc."
+  options:
+    - label: "No, todo está definido"
+      value: "none"
+    - label: "Sí, quiero añadir algo"
+      value: "custom"
+  required: false
+  order: 99
+  group: custom

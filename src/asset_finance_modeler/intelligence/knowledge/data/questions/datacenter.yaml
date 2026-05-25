@@ -1,0 +1,289 @@
+- field_path: meta.horizon.periods
+  question: "¿Horizonte de análisis del data center (años)?"
+  help_text: "Data centers: 20-30 años de vida útil del inmueble. Equipos IT se renuevan cada 5-7 años (tech refresh)."
+  options:
+    - label: "10 años (análisis inicial)"
+      value: 120
+    - label: "20 años (ciclo completo)"
+      value: 240
+    - label: "25 años (vida útil del activo)"
+      value: 300
+  required: true
+  order: 0
+  group: meta
+
+- field_path: production.it_capacity_mw
+  question: "¿Capacidad IT del data center (MW)?"
+  help_text: "Potencia IT máxima instalada. Hiperescala: 100+ MW. Enterprise: 1-10 MW. Edge: 0.1-1 MW."
+  options:
+    - label: "1 MW (pequeño / edge)"
+      value: 1
+    - label: "5 MW (enterprise mediano)"
+      value: 5
+    - label: "20 MW (enterprise grande)"
+      value: 20
+    - label: "100 MW (hiperescala)"
+      value: 100
+  required: true
+  order: 1
+  group: production
+
+- field_path: production.pue
+  question: "¿PUE (Power Usage Effectiveness)?"
+  help_text: "Ratio consumo total / consumo IT. PUE 1.0 = perfecto. PUE 1.5 = por cada MW IT se gastan 1.5 MW totales. Tier 3 moderno: 1.3-1.5."
+  options:
+    - label: "1.2 (hiperescala / cooling avanzado)"
+      value: 1.2
+    - label: "1.35 (data center moderno tier 3)"
+      value: 1.35
+    - label: "1.5 (data center estándar)"
+      value: 1.5
+    - label: "1.8 (data center antiguo)"
+      value: 1.8
+  required: true
+  order: 2
+  benchmark_key: pue_datacenter
+  group: production
+
+- field_path: production.tier_level
+  question: "¿Nivel de redundancia / Tier (Uptime Institute)?"
+  help_text: "Tier 1: 99.671% uptime. Tier 2: 99.741%. Tier 3: 99.982% (más frecuente). Tier 4: 99.995% (misión crítica)."
+  options:
+    - label: "Tier 2 (básico, sin redundancia total)"
+      value: 2
+    - label: "Tier 3 (N+1, concurrently maintainable)"
+      value: 3
+    - label: "Tier 4 (2N, fault tolerant)"
+      value: 4
+  required: true
+  order: 3
+  group: production
+
+- field_path: production.rack_density_kw_per_rack
+  question: "¿Densidad de rack (kW por rack)?"
+  help_text: "Servidores estándar: 5-15 kW/rack. Alta densidad / GPU: 20-50 kW/rack. AI computing: 50-100 kW/rack."
+  options:
+    - label: "8 kW/rack (servidores estándar)"
+      value: 8
+    - label: "20 kW/rack (alta densidad)"
+      value: 20
+    - label: "40 kW/rack (GPU / HPC)"
+      value: 40
+    - label: "80 kW/rack (AI / inferencia)"
+      value: 80
+  required: true
+  order: 4
+  group: production
+
+- field_path: revenue[0].price_eur_per_unit
+  question: "¿Precio de colocation por MW/mes (€/MW/mes)?"
+  help_text: "España 2025-2026: 80,000-150,000 €/MW/mes para Tier 3. Madrid más barato que Ámsterdam/Frankfurt. GPU colocation: 150-300k €/MW/mes."
+  options:
+    - label: "80,000 €/MW/mes (estándar Tier 2)"
+      value: 80000
+    - label: "110,000 €/MW/mes (Tier 3 Madrid)"
+      value: 110000
+    - label: "150,000 €/MW/mes (Tier 3 premium)"
+      value: 150000
+    - label: "250,000 €/MW/mes (GPU/AI colocation)"
+      value: 250000
+  required: true
+  order: 5
+  benchmark_key: colo_price_eur_mw_month
+  group: revenue
+
+- field_path: revenue.occupancy_ramp_months
+  question: "¿En cuántos meses se alcanza la ocupación máxima?"
+  help_text: "Tiempo de ramp-up desde apertura hasta ocupación objetivo. Data center grande: 18-36 meses. Pequeño: 6-12 meses."
+  options:
+    - label: "6 meses (ramp rápido)"
+      value: 6
+    - label: "12 meses (estándar)"
+      value: 12
+    - label: "24 meses (gran campus)"
+      value: 24
+    - label: "36 meses (hiperescala)"
+      value: 36
+  required: true
+  order: 6
+  group: revenue
+
+- field_path: revenue.target_occupancy_pct
+  question: "¿Ocupación objetivo en estado estacionario (%)?"
+  help_text: "Ocupación estabilizada. Data centers bien gestionados: 85-95%. Por debajo del 70% puede haber problemas de rentabilidad."
+  options:
+    - label: "75% (conservador / mercado nuevo)"
+      value: 75
+    - label: "85% (estabilizado)"
+      value: 85
+    - label: "92% (alta demanda / mercado maduro)"
+      value: 92
+    - label: "95% (casi lleno)"
+      value: 95
+  required: true
+  order: 7
+  group: revenue
+
+- field_path: capex.items[0].amount_per_unit
+  question: "¿CAPEX total de construcción (€/kW IT)?"
+  help_text: "España 2025-2026: 5,000-12,000 €/kW IT instalado (incluye edificio, MEP, cooling, UPS, generadores, conexión red). Tier 3: 7,000-10,000 €/kW."
+  options:
+    - label: "5,000 €/kW IT (Tier 2 básico)"
+      value: 5000
+    - label: "8,000 €/kW IT (Tier 3 estándar)"
+      value: 8000
+    - label: "10,000 €/kW IT (Tier 3 premium)"
+      value: 10000
+    - label: "14,000 €/kW IT (Tier 4 / misión crítica)"
+      value: 14000
+  required: true
+  order: 8
+  benchmark_key: capex_per_kw_datacenter
+  group: capex
+
+- field_path: opex.electricity_cost_eur_mwh
+  question: "¿Coste de electricidad (€/MWh)?"
+  help_text: "El mayor coste operativo: 60-70% del OPEX total. España 2025: mercado ~80-120 €/MWh. Con PPA renovable largo: 40-70 €/MWh."
+  options:
+    - label: "40 €/MWh (PPA solar propio)"
+      value: 40
+    - label: "70 €/MWh (PPA renovable mercado)"
+      value: 70
+    - label: "100 €/MWh (mercado spot España)"
+      value: 100
+    - label: "130 €/MWh (sin PPA, tarifa industrial)"
+      value: 130
+  required: true
+  order: 9
+  benchmark_key: electricity_cost_datacenter_es
+  group: opex
+
+- field_path: opex.staffing_annual_eur
+  question: "¿Coste de personal anual (€/año)?"
+  help_text: "Operadores 24x7, técnicos, gestión. Data center 5 MW: ~800K-1.5M €/año. 20 MW: ~2-4M €/año."
+  options:
+    - label: "500,000 €/año (1-2 MW, operación lean)"
+      value: 500000
+    - label: "1,200,000 €/año (5 MW estándar)"
+      value: 1200000
+    - label: "2,500,000 €/año (20 MW completo)"
+      value: 2500000
+    - label: "5,000,000 €/año (100 MW hiperescala)"
+      value: 5000000
+  required: true
+  order: 10
+  group: opex
+
+- field_path: opex.maintenance_annual_pct_capex
+  question: "¿Mantenimiento anual como % del CAPEX?"
+  help_text: "Incluye MEP, cooling, generadores, UPS. Típico: 1.5-3% del CAPEX anual."
+  options:
+    - label: "1.5% (equipos nuevos, garantía fabricante)"
+      value: 0.015
+    - label: "2.0% (estándar)"
+      value: 0.020
+    - label: "3.0% (equipos mixtos / sin garantía)"
+      value: 0.030
+  required: true
+  order: 11
+  group: opex
+
+- field_path: opex.tech_refresh_year
+  question: "¿Año del primer tech refresh de equipos IT (año)?"
+  help_text: "Renovación de equipos IT activos (si es propio). Típicamente cada 5-7 años. Coste: 20-40% del CAPEX IT original."
+  options:
+    - label: "No aplica (colocation puro)"
+      value: 0
+    - label: "Año 5"
+      value: 5
+    - label: "Año 7"
+      value: 7
+  required: false
+  order: 12
+  group: opex
+
+- field_path: financing.max_leverage
+  question: "¿Ratio deuda/equity?"
+  help_text: "Data centers con contratos: project finance 60-75%. Sin contratos de colocation firmados: corporate debt 50-60%."
+  options:
+    - label: "Sin deuda (100% equity)"
+      value: 0
+    - label: "55% deuda (corporate finance)"
+      value: 0.55
+    - label: "65% deuda (project finance con contratos)"
+      value: 0.65
+    - label: "75% deuda (contratos largo plazo ancla)"
+      value: 0.75
+  required: true
+  order: 13
+  group: financing
+
+- field_path: financing.debt_tenor_years
+  question: "¿Plazo de la deuda (años)?"
+  help_text: "Data center: 15-20 años project finance. Corporate debt: 5-10 años. Alineado con contratos de colocation."
+  options:
+    - label: "7 años (corporate debt)"
+      value: 7
+    - label: "15 años (project finance)"
+      value: 15
+    - label: "20 años (project finance largo)"
+      value: 20
+  required: true
+  order: 14
+  group: financing
+
+- field_path: financing.interest_rate_annual
+  question: "¿Tipo de interés de la deuda (% anual)?"
+  help_text: "España 2025-2026: 5-7% para activos prime con contratos. Sin contratos o CAPEX especulativo: 7-9%."
+  options:
+    - label: "5% (contratos ancla triple-A)"
+      value: 0.05
+    - label: "6.5% (mercado estándar)"
+      value: 0.065
+    - label: "8% (sin contratos / especulativo)"
+      value: 0.08
+  required: true
+  order: 15
+  group: financing
+  expert_only: true
+
+- field_path: taxes.corporate_income_tax_rate
+  question: "¿Tipo impositivo de sociedades?"
+  help_text: "España: 25%. Irlanda: 12.5% (muy usado para data centers europeos). Luxemburgo: 17%."
+  options:
+    - label: "25% (España)"
+      value: 0.25
+    - label: "12.5% (Irlanda)"
+      value: 0.125
+    - label: "21% (USA)"
+      value: 0.21
+  required: true
+  order: 16
+  group: taxes
+
+- field_path: valuation.discount_rate_annual
+  question: "¿WACC para la valoración del data center?"
+  help_text: "Data centers con contratos largos (triple-net): 6-9%. Sin contratos / especulativo: 10-14%."
+  options:
+    - label: "6.5% (contratos ancla, activo prime)"
+      value: 0.065
+    - label: "8.5% (mixto contratos + spot)"
+      value: 0.085
+    - label: "12% (data center especulativo)"
+      value: 0.12
+  required: true
+  order: 17
+  group: valuation
+  expert_only: true
+
+- field_path: custom_notes
+  question: "¿Quieres añadir algún input adicional o nota especial?"
+  help_text: "Puedes mencionar cualquier factor especial: subvenciones, restricciones, condiciones de mercado, etc."
+  options:
+    - label: "No, todo está definido"
+      value: "none"
+    - label: "Sí, quiero añadir algo"
+      value: "custom"
+  required: false
+  order: 99
+  group: custom
