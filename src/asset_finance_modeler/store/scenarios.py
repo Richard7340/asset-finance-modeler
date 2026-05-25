@@ -23,10 +23,12 @@ CREATE TABLE IF NOT EXISTS scenarios (
     notes TEXT NOT NULL DEFAULT '',
     is_canonical INTEGER NOT NULL DEFAULT 0,
     is_deleted INTEGER NOT NULL DEFAULT 0,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     FOREIGN KEY (parent_scenario_id) REFERENCES scenarios(id)
 );
 CREATE INDEX IF NOT EXISTS idx_parent ON scenarios(parent_scenario_id);
 CREATE INDEX IF NOT EXISTS idx_base_model ON scenarios(base_model);
+CREATE INDEX IF NOT EXISTS idx_tenant ON scenarios(tenant_id);
 """
 
 
@@ -34,7 +36,12 @@ class ScenarioStore(Protocol):
     def initialize(self) -> None: ...
     def save(self, scenario: Scenario) -> None: ...
     def get(self, scenario_id: str) -> Scenario | None: ...
-    def list(self, base_model: str | None = None, include_deleted: bool = False) -> list[Scenario]: ...
+    def list(
+        self,
+        base_model: str | None = None,
+        include_deleted: bool = False,
+        tenant_id: str | None = None,
+    ) -> list[Scenario]: ...
     def delete(self, scenario_id: str) -> None: ...
     def set_canonical(self, scenario_id: str, name: str | None = None) -> None: ...
 
@@ -69,10 +76,12 @@ class SQLiteScenarioStore:
             "notes": s.notes,
             "is_canonical": int(s.is_canonical),
             "is_deleted": int(s.is_deleted),
+            "tenant_id": s.tenant_id,
         }
 
     @staticmethod
     def _from_row(row: sqlite3.Row) -> Scenario:
+        keys = row.keys()
         return Scenario(
             id=row["id"],
             name=row["name"],
@@ -87,6 +96,7 @@ class SQLiteScenarioStore:
             notes=row["notes"],
             is_canonical=bool(row["is_canonical"]),
             is_deleted=bool(row["is_deleted"]),
+            tenant_id=row["tenant_id"] if "tenant_id" in keys else "default",
         )
 
     def save(self, scenario: Scenario) -> None:
@@ -97,11 +107,11 @@ class SQLiteScenarioStore:
                 INSERT INTO scenarios (
                     id, name, description, base_model, parent_scenario_id,
                     overrides_json, inputs_snapshot_json, results_snapshot_json,
-                    created_at, tags_json, notes, is_canonical, is_deleted
+                    created_at, tags_json, notes, is_canonical, is_deleted, tenant_id
                 ) VALUES (
                     :id, :name, :description, :base_model, :parent_scenario_id,
                     :overrides_json, :inputs_snapshot_json, :results_snapshot_json,
-                    :created_at, :tags_json, :notes, :is_canonical, :is_deleted
+                    :created_at, :tags_json, :notes, :is_canonical, :is_deleted, :tenant_id
                 )
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
@@ -112,7 +122,8 @@ class SQLiteScenarioStore:
                     tags_json = excluded.tags_json,
                     notes = excluded.notes,
                     is_canonical = excluded.is_canonical,
-                    is_deleted = excluded.is_deleted
+                    is_deleted = excluded.is_deleted,
+                    tenant_id = excluded.tenant_id
                 """,
                 row,
             )
@@ -125,7 +136,10 @@ class SQLiteScenarioStore:
         return self._from_row(row)
 
     def list(
-        self, base_model: str | None = None, include_deleted: bool = False
+        self,
+        base_model: str | None = None,
+        include_deleted: bool = False,
+        tenant_id: str | None = None,
     ) -> list[Scenario]:
         clauses = []
         params: list[object] = []
@@ -134,6 +148,9 @@ class SQLiteScenarioStore:
             params.append(base_model)
         if not include_deleted:
             clauses.append("is_deleted = 0")
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         sql = f"SELECT * FROM scenarios {where} ORDER BY created_at DESC"
         with self._conn() as conn:
