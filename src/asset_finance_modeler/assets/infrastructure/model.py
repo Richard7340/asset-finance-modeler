@@ -334,8 +334,8 @@ class InfrastructureModel:
     ) -> ProjectKPIs:
         total_capex = cap["total_capex"]
 
-        # Project FCF: initial outlay = -total_capex, then annual FCF
-        project_cf = [-total_capex] + list(fcf_annual)
+        # Project FCF: fcf_annual already includes CAPEX in year 0 via CFI
+        project_cf = list(fcf_annual)
 
         # Equity FCF: equity deployed = capex minus debt drawdown at t=0
         equity_outlay = total_capex - (debt_drawdowns[0] if debt_drawdowns else 0.0)
@@ -365,9 +365,9 @@ class InfrastructureModel:
         )
 
         dscr_series = debt_metrics["dscr"]
-        finite_dscr = [d for d in dscr_series if d < float("inf")]
-        dscr_min = min(finite_dscr) if finite_dscr else 0.0
-        dscr_avg = sum(finite_dscr) / len(finite_dscr) if finite_dscr else 0.0
+        positive_dscr = [d for d in dscr_series if 0 < d < float("inf")]
+        dscr_min = min(positive_dscr) if positive_dscr else 0.0
+        dscr_avg = sum(positive_dscr) / len(positive_dscr) if positive_dscr else 0.0
 
         return ProjectKPIs(
             irr_project=irr_project,

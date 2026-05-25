@@ -104,7 +104,12 @@ def _compute_dscr_for_debt(
     for t in range(n):
         if t < len(sched):
             ds = sched[t]["total_payment"]
-            dscr.append(cfads[t] / ds if ds > 0 else float("inf"))
+            if ds <= 0:
+                dscr.append(float("inf"))
+            elif cfads[t] <= 0:
+                dscr.append(0.0)
+            else:
+                dscr.append(cfads[t] / ds)
         else:
             dscr.append(float("inf"))
     return dscr
@@ -133,9 +138,9 @@ def size_debt(
             cfads, mid, interest_rate, tenor_periods,
             periods_per_year, amortization, grace_periods,
         )
-        active_dscr = [d for d in dscr[:tenor_periods] if d < float("inf")]
+        active_dscr = [d for d in dscr[:tenor_periods] if 0 < d < float("inf")]
         if not active_dscr:
-            lo = mid
+            hi = mid
             continue
         check = min(active_dscr) if dscr_mode == "min" else sum(active_dscr) / len(active_dscr)
         if check >= dscr_target:
