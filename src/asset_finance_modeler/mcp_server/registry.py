@@ -797,6 +797,123 @@ def build_registry(
         )
     )
 
+    # Project tools
+    if store is not None:
+        from asset_finance_modeler.store.projects import SQLiteProjectStore  # noqa: PLC0415
+        from asset_finance_modeler.mcp_server.tools.projects import (  # noqa: PLC0415
+            make_project_create,
+            make_project_list,
+            make_project_get,
+            make_project_archive,
+        )
+
+        project_store = SQLiteProjectStore(store.db_path)
+        project_store.initialize()
+
+        project_specs = [
+            ToolSpec(
+                name="finance.project.create",
+                description="Create a new project to group scenarios.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "tenant_id": {"type": "string"},
+                        "description": {"type": "string"},
+                        "asset_type": {"type": "string"},
+                        "region": {"type": "string"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["name"],
+                },
+                handler=make_project_create(project_store),
+            ),
+            ToolSpec(
+                name="finance.project.list",
+                description="List projects for a tenant.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "tenant_id": {"type": "string"},
+                        "include_archived": {"type": "boolean"},
+                    },
+                },
+                handler=make_project_list(project_store),
+            ),
+            ToolSpec(
+                name="finance.project.get",
+                description="Get project details with scenario list.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"project_id": {"type": "string"}},
+                    "required": ["project_id"],
+                },
+                handler=make_project_get(project_store),
+            ),
+            ToolSpec(
+                name="finance.project.archive",
+                description="Archive a project.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"project_id": {"type": "string"}},
+                    "required": ["project_id"],
+                },
+                handler=make_project_archive(project_store),
+            ),
+        ]
+        specs.extend(project_specs)
+
+        # Scenario recall + diff tools
+        from asset_finance_modeler.intelligence.recall import ScenarioRecall  # noqa: PLC0415
+        from asset_finance_modeler.mcp_server.tools.scenario_recall import (  # noqa: PLC0415
+            make_scenario_diff,
+            make_scenario_recall,
+            make_recall_project_context,
+        )
+
+        scenario_recall = ScenarioRecall()
+
+        specs.extend([
+            ToolSpec(
+                name="finance.scenario.diff",
+                description="Compare two scenarios — input deltas + KPI changes.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_a_id": {"type": "string"},
+                        "scenario_b_id": {"type": "string"},
+                    },
+                    "required": ["scenario_a_id", "scenario_b_id"],
+                },
+                handler=make_scenario_diff(store),
+            ),
+            ToolSpec(
+                name="finance.scenario.recall",
+                description="Search scenarios by natural language description.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "top_k": {"type": "integer", "default": 5},
+                    },
+                    "required": ["query"],
+                },
+                handler=make_scenario_recall(scenario_recall),
+            ),
+            ToolSpec(
+                name="finance.agent.recall_project_context",
+                description=(
+                    "Get narrative summary of a project — all scenarios, best metrics, key changes."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {"project_id": {"type": "string"}},
+                    "required": ["project_id"],
+                },
+                handler=make_recall_project_context(project_store, store),
+            ),
+        ])
+
     final_registry = {s.name: s for s in specs}
     _registry_holder["registry"] = final_registry
     return final_registry
