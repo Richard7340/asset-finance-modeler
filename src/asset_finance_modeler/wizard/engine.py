@@ -18,7 +18,11 @@ class WizardEngine:
 
     def start(self, asset_description: str, region: str | None = None) -> dict[str, Any]:
         asset_type = self._loader.detect_asset_type(asset_description)
-        questions = self._loader.load_questions(asset_type or "generic")
+        if asset_type:
+            questions = self._loader.load_questions(asset_type)
+        else:
+            slug = asset_description.lower().replace(" ", "_")[:30]
+            questions = self._loader.load_questions(slug)
         quick_start: dict[str, ResolvedInput] | None = None
         mode = "full"
         self._last_region: str | None = region
