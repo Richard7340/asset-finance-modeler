@@ -26,6 +26,7 @@ from asset_finance_modeler.mcp_server.tools.execute import (
     make_run,
 )
 from asset_finance_modeler.mcp_server.tools.dashboard import make_generate_dashboard
+from asset_finance_modeler.mcp_server.tools.report import make_generate_report
 from asset_finance_modeler.mcp_server.tools.output import (
     make_export,
     make_fetch_external,
@@ -426,6 +427,28 @@ def build_registry(
                     "additionalProperties": False,
                 },
                 handler=make_generate_dashboard(store),
+            ),
+            ToolSpec(
+                name="finance.report.generate",
+                description=(
+                    "Generate a professional financial analysis report — cover page, "
+                    "executive summary, assumptions, charts, tables, disclaimer. "
+                    "Print-ready HTML with Chart.js visualisations. "
+                    "Pass output_path to write the file to disk."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "output_path": {
+                            "type": "string",
+                            "description": "Optional file path for the HTML output",
+                        },
+                    },
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_generate_report(store),
             ),
         ])
 
