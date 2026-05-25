@@ -10,7 +10,7 @@ meta:
 production:
   type: wind_onshore
   capacity_mw: 30
-  capacity_factor: 0.27
+  capacity_factor: 0.32
   availability: 0.97
   wake_losses: 0.04
 

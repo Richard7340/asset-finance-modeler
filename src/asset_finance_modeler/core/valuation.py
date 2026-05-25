@@ -83,8 +83,10 @@ def compute_sensitivity_grid(
 
 
 def compute_irr(cashflows: list[float], periods_per_year: int) -> float:
+    import math
+
     period_irr = npf.irr(cashflows)
-    if period_irr is None or not isinstance(period_irr, float):
+    if period_irr is None or not isinstance(period_irr, float) or math.isnan(period_irr):
         return 0.0
     return (1 + period_irr) ** periods_per_year - 1
 

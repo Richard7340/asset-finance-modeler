@@ -18,7 +18,7 @@ production:
 revenue:
   - type: sla
     name: Colocation Hosting
-    price_per_mw_month: 120000
+    price_per_mw_month: 45000
     uptime_target: 0.999
 
 capex:

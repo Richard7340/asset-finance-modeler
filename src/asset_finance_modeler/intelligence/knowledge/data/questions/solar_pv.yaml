@@ -72,6 +72,20 @@
   benchmark_key: capex_per_kwp_eur
   group: capex
 
+- field_path: meta.horizon.periods
+  question: "¿Vida útil del proyecto (años)?"
+  help_text: "Solar FV: 25-30 años con paneles modernos. Con repowering (cambio de inversor/paneles a año 15-20) puede llegar a 35-40 años."
+  options:
+    - label: "25 años (estándar)"
+      value: 300
+    - label: "30 años (paneles modernos)"
+      value: 360
+    - label: "35 años (con repowering)"
+      value: 420
+  required: true
+  order: 0
+  group: meta
+
 - field_path: financing.max_leverage
   question: "¿Ratio deuda/equity?"
   help_text: "Project finance típico: 70-80% deuda."
