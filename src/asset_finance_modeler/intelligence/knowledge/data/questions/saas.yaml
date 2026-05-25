@@ -1,0 +1,187 @@
+- field_path: meta.horizon.periods
+  question: "¿A cuántos meses quieres proyectar?"
+  help_text: "SaaS típico: 36 meses (3 años) para MVP, 60 meses (5 años) para serie A."
+  options:
+    - label: "24 meses (2 años)"
+      value: 24
+    - label: "36 meses (3 años)"
+      value: 36
+    - label: "60 meses (5 años)"
+      value: 60
+  required: true
+  order: 1
+  group: meta
+
+- field_path: revenue.sources[0].pricing.per_unit_per_period
+  question: "¿Cuál es tu pricing mensual por unidad (agente/usuario/seat)?"
+  help_text: "El precio que cobra cada cliente por mes. SMB España: €20-100. Mid-market: €100-500."
+  options:
+    - label: "€29/mes (entrada SMB)"
+      value: 29
+    - label: "€99/mes (mid-market)"
+      value: 99
+    - label: "€200/mes (premium)"
+      value: 200
+    - label: "€300/mes (enterprise)"
+      value: 300
+  required: true
+  order: 2
+  benchmark_key: saas_arpu
+  group: revenue
+
+- field_path: revenue.sources[0].pricing.setup_one_time
+  question: "¿Hay fee de setup por cliente nuevo?"
+  help_text: "Onboarding, configuración inicial. Muchos SaaS lo ofrecen gratis para reducir fricción."
+  options:
+    - label: "€0 (gratis)"
+      value: 0
+    - label: "€500"
+      value: 500
+    - label: "€1,000"
+      value: 1000
+    - label: "€2,000"
+      value: 2000
+  required: false
+  order: 3
+  group: revenue
+
+- field_path: revenue.sources[0].acquisition.new_units_per_period
+  question: "¿Cuántos clientes nuevos esperas por mes al empezar?"
+  help_text: "Sé conservador. SaaS early-stage: 2-5/mes. Con tracción: 10-20/mes."
+  options:
+    - label: "2/mes (bootstrapping)"
+      value: 2
+    - label: "5/mes (tracción inicial)"
+      value: 5
+    - label: "10/mes (product-market fit)"
+      value: 10
+    - label: "20/mes (growth)"
+      value: 20
+  required: true
+  order: 4
+  group: revenue
+
+- field_path: revenue.sources[0].acquisition.cac_per_customer
+  question: "¿Cuánto cuesta adquirir un cliente (CAC)?"
+  help_text: "Todo incluido: marketing + ventas + tiempo. B2B SMB España: €500-2000. B2C: €50-200."
+  options:
+    - label: "€200 (orgánico/referral)"
+      value: 200
+    - label: "€800 (marketing digital)"
+      value: 800
+    - label: "€1,500 (outbound + inbound mix)"
+      value: 1500
+    - label: "€2,500 (enterprise sales)"
+      value: 2500
+  required: true
+  order: 5
+  benchmark_key: saas_cac
+  group: revenue
+
+- field_path: revenue.sources[0].retention.monthly_churn_rate
+  question: "¿Qué churn mensual esperas?"
+  help_text: "% de clientes que se dan de baja al mes. SaaS B2B saludable: 2-3%. Nuevo sin lock-in: 4-6%."
+  options:
+    - label: "2% (muy bueno, con lock-in)"
+      value: 0.02
+    - label: "4% (normal B2B nuevo)"
+      value: 0.04
+    - label: "6% (alto, sin stickiness)"
+      value: 0.06
+    - label: "8% (B2C o commodity)"
+      value: 0.08
+  required: true
+  order: 6
+  benchmark_key: saas_churn
+  group: revenue
+
+- field_path: meta.initial_cash
+  question: "¿Con cuánto cash inicial cuentas?"
+  help_text: "Dinero en caja al empezar. Incluye ahorros propios + pre-seed si lo hay."
+  options:
+    - label: "€10,000"
+      value: 10000
+    - label: "€50,000"
+      value: 50000
+    - label: "€100,000"
+      value: 100000
+    - label: "€250,000"
+      value: 250000
+  required: true
+  order: 7
+  group: meta
+
+- field_path: operating_expenses.team[0].monthly_cost
+  question: "¿Cuánto gastan en equipo al mes (total nóminas + SS)?"
+  help_text: "Incluye todos los fundadores/empleados con su coste total empresa."
+  options:
+    - label: "€4,000 (1 founder a tiempo parcial)"
+      value: 4000
+    - label: "€8,000 (2 founders bootstrapping)"
+      value: 8000
+    - label: "€15,000 (equipo pequeño 3-4 personas)"
+      value: 15000
+    - label: "€30,000 (equipo 6-8 personas)"
+      value: 30000
+  required: true
+  order: 8
+  group: opex
+
+- field_path: operating_expenses.infra_fixed_eur
+  question: "¿Cuánto gastan en infraestructura al mes (servidores, APIs, tools)?"
+  help_text: "Hetzner/AWS + APIs de LLM + herramientas SaaS que usáis."
+  options:
+    - label: "€100 (mínimo, self-hosted)"
+      value: 100
+    - label: "€500 (startup típico)"
+      value: 500
+    - label: "€2,000 (con LLM heavy)"
+      value: 2000
+    - label: "€5,000 (scale-up)"
+      value: 5000
+  required: true
+  order: 9
+  group: opex
+
+- field_path: operating_expenses.marketing_eur
+  question: "¿Cuánto gastan en marketing al mes?"
+  help_text: "Ads + content + eventos + herramientas de marketing."
+  options:
+    - label: "€0 (100% orgánico)"
+      value: 0
+    - label: "€500 (content marketing)"
+      value: 500
+    - label: "€2,000 (ads + content)"
+      value: 2000
+    - label: "€5,000 (growth agresivo)"
+      value: 5000
+  required: false
+  order: 10
+  group: opex
+
+- field_path: taxes.corporate_income_tax_rate
+  question: "¿Tipo impositivo de sociedades?"
+  help_text: "España: 25% (15% los 2 primeros años con beneficios para nuevas empresas)."
+  options:
+    - label: "15% (startup España, primeros 2 años)"
+      value: 0.15
+    - label: "25% (España estándar)"
+      value: 0.25
+  required: true
+  order: 11
+  group: taxes
+
+- field_path: valuation.discount_rate_annual
+  question: "¿Qué tasa de descuento usar para la valoración?"
+  help_text: "WACC. SaaS early-stage: 15-25%. SaaS con tracción: 10-15%."
+  options:
+    - label: "12% (SaaS con métricas sólidas)"
+      value: 0.12
+    - label: "18% (early-stage con tracción)"
+      value: 0.18
+    - label: "25% (pre-revenue / muy temprano)"
+      value: 0.25
+  required: true
+  order: 12
+  group: valuation
+  expert_only: true

@@ -9,3 +9,27 @@
   unit: EUR/MWh
   methodology: "Median PPA price, 10-year tenor, fixed"
   assumptions: ["utility-scale", "corporate PPA"]
+
+- field: ppa_price_solar_es
+  asset_type: solar_pv
+  region: ES
+  value: 42
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "LevelTen Energy PPA Index Q4 2025"
+  confidence: 0.85
+  unit: EUR/MWh
+  methodology: "Median PPA price, 10-year tenor, fixed"
+  assumptions: ["utility-scale", "corporate PPA"]
+
+- field: specific_yield_solar
+  asset_type: solar_pv
+  region: ES
+  value: 1650
+  valid_from: 2026-01-01
+  valid_to: 2026-12-31
+  source: "PVGIS EU / JRC"
+  confidence: 0.90
+  unit: kWh/kWp/yr
+  methodology: "Average GHI for southern Spain, optimally tilted"
+  assumptions: ["latitude 37-38°N", "fixed-tilt optimal angle", "no shading"]

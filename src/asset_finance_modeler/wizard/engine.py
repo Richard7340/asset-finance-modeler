@@ -21,21 +21,37 @@ class WizardEngine:
         questions = self._loader.load_questions(asset_type or "generic")
         quick_start: dict[str, ResolvedInput] | None = None
         mode = "full"
+        self._last_region: str | None = region
         if asset_type and region:
             presets = self._loader.load_quick_starts()
             for preset in presets:
                 if preset.asset_type == asset_type and (
                     preset.region is None or preset.region == region
                 ):
+                    bm_key_map = {q.field_path: q.benchmark_key for q in questions if q.benchmark_key}
                     quick_start = {}
                     for fp, val in preset.defaults.items():
-                        quick_start[fp] = ResolvedInput(
-                            field_path=fp,
-                            value=val,
-                            source="preset",
-                            provenance=f"quick_start_{asset_type}_{region}",
-                            confidence=0.3,
-                        )
+                        bm_key = bm_key_map.get(fp, fp)
+                        bm = self._benchmark.search(bm_key, asset_type, region)
+                        if not bm:
+                            bm = self._benchmark.search(fp, asset_type, region)
+                        if bm:
+                            quick_start[fp] = ResolvedInput(
+                                field_path=fp,
+                                value=bm.value,
+                                source="benchmark",
+                                provenance=bm.source,
+                                confidence=bm.confidence,
+                                benchmark_id=bm.benchmark_id,
+                            )
+                        else:
+                            quick_start[fp] = ResolvedInput(
+                                field_path=fp,
+                                value=val,
+                                source="preset",
+                                provenance=f"quick_start_{asset_type}_{region}",
+                                confidence=0.3,
+                            )
                     mode = "quick_start"
                     break
         session = WizardSession.create(asset_type or "generic", questions, quick_start)
@@ -68,8 +84,9 @@ class WizardEngine:
         q = session.current_question
         if q is None:
             return {"error": "No current question"}
+        region = getattr(self, "_last_region", None)
         bm = self._benchmark.search(
-            q.benchmark_key or q.field_path, session.asset_type, None
+            q.benchmark_key or q.field_path, session.asset_type, region
         )
         if bm:
             session.answer(

@@ -8,6 +8,8 @@
   asset_type: hydrogen
 - patterns: ["data center", "centro de datos", "datacenter", "colocation"]
   asset_type: data_center
+- patterns: ["SaaS", "saas", "software as a service", "suscripción", "plataforma", "agente de voz", "agentes", "app"]
+  asset_type: saas
 - patterns: ["inmobiliario", "vivienda", "edificio", "real estate", "alquiler"]
   asset_type: real_estate
 - patterns: ["empresa", "negocio", "M&A", "adquisición", "fusión", "corporate"]
