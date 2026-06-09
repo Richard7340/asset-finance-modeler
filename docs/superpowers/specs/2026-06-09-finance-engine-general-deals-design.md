@@ -49,12 +49,29 @@ Necesidad general: un **proyecto híbrido** que combine N activos con acoplamien
 - **Caja consolidada:** P&L y cashflow combinados; los flujos intra-grupo (p.ej. PPA interno) se **cancelan** a nivel consolidado.
 - **Diseño:** nuevo `HybridModel` (o `assets/hybrid/`) que compone `InfrastructureModel` por activo + reglas de acoplamiento. Interfaz: lista de activos + reglas de coupling.
 
-### E2 — Curvas por fases en arbitraje y ancillary
-Hoy: `MerchantStream.price_curve` existe; `ArbitrageStream.avg_spread` y `AncillaryStream` son escalares.
-Necesidad general: cualquier parámetro de revenue puede ser una **curva temporal** o una **curva por fases** (growth/compression por tramos de años).
-- Añadir `spread_curve: list[float] | None` y/o `phases: list[Phase]` (cada fase = {años, %crecimiento}) a `ArbitrageStream` y `AncillaryStream` (y homogeneizar con merchant).
-- Helper `build_phased_curve(base, phases, n_periods)` en `core/drivers.py` (reutilizable por cualquier stream/parámetro).
-- En SVJ: spread €82 +2%(y1-7)/0%(y8-15)/−2%(y16-30); ancillary €74k −0%(y1)/−12%(y2-3)/−8%(y4-10)/−2%(y11+).
+### E2 — Subsistema GENERAL de curvas (librería + búsqueda + custom, cualquier activo/parámetro)
+Hoy: `MerchantStream.price_curve` existe; `ArbitrageStream.avg_spread` y `AncillaryStream` son escalares; no hay librería ni curvas reutilizables.
+Necesidad general (versatilidad máxima): **cualquier parámetro de cualquier activo** (renovable, industrial, comercial…) puede proyectarse con una **curva**, y la curva puede venir de tres fuentes:
+
+**a) Objeto `Curve` de primera clase** (`core/curves.py`): representa una serie temporal proyectada. Constructores:
+- `from_points(values)` — lista de valores por periodo.
+- `from_phases(base, phases)` — fases {años, %crecimiento/decrecimiento} (p.ej. spread +2%/0%/−2%; ancillary −12%/−8%/−2%).
+- `from_library(name)` — curva pre-cargada y bancable (ver b).
+- `from_growth(base, rate)` / `from_inflation(...)` — atajos.
+- Atachable a CUALQUIER stream o parámetro (precio, spread, ancillary, demanda, coste, FX, índice…), no solo revenue.
+
+**b) Librería de curvas bancables** (`data/curves/`, YAML/JSON, citadas y versionadas): curvas proyectadas aprobadas/defendibles por tipo de activo y parámetro. No solo renovables:
+- *Renovables/energía:* spread DA (Agere/Modo TB2), ancillary (aFRR), captura solar/eólica, precio pool, PPA, curva Poyry.
+- *Industrial/commodities:* precios de materias primas, energía industrial, índices de coste, demanda.
+- *Transversal:* inflación, FX, WACC/tipos, curvas de degradación.
+- Cada entrada lleva **fuente + fecha + nota de bancabilidad**. Extensible: añadir curvas nuevas = añadir un YAML.
+
+**c) Fuentes dinámicas (interfaz definida aquí; ejecución en wizard/Torre):**
+- **Agente busca en internet** → precios/curvas → construye una `Curve` (interfaz `from_search(query)` que el wizard/agente rellena).
+- **Usuario define la suya** (precios propios, fases propias) → `Curve` custom.
+- **Agente sugiere** en el wizard la curva de librería más adecuada al activo.
+
+- En SVJ: spread €82 `from_phases(+2%/0%/−2%)`, ancillary €74k `from_phases(−0/−12/−8/−2)`, captura FV `from_library("solar_capture_es")` — todo trazable a fuente.
 
 ### E3 — Deuda multi-tramo + waterfall de subordinación
 Hoy: `financing.senior` (un tramo, DSCR-sized). 
