@@ -18,13 +18,18 @@ Environment:
     PORT                    HTTP port (default 8015)
 """
 from __future__ import annotations
+
 import json
 import os
+from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 import uvicorn
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from asset_finance_modeler.web_api.routes import router as svj_router
 
 from .server import _build_app
 
@@ -65,9 +70,20 @@ async def call_tool(req: CallRequest) -> dict[str, Any]:
     return json.loads(json.dumps(result, default=str))
 
 
+# /api/svj/* router (model/run/export) with token auth. Mounted before the SPA
+# so /api routes win over the catch-all static mount.
+app.include_router(svj_router)
+
+# Static SPA mount (AFTER include_router so /api wins). The repo `web/dist`
+# does not exist until the frontend is built, so guard with is_dir().
+web_dist = Path(__file__).resolve().parents[3] / "web" / "dist"
+if web_dist.is_dir():
+    app.mount("/", StaticFiles(directory=str(web_dist), html=True), name="spa")
+
+
 def main() -> None:
     port = int(os.getenv("PORT", "8015"))
-    uvicorn.run(app, host="127.0.0.1", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":
