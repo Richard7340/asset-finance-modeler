@@ -354,6 +354,18 @@ class IncentivesConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Capex events / repowering
+# ---------------------------------------------------------------------------
+
+
+class CapexEvent(BaseModel):
+    year: int  # 0-based model year of the event
+    amount: float  # capex injection, same units as CAPEX
+    resets_degradation: bool = False  # if True, capacity returns to nameplate
+    label: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Root model
 # ---------------------------------------------------------------------------
 
@@ -371,3 +383,4 @@ class InfrastructureModelConfig(BaseModel):
     taxes: TaxesConfig = Field(default_factory=TaxesConfig)
     valuation: ValuationConfig
     external_data: ExternalDataConfig = Field(default_factory=ExternalDataConfig)
+    capex_events: list[CapexEvent] = Field(default_factory=list)
