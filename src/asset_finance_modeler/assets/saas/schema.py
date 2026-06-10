@@ -227,6 +227,10 @@ class SensitivityGrid(BaseModel):
 
 class ValuationConfig(BaseModel):
     discount_rate_annual: float = Field(gt=0, description="WACC for DCF")
+    cost_of_equity_annual: float | None = Field(
+        default=None,
+        description="Ke for equity NPV; falls back to discount_rate_annual if None",
+    )
     terminal_growth_rate: float = Field(default=0.025, ge=0)
     exit_multiple_arr: float | None = None
     exit_multiple_ebitda: float | None = None

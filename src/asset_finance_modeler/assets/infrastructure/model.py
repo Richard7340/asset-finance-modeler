@@ -477,6 +477,14 @@ class InfrastructureModel:
         irr_project = compute_irr(project_cf, 1)
         irr_equity = compute_irr(equity_cf, 1) if has_debt else irr_project
 
+        # Equity NPV: plain discounted sum of the (finite, levered) equity cashflow
+        # at the cost of equity. equity_cf[0] is the year-0 outlay (discounted at
+        # t=0), so no terminal value is injected — unlike the project EV DCF.
+        ke = cfg.valuation.cost_of_equity_annual or cfg.valuation.discount_rate_annual
+        npv_equity = sum(
+            cf / ((1 + ke) ** t) for t, cf in enumerate(equity_cf)
+        )
+
         # LCOE
         total_production = sum(prod["production_mwh"])
         total_costs_pv = total_capex + sum(opx["total_opex"])
@@ -530,6 +538,7 @@ class InfrastructureModel:
             dscr_avg=dscr_avg,
             discount_rate_used=cfg.valuation.discount_rate_annual,
             debt_sizing=None,
+            npv_equity=npv_equity,
             dscr_senior_min=dscr_senior_min,
             dscr_senior_avg=dscr_senior_avg,
             dscr_subordinated_min=dscr_subordinated_min,
