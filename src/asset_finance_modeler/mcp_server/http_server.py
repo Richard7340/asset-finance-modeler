@@ -74,9 +74,12 @@ async def call_tool(req: CallRequest) -> dict[str, Any]:
 # so /api routes win over the catch-all static mount.
 app.include_router(svj_router)
 
-# Static SPA mount (AFTER include_router so /api wins). The repo `web/dist`
-# does not exist until the frontend is built, so guard with is_dir().
-web_dist = Path(__file__).resolve().parents[3] / "web" / "dist"
+# Static SPA mount (AFTER include_router so /api wins). The built SPA lives at
+# `web/dist`. Prefer SIM_WEB_DIST (set in the Docker image where the package is
+# installed to site-packages); fall back to the repo layout for local dev. The
+# dir may not exist until the frontend is built, so guard with is_dir().
+_env_dist = os.getenv("SIM_WEB_DIST")
+web_dist = Path(_env_dist) if _env_dist else Path(__file__).resolve().parents[3] / "web" / "dist"
 if web_dist.is_dir():
     app.mount("/", StaticFiles(directory=str(web_dist), html=True), name="spa")
 
