@@ -23,7 +23,15 @@ DEFAULT_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 @lru_cache(maxsize=1)
 def _load_model(model_name: str):  # type: ignore[no-untyped-def]
+    import os  # noqa: PLC0415
+
     from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+
+    # When running offline (no network), avoid hub lookups that otherwise hang
+    # until timeout: load strictly from the local HF cache.
+    offline = os.environ.get("HF_HUB_OFFLINE") == "1" or os.environ.get("TRANSFORMERS_OFFLINE") == "1"
+    if offline:
+        return SentenceTransformer(model_name, local_files_only=True)
     return SentenceTransformer(model_name)
 
 
