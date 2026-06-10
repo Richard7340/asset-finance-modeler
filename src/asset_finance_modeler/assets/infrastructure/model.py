@@ -11,6 +11,7 @@ engines in a fixed pipeline:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from asset_finance_modeler.assets.infrastructure.engines.capex import compute_capex
 from asset_finance_modeler.assets.infrastructure.engines.opex import compute_opex
@@ -24,7 +25,12 @@ from asset_finance_modeler.core.degradation import (
     degradation_time_based,
     degradation_usage_based,
 )
-from asset_finance_modeler.core.financing import DebtEngine, size_debt
+from asset_finance_modeler.core.drivers import AmortizationSchedule
+from asset_finance_modeler.core.financing import (
+    DebtEngine,
+    compute_waterfall_dscr,
+    size_debt,
+)
 from asset_finance_modeler.core.incentives import compute_incentives
 from asset_finance_modeler.core.protocols import FinancialOutput, ProjectKPIs
 from asset_finance_modeler.core.statements import (
@@ -108,9 +114,14 @@ class InfrastructureModel:
         )
 
         # 8b. Debt sizing (uses EBITDA as CFADS proxy)
-        debt_interest, debt_principal, debt_drawdowns, debt_balance = (
-            self._compute_debt(pnl["ebitda"], cap, n, ppy, cfg)
-        )
+        (
+            debt_interest,
+            debt_principal,
+            debt_drawdowns,
+            debt_balance,
+            senior_ds,
+            sub_ds,
+        ) = self._compute_debt(pnl["ebitda"], cap, n, ppy, cfg)
 
         # 8c. Rebuild P&L with actual interest
         pnl = self._build_pnl(
@@ -193,6 +204,8 @@ class InfrastructureModel:
             debt_principal=debt_principal,
             debt_balance=debt_balance,
             debt_metrics=debt_metrics,
+            senior_ds=senior_ds,
+            sub_ds=sub_ds,
             prod=prod,
             opx=opx,
             val=val,
@@ -264,56 +277,141 @@ class InfrastructureModel:
         n: int,
         ppy: int,
         cfg: InfrastructureModelConfig,
-    ) -> tuple[list[float], list[float], list[float], list[float]]:
-        """Size and schedule senior debt. Returns (interest, principal, drawdowns, balance)."""
+    ) -> tuple[
+        list[float], list[float], list[float], list[float], list[float], list[float]
+    ]:
+        """Size and schedule senior (+ subordinated) debt.
+
+        Returns (interest, principal, drawdowns, balance, senior_ds, sub_ds)
+        where senior_ds / sub_ds are the per-period total debt-service series
+        for the senior and subordinated tranches (zeros if absent). Interest /
+        principal / drawdowns / balance aggregate both tranches.
+        """
         debt_interest = [0.0] * n
         debt_principal = [0.0] * n
         debt_drawdowns = [0.0] * n
         debt_balance = [0.0] * n
+        senior_ds = [0.0] * n
+        sub_ds = [0.0] * n
 
-        if cfg.financing.senior is None:
-            return debt_interest, debt_principal, debt_drawdowns, debt_balance
+        instruments: list[DebtInstrument] = []
 
-        sr = cfg.financing.senior
-        total_capex = cap["total_capex"]
+        if cfg.financing.senior is not None:
+            sr = cfg.financing.senior
+            total_capex = cap["total_capex"]
 
-        if sr.auto_size:
-            sizing = size_debt(
-                cfads=ebitda,
-                dscr_target=sr.dscr_target,
-                dscr_mode=sr.dscr_mode,
-                interest_rate=sr.interest_rate,
-                tenor_periods=sr.tenor_years * ppy,
-                periods_per_year=ppy,
-                max_leverage=cfg.financing.max_leverage,
-                total_capex=total_capex,
-                amortization=sr.amortization,
-                grace_periods=sr.grace_period_months,
+            if sr.auto_size:
+                sizing = size_debt(
+                    cfads=ebitda,
+                    dscr_target=sr.dscr_target,
+                    dscr_mode=sr.dscr_mode,
+                    interest_rate=sr.interest_rate,
+                    tenor_periods=sr.tenor_years * ppy,
+                    periods_per_year=ppy,
+                    max_leverage=cfg.financing.max_leverage,
+                    total_capex=total_capex,
+                    amortization=sr.amortization,
+                    grace_periods=sr.grace_period_months,
+                )
+                debt_amount = sizing.max_debt if sizing.feasible else 0.0
+            else:
+                debt_amount = total_capex * cfg.financing.max_leverage
+
+            if debt_amount > 0:
+                instruments.append(
+                    DebtInstrument(
+                        name="Senior",
+                        principal=debt_amount,
+                        drawdown_period=0,
+                        interest_rate_annual=sr.interest_rate,
+                        term_months=sr.tenor_years * ppy,
+                        grace_period_months=sr.grace_period_months,
+                        amortization=sr.amortization,
+                    )
+                )
+                senior_ds = self._debt_service_series(
+                    principal=debt_amount,
+                    annual_rate=sr.interest_rate,
+                    term_periods=sr.tenor_years * ppy,
+                    grace_periods=sr.grace_period_months,
+                    amortization=sr.amortization,
+                    drawdown_period=0,
+                    n=n,
+                    ppy=ppy,
+                )
+
+        sub = cfg.financing.subordinated
+        if sub is not None and sub.principal > 0:
+            instruments.append(
+                DebtInstrument(
+                    name="Subordinated",
+                    principal=sub.principal,
+                    drawdown_period=sub.drawdown_period,
+                    interest_rate_annual=sub.interest_rate,
+                    term_months=sub.tenor_years * ppy,
+                    grace_period_months=sub.grace_period_months,
+                    amortization=sub.amortization,
+                )
             )
-            debt_amount = sizing.max_debt if sizing.feasible else 0.0
-        else:
-            debt_amount = total_capex * cfg.financing.max_leverage
+            sub_ds = self._debt_service_series(
+                principal=sub.principal,
+                annual_rate=sub.interest_rate,
+                term_periods=sub.tenor_years * ppy,
+                grace_periods=sub.grace_period_months,
+                amortization=sub.amortization,
+                drawdown_period=sub.drawdown_period,
+                n=n,
+                ppy=ppy,
+            )
 
-        if debt_amount <= 0:
-            return debt_interest, debt_principal, debt_drawdowns, debt_balance
+        if not instruments:
+            return (
+                debt_interest,
+                debt_principal,
+                debt_drawdowns,
+                debt_balance,
+                senior_ds,
+                sub_ds,
+            )
 
-        di = DebtInstrument(
-            name="Senior",
-            principal=debt_amount,
-            drawdown_period=0,
-            interest_rate_annual=sr.interest_rate,
-            term_months=sr.tenor_years * ppy,
-            grace_period_months=sr.grace_period_months,
-            amortization=sr.amortization,
-        )
-        debt_out = DebtEngine([di], periods=n, periods_per_year=ppy).compute()
+        debt_out = DebtEngine(instruments, periods=n, periods_per_year=ppy).compute()
 
         return (
             debt_out["interest_expense"],
             debt_out["principal_repaid"],
             debt_out["drawdowns"],
             debt_out["balance_outstanding"],
+            senior_ds,
+            sub_ds,
         )
+
+    @staticmethod
+    def _debt_service_series(
+        principal: float,
+        annual_rate: float,
+        term_periods: int,
+        grace_periods: int,
+        amortization: Literal["french", "bullet", "linear"],
+        drawdown_period: int,
+        n: int,
+        ppy: int,
+    ) -> list[float]:
+        """Per-period total debt service (interest + principal), padded to n."""
+        series = [0.0] * n
+        rows = AmortizationSchedule(
+            principal=principal,
+            annual_rate=annual_rate,
+            term_periods=term_periods,
+            periods_per_year=ppy,
+            kind=amortization,
+            grace_periods=grace_periods,
+        ).rows()
+        for i, row in enumerate(rows):
+            t = drawdown_period + i
+            if t >= n:
+                break
+            series[t] += row["total_payment"]
+        return series
 
     def _compute_kpis(
         self,
@@ -325,6 +423,8 @@ class InfrastructureModel:
         debt_principal: list[float],
         debt_balance: list[float],
         debt_metrics: dict,
+        senior_ds: list[float],
+        sub_ds: list[float],
         prod: dict,
         opx: dict,
         val: dict,
@@ -369,6 +469,29 @@ class InfrastructureModel:
         dscr_min = min(positive_dscr) if positive_dscr else 0.0
         dscr_avg = sum(positive_dscr) / len(positive_dscr) if positive_dscr else 0.0
 
+        # Per-tranche DSCR via the seniority waterfall: each tranche sees CFADS
+        # (EBITDA proxy) net of all more-senior tranches' debt service.
+        cfads = pnl["ebitda"]
+        tranches = [senior_ds]
+        has_sub = cfg.financing.subordinated is not None and any(
+            ds > 0 for ds in sub_ds
+        )
+        if has_sub:
+            tranches.append(sub_ds)
+        tranche_dscrs = compute_waterfall_dscr(cfads, tranches)
+
+        def _reduce(series: list[float]) -> tuple[float, float]:
+            active = [d for d in series if 0 < d < float("inf")]
+            if not active:
+                return 0.0, 0.0
+            return min(active), sum(active) / len(active)
+
+        dscr_senior_min, dscr_senior_avg = _reduce(tranche_dscrs[0])
+        dscr_subordinated_min = 0.0
+        dscr_subordinated_avg = 0.0
+        if has_sub:
+            dscr_subordinated_min, dscr_subordinated_avg = _reduce(tranche_dscrs[1])
+
         return ProjectKPIs(
             irr_project=irr_project,
             irr_equity=irr_equity,
@@ -381,6 +504,10 @@ class InfrastructureModel:
             dscr_avg=dscr_avg,
             discount_rate_used=cfg.valuation.discount_rate_annual,
             debt_sizing=None,
+            dscr_senior_min=dscr_senior_min,
+            dscr_senior_avg=dscr_senior_avg,
+            dscr_subordinated_min=dscr_subordinated_min,
+            dscr_subordinated_avg=dscr_subordinated_avg,
         )
 
     def _compute_degradation(self, periods: int, ppy: int) -> list[float]:

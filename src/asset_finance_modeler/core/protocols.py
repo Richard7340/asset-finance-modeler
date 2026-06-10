@@ -31,6 +31,10 @@ class ProjectKPIs:
     dscr_avg: float
     discount_rate_used: float
     debt_sizing: DebtSizingResult | None
+    dscr_senior_min: float = 0.0
+    dscr_senior_avg: float = 0.0
+    dscr_subordinated_min: float = 0.0
+    dscr_subordinated_avg: float = 0.0
 
 
 @dataclass
