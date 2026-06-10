@@ -297,6 +297,17 @@ class MezzanineDebtConfig(BaseModel):
     pik_interest: bool = False
 
 
+class SubordinatedDebtConfig(BaseModel):
+    """Fixed-ticket subordinated tranche (e.g. an investor's committed amount)."""
+
+    principal: float
+    interest_rate: float = 0.085
+    tenor_years: int = 7
+    grace_period_months: int = 0
+    amortization: Literal["french", "bullet", "linear"] = "french"
+    drawdown_period: int = 0
+
+
 class EquityConfig(BaseModel):
     target_irr: float = 0.12
     distribution_lock_years: int = 0
@@ -317,6 +328,7 @@ class CashSweepConfig(BaseModel):
 class ProjectFinanceConfig(BaseModel):
     senior: SeniorDebtConfig | None = None
     mezzanine: MezzanineDebtConfig | None = None
+    subordinated: SubordinatedDebtConfig | None = None
     equity: EquityConfig = Field(default_factory=EquityConfig)
     reserves: ReservesConfig = Field(default_factory=ReservesConfig)
     cash_sweep: CashSweepConfig = Field(default_factory=CashSweepConfig)
