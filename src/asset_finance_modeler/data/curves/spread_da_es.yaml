@@ -1,0 +1,12 @@
+name: spread_da_es
+asset_type: bess
+parameter: spread_eur_mwh
+source: "Agere TB2 Espana (67/93/87 EUR/MWh 2024/25/H1-26) + Modo Energy abr-2026; base conservadora"
+bankable: true
+build: phases
+base: 82.0
+periods: 30
+phases:
+  - {years: 7, growth_pct: 0.02}
+  - {years: 8, growth_pct: 0.0}
+  - {years: 15, growth_pct: -0.02}

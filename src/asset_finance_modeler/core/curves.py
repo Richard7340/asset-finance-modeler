@@ -35,9 +35,7 @@ class Curve:
     def from_library(cls, name: str) -> Curve:
         # Lazy import: curve_library is added in a later task; importing it
         # at module load time would break until then.
-        from asset_finance_modeler.core.curve_library import (  # type: ignore[import-not-found]
-            load_curve,
-        )
+        from asset_finance_modeler.core.curve_library import load_curve
         result: Curve = load_curve(name)
         return result
 
