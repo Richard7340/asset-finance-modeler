@@ -113,3 +113,29 @@ def compute_discounted_payback(
         if cumulative >= 0 and t > 0:
             return float(t) / periods_per_year
     return float("inf")
+
+
+def compute_moic(debt_service: list[float], principal: float) -> float:
+    """Money-on-invested-capital for a lender: total cash received / principal."""
+    if principal <= 0:
+        return 0.0
+    return sum(debt_service) / principal
+
+
+def compute_recovery_multiple(
+    cfads: list[float],
+    from_period: int,
+    discount_rate_annual: float,
+    periods_per_year: int,
+    outstanding_principal: float,
+) -> float:
+    """Going-concern recovery: PV of CFADS from `from_period` onwards
+    (discounted to from_period) divided by outstanding principal. Represents
+    how much a lender could recover by operating the asset from that point."""
+    if outstanding_principal <= 0:
+        return float("inf")
+    period_rate = (1.0 + discount_rate_annual) ** (1.0 / periods_per_year) - 1.0
+    pv = 0.0
+    for i, t in enumerate(range(from_period, len(cfads))):
+        pv += cfads[t] / (1.0 + period_rate) ** i
+    return pv / outstanding_principal
