@@ -1,0 +1,7 @@
+name: ancillary_afrr_es
+asset_type: bess
+parameter: ancillary_eur_mw_yr
+source: "Agere: aFRR/mFRR Espana, canibalizacion 2028-29; base 74k EUR/MW yr1 comprime a suelo ~21k"
+bankable: true
+build: points
+points: [74000, 65000, 60000, 55000, 48000, 42000, 36000, 31000, 27000, 24000, 22000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000, 21000]

@@ -1,0 +1,11 @@
+name: solar_capture_es
+asset_type: solar_pv
+parameter: capture_price_eur_mwh
+source: "Agere captura solar Espana ~36 EUR/MWh 2025, apuntamiento creciente decae a ~29; conservadora"
+bankable: true
+build: phases
+base: 36.0
+periods: 30
+phases:
+  - {years: 10, growth_pct: -0.01}
+  - {years: 20, growth_pct: -0.005}

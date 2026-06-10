@@ -18,3 +18,13 @@ def test_load_curve_spread_da_es():
 def test_load_unknown_curve_raises():
     with pytest.raises(KeyError):
         load_curve("does_not_exist_xyz")
+
+
+def test_seed_curves_present():
+    names = list_curves()
+    for n in ("spread_da_es", "ancillary_afrr_es", "solar_capture_es"):
+        assert n in names
+    anc = load_curve("ancillary_afrr_es")
+    assert anc.to_list(10)[2] < anc.to_list(10)[0]   # comprime tras yr1 (Agere)
+    sol = load_curve("solar_capture_es")
+    assert sol.at(0) > sol.at(29)                     # captura solar decae
