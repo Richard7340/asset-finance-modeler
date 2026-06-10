@@ -19,6 +19,10 @@ from asset_finance_modeler.assets.infrastructure.engines.production import compu
 from asset_finance_modeler.assets.infrastructure.engines.revenue import compute_revenue
 from asset_finance_modeler.assets.infrastructure.schema import InfrastructureModelConfig
 from asset_finance_modeler.assets.saas.schema import DebtInstrument
+from asset_finance_modeler.core.capex_events import (
+    apply_capex_events,
+    apply_degradation_resets,
+)
 from asset_finance_modeler.core.degradation import (
     degradation_cycle_based,
     degradation_none,
@@ -69,6 +73,13 @@ class InfrastructureModel:
 
         # 1. Degradation multipliers
         deg = self._compute_degradation(n, ppy)
+        # 1b. Repowering / augmentation resets: events flagged
+        #     resets_degradation restore the curve to nameplate at their period.
+        reset_periods = [
+            e.year * ppy for e in cfg.capex_events if e.resets_degradation
+        ]
+        if reset_periods:
+            deg = apply_degradation_resets(deg, reset_periods)
 
         # 2. Production
         prod = compute_production(cfg.production, deg, n, ppy)
@@ -78,6 +89,21 @@ class InfrastructureModel:
 
         # 4. CAPEX + depreciation
         cap = compute_capex(cfg.capex, cfg.production, n, ppy)
+
+        # 4b. CAPEX events (repowering / augmentation injections): add each
+        #     event amount to the spend at its period (lands in investing cash
+        #     flow / reduces FCF) and to the headline total CAPEX.
+        if cfg.capex_events:
+            cap["capex_spend"] = apply_capex_events(
+                cap["capex_spend"],
+                [(e.year, e.amount) for e in cfg.capex_events],
+                ppy,
+            )
+            cap["total_capex"] += sum(
+                e.amount
+                for e in cfg.capex_events
+                if 0 <= e.year * ppy < n
+            )
 
         # 5. OPEX
         opx = compute_opex(
