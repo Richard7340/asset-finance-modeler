@@ -60,6 +60,7 @@ ignore = ["PLR0913", "PLR0912", "PLR0917", "B905"]
 "tests/**/*.py" = ["PLR2004", "PLR0913", "PLR0917"]
 "src/asset_finance_modeler/mcp_server/tools/output.py" = ["PLR0911"]
 "src/asset_finance_modeler/mcp_server/registry.py" = ["I001"]
+"src/asset_finance_modeler/core/curves.py" = ["PLC0415"]
 
 [tool.mypy]
 python_version = "3.12"
