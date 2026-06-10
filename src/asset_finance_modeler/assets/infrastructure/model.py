@@ -48,6 +48,8 @@ from asset_finance_modeler.core.valuation import (
     compute_discounted_payback,
     compute_irr,
     compute_lcoe,
+    compute_moic,
+    compute_recovery_multiple,
 )
 
 __all__ = ["InfrastructureModel"]
@@ -523,8 +525,25 @@ class InfrastructureModel:
         dscr_senior_min, dscr_senior_avg = _reduce(tranche_dscrs[0])
         dscr_subordinated_min = 0.0
         dscr_subordinated_avg = 0.0
+        moic_subordinated = 0.0
+        recovery_going_concern = 0.0
         if has_sub:
             dscr_subordinated_min, dscr_subordinated_avg = _reduce(tranche_dscrs[1])
+            sub = cfg.financing.subordinated
+            assert sub is not None  # narrowed by has_sub
+            moic_subordinated = compute_moic(sub_ds, sub.principal)
+            recovery_rate = (
+                cfg.valuation.cost_of_equity_annual
+                or cfg.valuation.discount_rate_annual
+            )
+            tenor_periods = int(sub.tenor_years * ppy)
+            recovery_going_concern = compute_recovery_multiple(
+                cfads,
+                from_period=tenor_periods,
+                discount_rate_annual=recovery_rate,
+                periods_per_year=ppy,
+                outstanding_principal=sub.principal,
+            )
 
         return ProjectKPIs(
             irr_project=irr_project,
@@ -543,6 +562,8 @@ class InfrastructureModel:
             dscr_senior_avg=dscr_senior_avg,
             dscr_subordinated_min=dscr_subordinated_min,
             dscr_subordinated_avg=dscr_subordinated_avg,
+            moic_subordinated=moic_subordinated,
+            recovery_going_concern=recovery_going_concern,
         )
 
     def _compute_degradation(self, periods: int, ppy: int) -> list[float]:
