@@ -173,3 +173,32 @@ def size_debt(
         feasible=True,
         reason="ok",
     )
+
+
+def compute_waterfall_dscr(
+    cfads: list[float],
+    tranche_debt_service: list[list[float]],
+) -> list[list[float]]:
+    """Per-tranche DSCR in seniority order (most senior first).
+
+    Each tranche's DSCR uses CFADS net of ALL more-senior tranches' debt
+    service: DSCR_k[t] = (cfads[t] - sum(ds_j[t] for j<k)) / ds_k[t].
+    Zero service -> inf (no obligation that period); non-positive available
+    cash with positive service -> 0.0.
+    """
+    n = len(cfads)
+    results: list[list[float]] = []
+    for idx, ds in enumerate(tranche_debt_service):
+        dscr: list[float] = []
+        for t in range(n):
+            senior_ds = sum(tranche_debt_service[j][t] for j in range(idx))
+            available = cfads[t] - senior_ds
+            service = ds[t]
+            if service <= 0:
+                dscr.append(float("inf"))
+            elif available <= 0:
+                dscr.append(0.0)
+            else:
+                dscr.append(available / service)
+        results.append(dscr)
+    return results
