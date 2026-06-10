@@ -1,0 +1,75 @@
+meta:
+  name: svj_fv_cordoba
+  horizon:
+    periods: 360
+    frequency: M
+  start_date: "2026-01-01"
+  initial_cash: 0
+  base_currency: EUR
+
+production:
+  type: solar_pv
+  capacity_mwp: 4.76
+  specific_yield_kwh_kwp: 1582
+  performance_ratio: 0.86
+
+revenue:
+  - type: ppa
+    name: PPA
+    price_eur_per_unit: 43.0
+    volume_fraction: 0.50
+    escalation_pct_yr: 0.02
+    tenor_years: 30
+  - type: merchant
+    name: Merchant
+    base_price_eur_per_unit: 36.0
+    volume_fraction: 0.50
+    capture_ratio: 0.85
+    escalation_pct_yr: 0.01
+
+capex:
+  items:
+    - name: EPC (modules + BOS + installation)
+      amount_per_unit: 0.93
+      unit: Wp
+      depreciation_years: 25
+      depreciation_method: straight_line
+  contingency_pct: 0.05
+  development_cost: 100000
+  grid_connection_cost: 200000
+
+opex:
+  om_fixed_eur_per_mw_yr: 12000
+  om_variable_eur_per_mwh: 1.0
+  insurance_pct_capex: 0.004
+  land_lease_eur_yr: 15000
+  management_fee_eur_yr: 10000
+  opex_escalation_pct_yr: 0.02
+
+degradation:
+  type: time_based
+  annual_rate: 0.006
+
+timeline:
+  development_months: 6
+  permitting_months: 12
+  construction_months: 8
+  grid_connection_months: 3
+
+financing:
+  senior:
+    tenor_years: 10
+    interest_rate: 0.032
+    amortization: french
+    auto_size: false
+  max_leverage: 0.50
+
+taxes:
+  corporate_income_tax_rate: 0.25
+  tax_loss_carryforward: true
+
+valuation:
+  discount_rate_annual: 0.0537
+  cost_of_equity_annual: 0.075
+  terminal_growth_rate: 0.0
+  terminal_method: gordon
