@@ -88,3 +88,16 @@ def analyze_portfolio(scenarios: list[dict[str, Any]]) -> PortfolioAnalysis:
         entries=entries, aggregated=aggregated,
         comparison_table=comparison, narrative=narrative,
     )
+
+
+def consolidate_series(series_list: list[list[float]]) -> list[float]:
+    """Sum several per-period series element-wise. Shorter series are treated
+    as 0 in the periods they don't cover (ramp-up / different horizons)."""
+    n = max((len(s) for s in series_list), default=0)
+    return [sum(s[t] for s in series_list if t < len(s)) for t in range(n)]
+
+
+def consolidate_npv(fcf: list[float], discount_rate_annual: float) -> float:
+    """NPV of a consolidated annual FCF series with the year-0 outlay at t=0
+    (plain discounted sum, no terminal value). Convention matches equity NPV."""
+    return sum(cf / ((1.0 + discount_rate_annual) ** t) for t, cf in enumerate(fcf))
