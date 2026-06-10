@@ -23,6 +23,7 @@ from asset_finance_modeler.assets.infrastructure.schema import (
     RentalStream,
     SLAStream,
 )
+from asset_finance_modeler.core.curves import Curve
 
 __all__ = ["compute_revenue"]
 
@@ -187,9 +188,20 @@ def _arbitrage(
     cycles: float = cfg.cycles_per_day
     days = 365.0 / ppy
 
-    base = energy_cap * dod * rte * cycles * days * cfg.avg_spread_eur_mwh * cfg.spread_capture_ratio
+    n_years = (periods + ppy - 1) // ppy
 
-    return [base * degradation[t] for t in range(periods)]
+    # Per-year spread: library curve > explicit points > flat scalar.
+    if cfg.spread_curve_name is not None:
+        spread_by_year = Curve.from_library(cfg.spread_curve_name).to_list(n_years)
+    elif cfg.spread_points is not None:
+        spread_by_year = Curve.from_points(cfg.spread_points).to_list(n_years)
+    else:
+        spread_by_year = [cfg.avg_spread_eur_mwh] * n_years
+
+    # Constant part of the revenue formula (spread applied per-period below).
+    base = energy_cap * dod * rte * cycles * days * cfg.spread_capture_ratio
+
+    return [base * spread_by_year[t // ppy] * degradation[t] for t in range(periods)]
 
 
 # ---------------------------------------------------------------------------
@@ -203,9 +215,14 @@ def _ancillary(
     periods: int,
     ppy: int,
 ) -> list[float]:
-    """(fcr + afrr + mfrr) × capacity_mw / ppy"""
+    """(fcr + afrr + mfrr) × capacity_mw / ppy, optionally scaled by a per-year multiplier."""
     annual = (cfg.fcr_eur_mw_yr + cfg.afrr_eur_mw_yr + cfg.mfrr_eur_mw_yr) * capacity_mw
     per_period = annual / ppy
+
+    if cfg.curve_points is not None:
+        multiplier = Curve.from_points(cfg.curve_points)
+        return [per_period * multiplier.at(t // ppy) for t in range(periods)]
+
     return [per_period] * periods
 
 

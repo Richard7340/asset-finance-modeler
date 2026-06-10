@@ -119,6 +119,8 @@ class ArbitrageStream(BaseModel):
     avg_spread_eur_mwh: float = 40
     cycles_per_day: float = 1.5
     spread_capture_ratio: float = 0.75
+    spread_curve_name: str | None = None
+    spread_points: list[float] | None = None
 
 
 class AncillaryStream(BaseModel):
@@ -127,6 +129,7 @@ class AncillaryStream(BaseModel):
     fcr_eur_mw_yr: float = 0
     afrr_eur_mw_yr: float = 0
     mfrr_eur_mw_yr: float = 0
+    curve_points: list[float] | None = None
 
 
 class CapacityStream(BaseModel):
