@@ -14,6 +14,37 @@ def expand_growth(value: float | list[float], periods: int) -> list[float]:
     return [float(v) for v in value]
 
 
+@dataclass(frozen=True)
+class CurvePhase:
+    """A growth phase: `years` periods at `growth_pct` per-period compounding."""
+
+    years: int
+    growth_pct: float
+
+
+def build_phased_curve(base: float, phases: list["CurvePhase"], periods: int) -> list[float]:
+    """Build a value series from a base and phased compounding growth.
+
+    Year 1 (index 0) = base. For each later period t, the value steps from the
+    previous period by the growth rate of the active phase. Phases are consumed
+    in order by their `years` span; if they run out before `periods`, the last
+    phase's growth continues (ramp-then-hold semantics).
+    """
+    growth_by_period: list[float] = []
+    for ph in phases:
+        growth_by_period.extend([ph.growth_pct] * ph.years)
+    if not growth_by_period:
+        growth_by_period = [0.0]
+    values: list[float] = []
+    current = base
+    for t in range(periods):
+        if t > 0:
+            g = growth_by_period[t] if t < len(growth_by_period) else growth_by_period[-1]
+            current = current * (1.0 + g)
+        values.append(current)
+    return values
+
+
 GrowthKind = Literal["linear", "geometric", "step"]
 
 
