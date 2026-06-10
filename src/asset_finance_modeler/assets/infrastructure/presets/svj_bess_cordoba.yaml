@@ -78,10 +78,9 @@ opex:
   opex_escalation_pct_yr: 0.02
 
 degradation:
-  type: cycle_based
-  capacity_fade_per_cycle: 0.00004
-  calendar_fade_annual: 0.015
-  eol_capacity_pct: 0.70
+  type: time_based
+  annual_rate: 0.006
+
 
 timeline:
   construction_months: 8

@@ -33,7 +33,7 @@ revenue:
     base_price_eur_per_unit: 36.0
     volume_fraction: 0.50
     capture_ratio: 0.85
-    escalation_pct_yr: 0.01
+    escalation_pct_yr: -0.015
 
 capex:
   items:
@@ -51,12 +51,13 @@ capex:
   grid_connection_cost: 0
 
 opex:
-  om_fixed_eur_per_mw_yr: 12000
-  om_variable_eur_per_mwh: 1.0
-  insurance_pct_capex: 0.004
-  land_lease_eur_yr: 15000
-  management_fee_eur_yr: 10000
+  om_fixed_eur_per_mw_yr: 4000
+  om_variable_eur_per_mwh: 0.5
+  insurance_pct_capex: 0.0015
+  land_lease_eur_yr: 3000
+  management_fee_eur_yr: 2000
   opex_escalation_pct_yr: 0.02
+
 
 degradation:
   type: time_based
