@@ -10,8 +10,16 @@ meta:
 production:
   type: solar_pv
   capacity_mwp: 4.76
+  # CALIBRATION (Phase 6, Task 3): specific_yield_kwh_kwp already represents
+  # NET specific production (post-PR, post-losses) per the validated Excel.
+  # The solar engine multiplies yield * performance_ratio, so leaving PR<1
+  # double-applies the performance ratio and under-counts production
+  # (4.76*1582*0.86 = 6,476 MWh vs Excel target 7,530 MWh). We bake the PR
+  # into the (already net) yield by setting performance_ratio: 1.0.
+  # Result: 4.76 * 1582 * 1.0 = 7,530 MWh/yr (matches Excel).
+  # See docs/superpowers/svj_validation_report.md.
   specific_yield_kwh_kwp: 1582
-  performance_ratio: 0.86
+  performance_ratio: 1.0
 
 revenue:
   - type: ppa
@@ -34,9 +42,13 @@ capex:
       unit: Wp
       depreciation_years: 25
       depreciation_method: straight_line
-  contingency_pct: 0.05
-  development_cost: 100000
-  grid_connection_cost: 200000
+  # CALIBRATION (Phase 6, Task 3): the validated Excel total_capex is ~€4.44M,
+  # which is essentially EPC (4.76M Wp * 0.93 = €4,426,800) plus a thin
+  # development allowance. Original preset extras (5% contingency + €100k dev +
+  # €200k grid) inflated total_capex to €4.95M. Trimmed to match Excel.
+  contingency_pct: 0.0
+  development_cost: 13200
+  grid_connection_cost: 0
 
 opex:
   om_fixed_eur_per_mw_yr: 12000
