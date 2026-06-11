@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 def _client(monkeypatch):
     monkeypatch.setenv("SIM_TOKEN", "secret123")
+    monkeypatch.setenv("SIM_ONLY", "1")
     from asset_finance_modeler.mcp_server.http_server import app  # noqa: PLC0415
     return TestClient(app)
 
