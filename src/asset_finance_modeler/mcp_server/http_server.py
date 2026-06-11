@@ -40,7 +40,13 @@ class CallRequest(BaseModel):
 
 
 app = FastAPI(title="asset-finance-modeler HTTP")
-_, _registry = _build_app()
+# SIM_ONLY=1 skips building the full 30+ MCP tool registry (incl. the heavy
+# embeddings/FAISS intelligence stack). The web simulator only needs /api/svj/*
+# + the static SPA, so this gives an instant, reliable startup for the dashboard.
+if os.getenv("SIM_ONLY") == "1":
+    _registry = {}
+else:
+    _, _registry = _build_app()
 
 
 @app.get("/health")
