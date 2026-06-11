@@ -29,6 +29,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from asset_finance_modeler.web_api.assets import router as assets_router
 from asset_finance_modeler.web_api.models import router as models_router
 from asset_finance_modeler.web_api.routes import router as svj_router
 
@@ -83,6 +84,8 @@ app.include_router(svj_router)
 # Generic multi-asset router /api/models (list + schema + run). After svj,
 # before the static mount so /api routes win over the catch-all.
 app.include_router(models_router)
+# Generic asset persistence router /api/assets (save/list/review/delete).
+app.include_router(assets_router)
 
 # Static SPA mount (AFTER include_router so /api wins). The built SPA lives at
 # `web/dist`. Prefer SIM_WEB_DIST (set in the Docker image where the package is
