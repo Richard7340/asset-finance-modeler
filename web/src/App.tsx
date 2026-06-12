@@ -1,107 +1,229 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getModel, isEmbed } from "./api";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  deleteAsset,
+  getAsset,
+  getSchema,
+  isHybridResult,
+  isEmbed,
+  listModels,
+} from "./api";
+import type {
+  ModelSummary,
+  Overrides,
+  SavedAssetSummary,
+} from "./api";
 import { useRun } from "./hooks/useRun";
-import InputsPanel from "./components/InputsPanel";
+import { fmtDateTime } from "./format";
+import AssetPanel from "./components/AssetPanel";
+import DynamicInputs from "./components/DynamicInputs";
 import KpiCards from "./components/KpiCards";
+import IncomeStatementTable from "./components/IncomeStatement";
+import CashFlowTable from "./components/CashFlowTable";
 import Charts from "./components/Charts";
 import Toolbar from "./components/Toolbar";
 
+type Selection = {
+  modelId: string;
+  modelName: string;
+  // When set, the editor reflects a saved asset being reviewed.
+  assetId: string | null;
+  savedAt: string | null;
+};
+
 export default function App() {
-  const modelQuery = useQuery({ queryKey: ["model"], queryFn: getModel });
-  const [overrides, setOverrides] = useState<Record<string, number>>({});
+  const queryClient = useQueryClient();
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [overrides, setOverrides] = useState<Overrides>({});
 
-  // Seed overrides with defaults once the model loads.
-  const seeded = useMemo(() => {
-    if (!modelQuery.data) return false;
-    if (Object.keys(overrides).length > 0) return true;
-    const defaults: Record<string, number> = {};
-    for (const inp of modelQuery.data.inputs) defaults[inp.key] = inp.default;
-    setOverrides(defaults);
-    return true;
-  }, [modelQuery.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const modelId = selection?.modelId ?? null;
 
-  const { data, isFetching } = useRun(overrides, seeded);
+  // Schema for the selected model.
+  const schemaQuery = useQuery({
+    queryKey: ["schema", modelId],
+    queryFn: () => getSchema(modelId as string),
+    enabled: !!modelId,
+  });
 
-  const setOne = (key: string, value: number) =>
-    setOverrides((prev) => ({ ...prev, [key]: value }));
+  const { data: result, isFetching } = useRun(modelId, overrides, !!modelId);
 
-  if (modelQuery.isLoading) {
-    return (
-      <div className="grid h-full place-items-center text-slate-400">
-        Cargando modelo…
-      </div>
+  // --- selection handlers ---
+
+  const selectModel = (m: ModelSummary) => {
+    setSelection({ modelId: m.id, modelName: m.name, assetId: null, savedAt: null });
+    setOverrides({}); // defaults come from schema; empty overrides => backend defaults
+  };
+
+  const selectAsset = async (a: SavedAssetSummary) => {
+    const full = await getAsset(a.id);
+    setSelection({
+      modelId: full.model_id,
+      modelName: full.name,
+      assetId: full.id,
+      savedAt: full.created_at,
+    });
+    setOverrides(full.overrides ?? {});
+  };
+
+  const handleDeleteAsset = async (id: string) => {
+    await deleteAsset(id);
+    if (selection?.assetId === id) {
+      setSelection(null);
+      setOverrides({});
+    }
+    queryClient.invalidateQueries({ queryKey: ["assets"] });
+  };
+
+  const refreshCartera = () =>
+    queryClient.invalidateQueries({ queryKey: ["assets"] });
+
+  // Editing an input clears the "reviewing saved asset" banner (it becomes a
+  // live edit) but keeps the same model.
+  const setOne = (path: string, value: number) => {
+    setOverrides((prev) => ({ ...prev, [path]: value }));
+    setSelection((prev) =>
+      prev && prev.assetId ? { ...prev, assetId: null, savedAt: null } : prev,
     );
-  }
+  };
 
-  if (modelQuery.error || !modelQuery.data) {
+  // Auto-select the first model on load so the screen is never empty.
+  const modelsForBootstrap = useQuery({ queryKey: ["models"], queryFn: listModels });
+  useEffect(() => {
+    if (!selection && modelsForBootstrap.data && modelsForBootstrap.data.length > 0) {
+      const first = modelsForBootstrap.data[0];
+      setSelection({
+        modelId: first.id,
+        modelName: first.name,
+        assetId: null,
+        savedAt: null,
+      });
+    }
+  }, [selection, modelsForBootstrap.data]);
+
+  const recalcBadge = isFetching ? (
+    <span className="flex items-center gap-1.5 text-xs text-slate-400">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" />
+      recalculando…
+    </span>
+  ) : null;
+
+  const hybrid = result ? isHybridResult(result) : false;
+
+  const center = useMemo(() => {
+    if (!modelId) {
+      return (
+        <div className="grid h-full place-items-center text-sm text-slate-400">
+          Selecciona un modelo o una simulación.
+        </div>
+      );
+    }
+    if (schemaQuery.isLoading) {
+      return <div className="p-2 text-sm text-slate-400">Cargando parámetros…</div>;
+    }
+    if (schemaQuery.error || !schemaQuery.data) {
+      return (
+        <div className="p-2 text-sm text-rose-500">
+          No se pudieron cargar los parámetros.
+        </div>
+      );
+    }
     return (
-      <div className="grid h-full place-items-center text-rose-500">
-        No se pudo cargar el modelo.
-      </div>
+      <DynamicInputs
+        schema={schemaQuery.data}
+        overrides={overrides}
+        onChangeNumber={setOne}
+      />
     );
-  }
-
-  const model = modelQuery.data;
+  }, [modelId, schemaQuery.isLoading, schemaQuery.error, schemaQuery.data, overrides]);
 
   return (
-    <div className="min-h-full bg-slate-50 text-slate-900">
+    <div className="flex h-full min-h-screen flex-col bg-slate-50 text-slate-900">
       {!isEmbed && (
         <header className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-4">
+          <div className="flex items-center justify-between gap-3 px-6 py-3">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
-                Gestnova · Simulador Financiero
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-sky-700">
+                Gestnova
               </div>
-              <h1 className="text-lg font-semibold text-slate-800">
-                {model.name}
+              <h1 className="text-base font-semibold text-slate-800">
+                Plataforma de Valoración de Activos
               </h1>
             </div>
             <div className="flex items-center gap-3">
-              {isFetching && (
-                <span className="flex items-center gap-1.5 text-xs text-slate-400">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
-                  recalculando…
-                </span>
+              {recalcBadge}
+              {selection && (
+                <Toolbar
+                  modelId={selection.modelId}
+                  modelName={selection.modelName}
+                  overrides={overrides}
+                  onSaved={refreshCartera}
+                />
               )}
-              <Toolbar overrides={overrides} onLoad={setOverrides} />
             </div>
           </div>
         </header>
       )}
 
-      <main className="mx-auto max-w-7xl px-6 py-6">
-        {isEmbed && (
-          <div className="mb-4 flex items-center justify-end gap-3">
-            {isFetching && (
-              <span className="flex items-center gap-1.5 text-xs text-slate-400">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
-                recalculando…
-              </span>
-            )}
-            <Toolbar overrides={overrides} onLoad={setOverrides} />
-          </div>
-        )}
+      <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[260px_320px_1fr]">
+        {/* Left: asset navigator */}
+        <aside className="border-r border-slate-200 bg-white p-4">
+          <AssetPanel
+            selectedModelId={selection?.modelId ?? null}
+            selectedAssetId={selection?.assetId ?? null}
+            onSelectModel={selectModel}
+            onSelectAsset={selectAsset}
+            onDeleteAsset={handleDeleteAsset}
+          />
+        </aside>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
-          <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <InputsPanel model={model} overrides={overrides} onChange={setOne} />
-          </aside>
+        {/* Center: input editor */}
+        <section className="border-r border-slate-200 bg-slate-50 p-4">
+          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+            Parámetros · {selection?.modelName ?? ""}
+          </h2>
+          {center}
+        </section>
 
-          <section className="space-y-6">
-            {data ? (
-              <>
-                <KpiCards data={data} />
-                <Charts data={data} />
-              </>
-            ) : (
-              <div className="grid h-64 place-items-center text-slate-400">
-                Calculando…
-              </div>
-            )}
-          </section>
-        </div>
-      </main>
+        {/* Right: financial output */}
+        <main className="space-y-5 p-5">
+          {isEmbed && (
+            <div className="flex items-center justify-end gap-3">
+              {recalcBadge}
+              {selection && (
+                <Toolbar
+                  modelId={selection.modelId}
+                  modelName={selection.modelName}
+                  overrides={overrides}
+                  onSaved={refreshCartera}
+                />
+              )}
+            </div>
+          )}
+
+          {selection?.savedAt && (
+            <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+              Simulación guardada el {fmtDateTime(selection.savedAt)}
+            </div>
+          )}
+
+          {!result ? (
+            <div className="grid h-64 place-items-center text-sm text-slate-400">
+              Calculando…
+            </div>
+          ) : (
+            <>
+              <KpiCards data={result} />
+              {!hybrid && result.income_statement && (
+                <IncomeStatementTable data={result.income_statement} />
+              )}
+              {!hybrid && result.cash_flow && (
+                <CashFlowTable data={result.cash_flow} />
+              )}
+              <Charts data={result} />
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

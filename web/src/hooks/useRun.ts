@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { runModel } from "../api";
+import type { Overrides } from "../api";
 
 /**
  * Debounced live recalc. Keeps the latest `overrides` and only re-runs the
- * model ~300ms after the user stops moving sliders.
+ * model ~300ms after the user stops editing inputs.
  */
-export function useRun(overrides: Record<string, number>, enabled: boolean) {
+export function useRun(
+  modelId: string | null,
+  overrides: Overrides,
+  enabled: boolean,
+) {
   const [debounced, setDebounced] = useState(overrides);
 
   useEffect(() => {
@@ -15,9 +20,9 @@ export function useRun(overrides: Record<string, number>, enabled: boolean) {
   }, [overrides]);
 
   const query = useQuery({
-    queryKey: ["run", debounced],
-    queryFn: () => runModel(debounced),
-    enabled,
+    queryKey: ["run", modelId, debounced],
+    queryFn: () => runModel(modelId as string, debounced),
+    enabled: enabled && !!modelId,
     placeholderData: (prev) => prev,
   });
 
