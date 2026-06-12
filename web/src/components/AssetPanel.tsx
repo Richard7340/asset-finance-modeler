@@ -62,7 +62,7 @@ export default function AssetPanel({
                   <div
                     className={`group flex items-start justify-between gap-2 rounded-md border px-2.5 py-2 text-left transition ${
                       active
-                        ? "border-sky-500 bg-sky-50"
+                        ? "border-accent-500 bg-accent-50"
                         : "border-transparent hover:border-slate-200 hover:bg-slate-50"
                     }`}
                   >
@@ -132,7 +132,7 @@ export default function AssetPanel({
                             onClick={() => onSelectModel(m)}
                             className={`w-full truncate rounded-md border px-2.5 py-1.5 text-left text-sm transition ${
                               active
-                                ? "border-sky-500 bg-sky-50 text-slate-900"
+                                ? "border-accent-500 bg-accent-50 text-slate-900"
                                 : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50"
                             }`}
                           >
