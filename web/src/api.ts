@@ -2,47 +2,163 @@ const BASE = import.meta.env.VITE_API_BASE ?? "";
 const params = new URLSearchParams(location.search);
 const token = params.get("t") ?? "";
 export const isEmbed = params.get("embed") === "1";
-const q = token ? `?t=${token}` : "";
 
-export type ModelInput = {
-  key: string;
-  label: string;
-  unit: string;
-  default: number;
-  min: number;
-  max: number;
+/** Append the auth token query, preserving an existing query string. */
+function withToken(path: string): string {
+  if (!token) return `${BASE}${path}`;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${BASE}${path}${sep}t=${token}`;
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type AssetType =
+  | "solar"
+  | "bess"
+  | "wind"
+  | "datacenter"
+  | "svj"
+  | "hybrid"
+  | "business"
+  | "real_estate";
+
+export type ModelSummary = {
+  id: string;
+  name: string;
+  asset_type: AssetType;
 };
 
-export type Model = { name: string; inputs: ModelInput[] };
+export type InputType = "number" | "bool" | "text";
 
-export type RunResult = {
-  kpis: Record<string, number>;
+export type SchemaInput = {
+  path: string;
+  value: number | string | boolean;
+  type: InputType;
+  section: string;
+  label: string;
+};
+
+export type ModelSchema = { inputs: SchemaInput[] };
+
+export type Kpis = Record<string, number>;
+
+export type IncomeStatement = {
+  years: number[];
+  rows: {
+    revenue: number[];
+    ebitda: number[];
+    ebit: number[];
+    interest_expense: number[];
+    ebt: number[];
+    tax: number[];
+    net_income: number[];
+  };
+};
+
+export type CashFlow = {
+  years: number[];
+  cfo: number[];
+  cfi: number[];
+  cff: number[];
+};
+
+/** Generic infra/business run result. */
+export type GenericResult = {
+  kpis: Kpis;
+  income_statement: IncomeStatement;
+  cash_flow: CashFlow;
+  summary?: Record<string, unknown>;
+};
+
+/** Legacy svj_hybrid v1 result shape. */
+export type HybridResult = {
+  kpis: Kpis;
   cashflows: { years: number[]; fv: number[]; bess: number[] };
   curves: { spread: number[]; ancillary: number[] };
   bridge: { fv: number; bess: number; hybrid: number };
   dscr_profile: number[];
 };
 
-export async function getModel(): Promise<Model> {
-  const r = await fetch(`${BASE}/api/svj/model${q}`);
-  if (!r.ok) throw new Error(`getModel failed: ${r.status}`);
-  return r.json();
+export type RunResult = Partial<GenericResult> & Partial<HybridResult>;
+
+/** Discriminate the two backend response shapes defensively. */
+export function isGenericResult(r: RunResult): r is GenericResult {
+  return !!r.income_statement;
+}
+export function isHybridResult(r: RunResult): r is HybridResult {
+  return !r.income_statement && !!r.cashflows;
+}
+
+export type Overrides = Record<string, number>;
+
+export type SavedAssetSummary = {
+  id: string;
+  name: string;
+  model_id: string;
+  created_at: string;
+  kpis: Kpis;
+};
+
+export type SavedAsset = {
+  id: string;
+  name: string;
+  model_id: string;
+  overrides: Overrides;
+  results_snapshot: RunResult | null;
+  created_at: string;
+};
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+async function getJson<T>(path: string): Promise<T> {
+  const r = await fetch(withToken(path));
+  if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
+  return r.json() as Promise<T>;
+}
+
+export async function listModels(): Promise<ModelSummary[]> {
+  const d = await getJson<{ models: ModelSummary[] }>("/api/models");
+  return d.models;
+}
+
+export async function getSchema(modelId: string): Promise<ModelSchema> {
+  return getJson<ModelSchema>(`/api/models/${modelId}/schema`);
 }
 
 export async function runModel(
-  overrides: Record<string, number>,
+  modelId: string,
+  overrides: Overrides,
 ): Promise<RunResult> {
-  const r = await fetch(`${BASE}/api/svj/run${q}`, {
+  const r = await fetch(withToken(`/api/models/${modelId}/run`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ overrides }),
   });
-  if (!r.ok) throw new Error(`runModel failed: ${r.status}`);
+  if (!r.ok) throw new Error(`run failed: ${r.status}`);
   return r.json();
 }
 
-export async function downloadExcel(overrides: Record<string, number>) {
-  const r = await fetch(`${BASE}/api/svj/export${q}`, {
+/**
+ * Excel export. Only the legacy svj endpoint exists in the backend, so export
+ * is only available for the svj_hybrid model. Returns false if the model is
+ * not exportable.
+ */
+export function canExport(modelId: string): boolean {
+  return modelId === "svj_hybrid";
+}
+
+export async function downloadExcel(
+  modelId: string,
+  overrides: Overrides,
+): Promise<void> {
+  if (!canExport(modelId)) {
+    throw new Error("Este modelo no admite exportación a Excel todavía.");
+  }
+  const r = await fetch(withToken(`/api/svj/export`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ overrides }),
@@ -52,7 +168,39 @@ export async function downloadExcel(overrides: Record<string, number>) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "SVJ_simulacion.xlsx";
+  a.download = `${modelId}_simulacion.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Persistence (Mi cartera)
+// ---------------------------------------------------------------------------
+
+export async function listAssets(): Promise<SavedAssetSummary[]> {
+  const d = await getJson<{ assets: SavedAssetSummary[] }>("/api/assets");
+  return d.assets;
+}
+
+export async function getAsset(id: string): Promise<SavedAsset> {
+  return getJson<SavedAsset>(`/api/assets/${id}`);
+}
+
+export async function saveAsset(
+  modelId: string,
+  name: string,
+  overrides: Overrides,
+): Promise<{ id: string }> {
+  const r = await fetch(withToken("/api/assets"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model_id: modelId, name, overrides }),
+  });
+  if (!r.ok) throw new Error(`save failed: ${r.status}`);
+  return r.json();
+}
+
+export async function deleteAsset(id: string): Promise<void> {
+  const r = await fetch(withToken(`/api/assets/${id}`), { method: "DELETE" });
+  if (!r.ok) throw new Error(`delete failed: ${r.status}`);
 }

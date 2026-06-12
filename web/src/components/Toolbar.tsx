@@ -1,114 +1,80 @@
-import { useEffect, useState } from "react";
-import { downloadExcel } from "../api";
+import { useState } from "react";
+import { canExport, downloadExcel, saveAsset } from "../api";
+import type { Overrides } from "../api";
 
-const STORAGE_KEY = "svj_scenarios";
+type Props = {
+  modelId: string;
+  modelName: string;
+  overrides: Overrides;
+  onSaved: () => void;
+};
 
-type Scenarios = Record<string, Record<string, number>>;
-
-function loadScenarios(): Scenarios {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
-  } catch {
-    return {};
-  }
-}
-
-export default function Toolbar({
-  overrides,
-  onLoad,
-}: {
-  overrides: Record<string, number>;
-  onLoad: (overrides: Record<string, number>) => void;
-}) {
-  const [scenarios, setScenarios] = useState<Scenarios>(loadScenarios);
+export default function Toolbar({ modelId, modelName, overrides, onSaved }: Props) {
   const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [savingState, setSavingState] = useState<"idle" | "busy" | "ok">("idle");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
-  }, [scenarios]);
+  const exportable = canExport(modelId);
 
-  const save = () => {
-    const n = name.trim();
-    if (!n) return;
-    setScenarios((prev) => ({ ...prev, [n]: overrides }));
-    setName("");
-  };
-
-  const remove = (n: string) => {
-    setScenarios((prev) => {
-      const next = { ...prev };
-      delete next[n];
-      return next;
-    });
+  const save = async () => {
+    const n = name.trim() || `${modelName} ${new Date().toLocaleDateString("es-ES")}`;
+    setSavingState("busy");
+    setNotice(null);
+    try {
+      await saveAsset(modelId, n, overrides);
+      setName("");
+      setSavingState("ok");
+      onSaved();
+      setTimeout(() => setSavingState("idle"), 1500);
+    } catch (e) {
+      setSavingState("idle");
+      setNotice(e instanceof Error ? e.message : "No se pudo guardar.");
+    }
   };
 
   const exportXlsx = async () => {
-    setBusy(true);
+    setExportBusy(true);
+    setNotice(null);
     try {
-      await downloadExcel(overrides);
+      await downloadExcel(modelId, overrides);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "No se pudo exportar.");
     } finally {
-      setBusy(false);
+      setExportBusy(false);
     }
   };
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Nombre de la simulación"
+        onKeyDown={(e) => e.key === "Enter" && save()}
+        className="w-48 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+      />
       <button
-        onClick={exportXlsx}
-        disabled={busy}
-        className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
+        type="button"
+        onClick={save}
+        disabled={savingState === "busy"}
+        className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
       >
-        {busy ? "Generando…" : "Descargar Excel"}
+        {savingState === "busy" ? "Guardando…" : savingState === "ok" ? "Guardado" : "Guardar"}
       </button>
 
-      <div className="flex items-center gap-1">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nombre escenario"
-          className="w-40 rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          onKeyDown={(e) => e.key === "Enter" && save()}
-        />
+      {exportable && (
         <button
-          onClick={save}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          type="button"
+          onClick={exportXlsx}
+          disabled={exportBusy}
+          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
         >
-          Guardar
+          {exportBusy ? "Generando…" : "Descargar Excel"}
         </button>
-      </div>
-
-      {Object.keys(scenarios).length > 0 && (
-        <select
-          defaultValue=""
-          onChange={(e) => {
-            const s = scenarios[e.target.value];
-            if (s) onLoad(s);
-            e.target.value = "";
-          }}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none"
-        >
-          <option value="" disabled>
-            Cargar escenario…
-          </option>
-          {Object.keys(scenarios).map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
       )}
 
-      {Object.keys(scenarios).map((n) => (
-        <button
-          key={n}
-          onClick={() => remove(n)}
-          title={`Eliminar ${n}`}
-          className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-500 hover:border-rose-300 hover:text-rose-600"
-        >
-          {n} ✕
-        </button>
-      ))}
+      {notice && <span className="text-xs text-rose-600">{notice}</span>}
     </div>
   );
 }
