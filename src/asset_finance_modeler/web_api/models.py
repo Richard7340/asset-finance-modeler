@@ -13,15 +13,31 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from asset_finance_modeler.assets.business.loader import (
+    business_preset_ids,
+    load_business_preset,
+)
+from asset_finance_modeler.assets.business.model import BusinessModel
+from asset_finance_modeler.assets.business.schema import BusinessModelConfig
 from asset_finance_modeler.assets.infrastructure import presets as _presets_pkg
 from asset_finance_modeler.assets.infrastructure.loader import load_preset
 from asset_finance_modeler.assets.infrastructure.model import InfrastructureModel
 from asset_finance_modeler.assets.infrastructure.schema import InfrastructureModelConfig
+from asset_finance_modeler.core.protocols import FinancialOutput
 from asset_finance_modeler.deals.svj import run_svj, svj_input_spec
 from asset_finance_modeler.web_api.auth import require_token
 from asset_finance_modeler.web_api.introspect import schema_tree, set_by_path
 
 _FREQ_PPY = {"M": 12, "Q": 4, "Y": 1}
+
+_BUSINESS_IDS: set[str] = set(business_preset_ids())
+
+_BUSINESS_NAMES: dict[str, str] = {
+    "business_generic": "Negocio genérico",
+    "business_restaurant": "Restaurante",
+    "business_industrial": "Planta industrial",
+    "real_estate_rental": "Inmueble en alquiler",
+}
 
 
 def _preset_ids() -> list[str]:
@@ -34,15 +50,22 @@ def _annual(series: list[float], ppy: int) -> list[float]:
     return [sum(series[y * ppy : (y + 1) * ppy]) for y in range(len(series) // ppy)]
 
 
+def _ppy_of(cfg_dict: dict[str, Any]) -> int:
+    freq = (cfg_dict.get("meta", {}).get("horizon", {}) or {}).get("frequency", "M")
+    return _FREQ_PPY.get(freq, 12)
+
+
 def _run_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     """Validate, run, and shape an infrastructure config dict into a JSON-
     serializable payload with annualized statements + KPIs."""
     cfg = InfrastructureModelConfig.model_validate(cfg_dict)
     out = InfrastructureModel(cfg).run()
+    return _run_financial_output(out, _ppy_of(cfg_dict))
 
-    freq = (cfg_dict.get("meta", {}).get("horizon", {}) or {}).get("frequency", "M")
-    ppy = _FREQ_PPY.get(freq, 12)
 
+def _run_financial_output(out: FinancialOutput, ppy: int) -> dict[str, Any]:
+    """Shape any ``FinancialOutput`` into the JSON payload (annualized
+    statements + headline KPIs). Shared by infra and business models."""
     pnl = out.pnl
     income_rows = {
         k: [round(x) for x in _annual(pnl[k], ppy)]
@@ -78,6 +101,13 @@ def _run_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _run_business_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
+    """Validate, run, and shape a business config dict (same payload shape)."""
+    cfg = BusinessModelConfig.model_validate(cfg_dict)
+    out = BusinessModel(cfg).run()
+    return _run_financial_output(out, _ppy_of(cfg_dict))
+
+
 router = APIRouter(prefix="/api/models", dependencies=[Depends(require_token)])
 
 
@@ -102,6 +132,14 @@ def list_models() -> dict[str, Any]:
             "asset_type": "hybrid",
         }
     )
+    for bid in business_preset_ids():
+        models.append(
+            {
+                "id": bid,
+                "name": _BUSINESS_NAMES.get(bid, bid.replace("_", " ").title()),
+                "asset_type": "real_estate" if bid.startswith("real_estate") else "business",
+            }
+        )
     return {"models": models}
 
 
@@ -120,6 +158,10 @@ def model_schema(model_id: str) -> dict[str, Any]:
         ]
         return {"inputs": inputs}
 
+    if model_id in _BUSINESS_IDS:
+        cfg = load_business_preset(model_id).model_dump()
+        return {"inputs": schema_tree(cfg)}
+
     if model_id not in _preset_ids():
         raise HTTPException(status_code=404, detail=f"unknown model: {model_id}")
     cfg = load_preset(model_id).model_dump()
@@ -131,6 +173,12 @@ def model_run(model_id: str, body: RunBody) -> dict[str, Any]:
     overrides = body.overrides or {}
     if model_id == "svj_hybrid":
         return run_svj(overrides)
+
+    if model_id in _BUSINESS_IDS:
+        cfg = load_business_preset(model_id).model_dump()
+        for path, value in overrides.items():
+            cfg = set_by_path(cfg, path, _coerce(cfg, path, value))
+        return _run_business_config(cfg)
 
     if model_id not in _preset_ids():
         raise HTTPException(status_code=404, detail=f"unknown model: {model_id}")

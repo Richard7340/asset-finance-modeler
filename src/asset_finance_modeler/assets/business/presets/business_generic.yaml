@@ -1,0 +1,29 @@
+meta:
+  name: "Negocio genérico"
+  horizon:
+    periods: 120
+    frequency: M
+revenue:
+  - name: "Ventas"
+    year1_amount: 1000000
+    growth_pct_yr: 0.05
+cogs:
+  pct_of_revenue: 0.40
+opex:
+  fixed_lines:
+    - name: "Personal"
+      year1_amount: 300000
+    - name: "Estructura"
+      year1_amount: 120000
+  variable_pct_of_revenue: 0.08
+  escalation_pct_yr: 0.02
+capex:
+  items:
+    - name: "Inversión inicial"
+      amount: 400000
+      period: 0
+      depreciation_years: 10
+taxes:
+  corporate_income_tax_rate: 0.25
+valuation:
+  discount_rate_annual: 0.10
