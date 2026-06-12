@@ -93,7 +93,7 @@ export default function DynamicInputs({
             <button
               type="button"
               onClick={() => setOpen((p) => ({ ...p, [s.key]: !p[s.key] }))}
-              className="flex w-full items-center justify-between px-3 py-2 text-left"
+              className="flex w-full items-center justify-between px-3 py-2 text-left transition hover:bg-slate-50"
             >
               <span className="text-sm font-semibold text-slate-700">
                 {sectionTitle(s.key)}
@@ -130,7 +130,7 @@ export default function DynamicInputs({
                             Number.isNaN(v) ? 0 : v,
                           );
                         }}
-                        className="w-32 rounded border border-slate-300 px-2 py-1 text-right text-sm tabular-nums focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        className="w-32 rounded border border-slate-300 px-2 py-1 text-right text-sm tabular-nums transition focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
                       />
                     </label>
                   );

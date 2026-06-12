@@ -31,8 +31,10 @@ function renderWithClient(ui: React.ReactElement) {
 
 test("renders aggregate VAN total and per-asset rows", async () => {
   renderWithClient(<PortfolioOverview onOpenAsset={() => {}} />);
-  // Aggregate VAN total (4 M€).
-  expect(await screen.findByText(/4,00 M€/)).toBeTruthy();
+  // Aggregate VAN total (4 M€). It appears both in the KPI strip and the
+  // composition-donut centre label, so we assert at least one occurrence.
+  const vanTotals = await screen.findAllByText(/4,00 M€/);
+  expect(vanTotals.length).toBeGreaterThan(0);
   // Per-asset rows.
   expect(screen.getByText("Planta Solar Sur")).toBeTruthy();
   expect(screen.getByText("BESS Norte")).toBeTruthy();

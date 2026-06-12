@@ -52,13 +52,13 @@ export default function Toolbar({ modelId, modelName, overrides, onSaved }: Prop
         onChange={(e) => setName(e.target.value)}
         placeholder="Nombre de la simulación"
         onKeyDown={(e) => e.key === "Enter" && save()}
-        className="w-48 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+        className="w-48 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 transition focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
       />
       <button
         type="button"
         onClick={save}
         disabled={savingState === "busy"}
-        className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+        className="rounded-md bg-accent-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-accent-700 disabled:opacity-50"
       >
         {savingState === "busy" ? "Guardando…" : savingState === "ok" ? "Guardado" : "Guardar"}
       </button>

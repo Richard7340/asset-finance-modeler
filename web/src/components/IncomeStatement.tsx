@@ -1,5 +1,6 @@
 import type { IncomeStatement as IS } from "../api";
 import { eurExact } from "../format";
+import Reveal from "./Reveal";
 
 const ROWS: { key: keyof IS["rows"]; label: string; bold?: boolean }[] = [
   { key: "revenue", label: "Ingresos", bold: true },
@@ -14,8 +15,8 @@ const ROWS: { key: keyof IS["rows"]; label: string; bold?: boolean }[] = [
 export default function IncomeStatement({ data }: { data: IS }) {
   const { years, rows } = data;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">
+    <Reveal className="surface p-4">
+      <h3 className="mb-3 text-sm font-semibold text-slate-800">
         Cuenta de resultados
       </h3>
       <div className="overflow-x-auto">
@@ -38,8 +39,8 @@ export default function IncomeStatement({ data }: { data: IS }) {
               return (
                 <tr
                   key={r.key}
-                  className={`border-b border-slate-50 ${
-                    r.bold ? "font-semibold text-slate-800" : "text-slate-600"
+                  className={`border-b border-slate-50 transition hover:bg-slate-50/70 ${
+                    r.bold ? "font-semibold text-slate-900" : "text-slate-600"
                   }`}
                 >
                   <td className="sticky left-0 z-10 bg-white py-1.5 pr-3 text-left">
@@ -61,6 +62,6 @@ export default function IncomeStatement({ data }: { data: IS }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </Reveal>
   );
 }

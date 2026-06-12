@@ -1,16 +1,6 @@
-import {
-  Bar,
-  CartesianGrid,
-  Legend,
-  Line,
-  ComposedChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import type { CashFlow } from "../api";
-import { eur, eurExact } from "../format";
+import { eurExact } from "../format";
+import Reveal from "./Reveal";
 
 const ROWS: { key: keyof Omit<CashFlow, "years">; label: string }[] = [
   { key: "cfo", label: "Flujo de operaciones (CFO)" },
@@ -19,53 +9,15 @@ const ROWS: { key: keyof Omit<CashFlow, "years">; label: string }[] = [
 ];
 
 export default function CashFlowTable({ data }: { data: CashFlow }) {
-  const { years, cfo, cfi, cff } = data;
-
-  const chartData = years.map((y, i) => ({
-    year: `A${y}`,
-    cfo: cfo[i] ?? 0,
-    cfi: cfi[i] ?? 0,
-    cff: cff[i] ?? 0,
-    fcf: (cfo[i] ?? 0) + (cfi[i] ?? 0),
-  }));
+  const { years, cfo, cfi } = data;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">
+    <Reveal className="surface p-4">
+      <h3 className="mb-3 text-sm font-semibold text-slate-800">
         Flujos de caja
       </h3>
 
-      <div className="h-64 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-            <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#64748b" }} />
-            <YAxis
-              tick={{ fontSize: 11, fill: "#64748b" }}
-              tickFormatter={(v) => eur(Number(v))}
-              width={70}
-            />
-            <Tooltip
-              formatter={(v: number) => eur(Number(v))}
-              contentStyle={{ fontSize: 12 }}
-            />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="cfo" name="CFO" fill="#0ea5e9" />
-            <Bar dataKey="cfi" name="CFI" fill="#94a3b8" />
-            <Bar dataKey="cff" name="CFF" fill="#cbd5e1" />
-            <Line
-              type="monotone"
-              dataKey="fcf"
-              name="FCF (CFO+CFI)"
-              stroke="#0f172a"
-              strokeWidth={2}
-              dot={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="mt-3 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full border-collapse text-xs tabular-nums">
           <thead>
             <tr className="border-b border-slate-200 text-slate-500">
@@ -83,7 +35,10 @@ export default function CashFlowTable({ data }: { data: CashFlow }) {
             {ROWS.map((r) => {
               const series = data[r.key] ?? [];
               return (
-                <tr key={r.key} className="border-b border-slate-50 text-slate-600">
+                <tr
+                  key={r.key}
+                  className="border-b border-slate-50 text-slate-600 transition hover:bg-slate-50/70"
+                >
                   <td className="sticky left-0 z-10 bg-white py-1.5 pr-3 text-left">
                     {r.label}
                   </td>
@@ -98,7 +53,7 @@ export default function CashFlowTable({ data }: { data: CashFlow }) {
                 </tr>
               );
             })}
-            <tr className="border-b border-slate-100 font-semibold text-slate-800">
+            <tr className="border-b border-slate-100 font-semibold text-slate-900">
               <td className="sticky left-0 z-10 bg-white py-1.5 pr-3 text-left">
                 FCF (CFO+CFI)
               </td>
@@ -117,6 +72,6 @@ export default function CashFlowTable({ data }: { data: CashFlow }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </Reveal>
   );
 }
