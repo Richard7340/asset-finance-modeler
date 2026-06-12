@@ -1,0 +1,33 @@
+meta:
+  name: "Restaurante"
+  horizon:
+    periods: 120
+    frequency: M
+revenue:
+  - name: "Comidas"
+    year1_amount: 600000
+    growth_pct_yr: 0.03
+  - name: "Bebidas"
+    year1_amount: 200000
+    growth_pct_yr: 0.03
+cogs:
+  pct_of_revenue: 0.32
+opex:
+  fixed_lines:
+    - name: "Personal"
+      year1_amount: 240000
+    - name: "Alquiler"
+      year1_amount: 60000
+    - name: "Suministros"
+      year1_amount: 36000
+  variable_pct_of_revenue: 0.05
+capex:
+  items:
+    - name: "Reforma+equipamiento"
+      amount: 250000
+      period: 0
+      depreciation_years: 8
+taxes:
+  corporate_income_tax_rate: 0.25
+valuation:
+  discount_rate_annual: 0.12

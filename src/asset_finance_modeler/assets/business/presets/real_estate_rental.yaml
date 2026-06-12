@@ -1,0 +1,36 @@
+meta:
+  name: "Inmueble en alquiler"
+  horizon:
+    periods: 120
+    frequency: M
+revenue:
+  - name: "Rentas"
+    year1_amount: 240000
+    growth_pct_yr: 0.02
+cogs:
+  pct_of_revenue: 0.0
+opex:
+  fixed_lines:
+    - name: "Comunidad+IBI+seguros"
+      year1_amount: 18000
+    - name: "Mantenimiento"
+      year1_amount: 12000
+  variable_pct_of_revenue: 0.0
+  escalation_pct_yr: 0.02
+capex:
+  items:
+    - name: "Adquisición"
+      amount: 3000000
+      period: 0
+      depreciation_years: 30
+financing:
+  senior:
+    interest_rate: 0.04
+    tenor_years: 20
+    amortization: french
+    auto_size: false
+  max_leverage: 0.6
+taxes:
+  corporate_income_tax_rate: 0.25
+valuation:
+  discount_rate_annual: 0.06
