@@ -11,10 +11,10 @@ const assets = [
 
 const portfolio = {
   assets: [
-    { id: "a1", name: "Planta Solar Sur", model_id: "solar", npv: 3_000_000, revenue_y1: 800_000, capex: 5_000_000 },
-    { id: "a2", name: "BESS Norte", model_id: "bess", npv: 1_000_000, revenue_y1: 400_000, capex: 2_000_000 },
+    { id: "a1", name: "Planta Solar Sur", model_id: "solar", npv: 3_000_000, revenue_y1: 800_000, capex: 5_000_000, irr: 0.082, yield_pct: 0.6 },
+    { id: "a2", name: "BESS Norte", model_id: "bess", npv: 1_000_000, revenue_y1: 400_000, capex: 2_000_000, irr: 0.055, yield_pct: 0.5 },
   ],
-  totals: { npv: 4_000_000, capex: 7_000_000, revenue_y1: 1_200_000, count: 2 },
+  totals: { npv: 4_000_000, capex: 7_000_000, revenue_y1: 1_200_000, count: 2, irr_weighted: 0.072 },
 };
 
 beforeEach(() => {
@@ -38,4 +38,8 @@ test("renders aggregate VAN total and per-asset rows", async () => {
   expect(screen.getByText("BESS Norte")).toBeTruthy();
   // Contribution column: a1 = 75%.
   expect(screen.getByText(/75%/)).toBeTruthy();
+  // TIR column renders a % for an asset (a1 IRR = 8.2%).
+  expect(screen.getByText(/8,2%/)).toBeTruthy();
+  // Aggregate TIR media card (7.2%).
+  expect(screen.getByText(/7,2%/)).toBeTruthy();
 });

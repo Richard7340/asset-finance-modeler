@@ -21,6 +21,27 @@ type Props = {
 
 const NPV_BAR = "#0ea5e9";
 const NPV_BAR_NEG = "#f43f5e";
+const REV_BAR = "#475569";
+
+// Sober, restrained tones for error-spotting cues (no loud colors, no emojis).
+const NEG = "text-rose-700"; // negative VAN / TIR
+const WARN = "text-amber-600"; // zero / missing structural value (CAPEX, revenue)
+const MUTE = "text-slate-400"; // N/A or undefined metric
+
+/** Cell tone for a money value that should normally be positive and non-zero. */
+function moneyTone(v: number | undefined): string {
+  if (v === undefined || !Number.isFinite(v)) return MUTE;
+  if (v === 0) return WARN;
+  if (v < 0) return NEG;
+  return "text-slate-800";
+}
+
+/** Cell tone for a rate (VAN, TIR, rentabilidad): red if negative, muted if N/A. */
+function rateTone(v: number | undefined): string {
+  if (v === undefined || !Number.isFinite(v)) return MUTE;
+  if (v < 0) return NEG;
+  return "text-slate-800";
+}
 
 function Kpi({
   label,
@@ -116,6 +137,15 @@ export default function PortfolioOverview({ onOpenAsset }: Props) {
     [portfolio],
   );
 
+  // Bar chart data: año-1 revenue per included asset, sorted descending.
+  const revChartData = useMemo(
+    () =>
+      (portfolio?.assets ?? [])
+        .map((a) => ({ name: a.name, revenue_y1: a.revenue_y1 }))
+        .sort((x, y) => y.revenue_y1 - x.revenue_y1),
+    [portfolio],
+  );
+
   // --- empty / loading states ---
   if (assetsQuery.isLoading || portfolioQuery.isLoading) {
     return (
@@ -150,10 +180,21 @@ export default function PortfolioOverview({ onOpenAsset }: Props) {
       </div>
 
       {/* Aggregate KPIs */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div
+        className={`grid grid-cols-2 gap-3 ${
+          totals?.irr_weighted !== undefined ? "sm:grid-cols-5" : "sm:grid-cols-4"
+        }`}
+      >
         <Kpi label="VAN total" value={eur(totals?.npv ?? 0)} />
         <Kpi label="CAPEX total" value={eur(totals?.capex ?? 0)} />
         <Kpi label="Ingresos año 1" value={eur(totals?.revenue_y1 ?? 0)} />
+        {totals?.irr_weighted !== undefined && (
+          <Kpi
+            label="TIR media"
+            value={pct(totals.irr_weighted)}
+            hint="ponderada por CAPEX"
+          />
+        )}
         <Kpi
           label="Nº activos"
           value={String(totals?.count ?? 0)}
@@ -174,6 +215,8 @@ export default function PortfolioOverview({ onOpenAsset }: Props) {
               <th className="px-3 py-2.5 font-medium">Activo</th>
               <th className="px-3 py-2.5 font-medium">Tipo / Modelo</th>
               <th className="px-3 py-2.5 text-right font-medium">VAN</th>
+              <th className="px-3 py-2.5 text-right font-medium">TIR</th>
+              <th className="px-3 py-2.5 text-right font-medium">Rentabilidad</th>
               <th className="px-3 py-2.5 text-right font-medium">Ingresos año 1</th>
               <th className="px-3 py-2.5 text-right font-medium">CAPEX</th>
               <th className="px-3 py-2.5 text-right font-medium">% VAN</th>
@@ -211,13 +254,39 @@ export default function PortfolioOverview({ onOpenAsset }: Props) {
                     </button>
                   </td>
                   <td className="px-3 py-2.5 text-slate-500">{r.model_id}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
+                  <td
+                    className={`px-3 py-2.5 text-right tabular-nums ${
+                      isIncluded ? rateTone(m?.npv) : ""
+                    }`}
+                  >
                     {m ? eurExact(m.npv) : "—"}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
+                  <td
+                    className={`px-3 py-2.5 text-right tabular-nums ${
+                      isIncluded ? rateTone(m?.irr) : ""
+                    }`}
+                  >
+                    {m && Number.isFinite(m.irr) ? pct(m.irr) : "—"}
+                  </td>
+                  <td
+                    className={`px-3 py-2.5 text-right tabular-nums ${
+                      isIncluded ? rateTone(m?.yield_pct) : ""
+                    }`}
+                  >
+                    {m && Number.isFinite(m.yield_pct) ? pct(m.yield_pct) : "—"}
+                  </td>
+                  <td
+                    className={`px-3 py-2.5 text-right tabular-nums ${
+                      isIncluded ? moneyTone(m?.revenue_y1) : ""
+                    }`}
+                  >
                     {m ? eurExact(m.revenue_y1) : "—"}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
+                  <td
+                    className={`px-3 py-2.5 text-right tabular-nums ${
+                      isIncluded ? moneyTone(m?.capex) : ""
+                    }`}
+                  >
                     {m ? eurExact(m.capex) : "—"}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
@@ -230,44 +299,81 @@ export default function PortfolioOverview({ onOpenAsset }: Props) {
         </table>
       </div>
 
-      {/* VAN per asset bar chart */}
+      {/* Charts: VAN + Ingresos año 1 per asset */}
       {chartData.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">
-            VAN por activo
-          </h3>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                layout="vertical"
-                margin={{ left: 8, right: 16 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
-                <XAxis
-                  type="number"
-                  tickFormatter={(v: number) => eur(Number(v))}
-                  fontSize={11}
-                  stroke="#94a3b8"
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  fontSize={11}
-                  stroke="#94a3b8"
-                  width={140}
-                />
-                <Tooltip
-                  formatter={(v: number) => eur(Number(v))}
-                  contentStyle={{ fontSize: 12 }}
-                />
-                <Bar dataKey="npv" name="VAN">
-                  {chartData.map((d) => (
-                    <Cell key={d.name} fill={d.npv >= 0 ? NPV_BAR : NPV_BAR_NEG} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">
+              VAN por activo
+            </h3>
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  layout="vertical"
+                  margin={{ left: 8, right: 16 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(v: number) => eur(Number(v))}
+                    fontSize={11}
+                    stroke="#94a3b8"
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    fontSize={11}
+                    stroke="#94a3b8"
+                    width={140}
+                  />
+                  <Tooltip
+                    formatter={(v: number) => eur(Number(v))}
+                    contentStyle={{ fontSize: 12 }}
+                  />
+                  <Bar dataKey="npv" name="VAN">
+                    {chartData.map((d) => (
+                      <Cell key={d.name} fill={d.npv >= 0 ? NPV_BAR : NPV_BAR_NEG} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">
+              Ingresos año 1 por activo
+            </h3>
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={revChartData}
+                  layout="vertical"
+                  margin={{ left: 8, right: 16 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(v: number) => eur(Number(v))}
+                    fontSize={11}
+                    stroke="#94a3b8"
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    fontSize={11}
+                    stroke="#94a3b8"
+                    width={140}
+                  />
+                  <Tooltip
+                    formatter={(v: number) => eur(Number(v))}
+                    contentStyle={{ fontSize: 12 }}
+                  />
+                  <Bar dataKey="revenue_y1" name="Ingresos año 1" fill={REV_BAR} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       )}
