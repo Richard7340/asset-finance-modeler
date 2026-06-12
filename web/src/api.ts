@@ -204,3 +204,33 @@ export async function deleteAsset(id: string): Promise<void> {
   const r = await fetch(withToken(`/api/assets/${id}`), { method: "DELETE" });
   if (!r.ok) throw new Error(`delete failed: ${r.status}`);
 }
+
+// ---------------------------------------------------------------------------
+// Portfolio (Cartera) — aggregate view
+// ---------------------------------------------------------------------------
+
+export type PortfolioAsset = {
+  id: string;
+  name: string;
+  model_id: string;
+  npv: number;
+  revenue_y1: number;
+  capex: number;
+};
+
+export type PortfolioTotals = {
+  npv: number;
+  capex: number;
+  revenue_y1: number;
+  count: number;
+};
+
+export type Portfolio = {
+  assets: PortfolioAsset[];
+  totals: PortfolioTotals;
+};
+
+export async function getPortfolio(ids?: string[]): Promise<Portfolio> {
+  const q = ids && ids.length > 0 ? `?ids=${ids.map(encodeURIComponent).join(",")}` : "";
+  return getJson<Portfolio>(`/api/portfolio${q}`);
+}

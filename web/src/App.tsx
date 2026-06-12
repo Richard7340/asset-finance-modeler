@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteAsset,
@@ -6,7 +6,6 @@ import {
   getSchema,
   isHybridResult,
   isEmbed,
-  listModels,
 } from "./api";
 import type {
   ModelSummary,
@@ -16,6 +15,7 @@ import type {
 import { useRun } from "./hooks/useRun";
 import { fmtDateTime } from "./format";
 import AssetPanel from "./components/AssetPanel";
+import PortfolioOverview from "./components/PortfolioOverview";
 import DynamicInputs from "./components/DynamicInputs";
 import KpiCards from "./components/KpiCards";
 import IncomeStatementTable from "./components/IncomeStatement";
@@ -31,8 +31,11 @@ type Selection = {
   savedAt: string | null;
 };
 
+type View = "portfolio" | "detail";
+
 export default function App() {
   const queryClient = useQueryClient();
+  const [view, setView] = useState<View>("portfolio");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
 
@@ -52,6 +55,7 @@ export default function App() {
   const selectModel = (m: ModelSummary) => {
     setSelection({ modelId: m.id, modelName: m.name, assetId: null, savedAt: null });
     setOverrides({}); // defaults come from schema; empty overrides => backend defaults
+    setView("detail");
   };
 
   const selectAsset = async (a: SavedAssetSummary) => {
@@ -63,7 +67,10 @@ export default function App() {
       savedAt: full.created_at,
     });
     setOverrides(full.overrides ?? {});
+    setView("detail");
   };
+
+  const showPortfolio = () => setView("portfolio");
 
   const handleDeleteAsset = async (id: string) => {
     await deleteAsset(id);
@@ -72,10 +79,13 @@ export default function App() {
       setOverrides({});
     }
     queryClient.invalidateQueries({ queryKey: ["assets"] });
+    queryClient.invalidateQueries({ queryKey: ["portfolio"] });
   };
 
-  const refreshCartera = () =>
+  const refreshCartera = () => {
     queryClient.invalidateQueries({ queryKey: ["assets"] });
+    queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+  };
 
   // Editing an input clears the "reviewing saved asset" banner (it becomes a
   // live edit) but keeps the same model.
@@ -85,20 +95,6 @@ export default function App() {
       prev && prev.assetId ? { ...prev, assetId: null, savedAt: null } : prev,
     );
   };
-
-  // Auto-select the first model on load so the screen is never empty.
-  const modelsForBootstrap = useQuery({ queryKey: ["models"], queryFn: listModels });
-  useEffect(() => {
-    if (!selection && modelsForBootstrap.data && modelsForBootstrap.data.length > 0) {
-      const first = modelsForBootstrap.data[0];
-      setSelection({
-        modelId: first.id,
-        modelName: first.name,
-        assetId: null,
-        savedAt: null,
-      });
-    }
-  }, [selection, modelsForBootstrap.data]);
 
   const recalcBadge = isFetching ? (
     <span className="flex items-center gap-1.5 text-xs text-slate-400">
@@ -150,8 +146,19 @@ export default function App() {
               </h1>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={showPortfolio}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                  view === "portfolio"
+                    ? "bg-sky-50 text-sky-700"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+              >
+                Cartera
+              </button>
               {recalcBadge}
-              {selection && (
+              {view === "detail" && selection && (
                 <Toolbar
                   modelId={selection.modelId}
                   modelName={selection.modelName}
@@ -164,66 +171,72 @@ export default function App() {
         </header>
       )}
 
-      <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[260px_320px_1fr]">
-        {/* Left: asset navigator */}
-        <aside className="border-r border-slate-200 bg-white p-4">
-          <AssetPanel
-            selectedModelId={selection?.modelId ?? null}
-            selectedAssetId={selection?.assetId ?? null}
-            onSelectModel={selectModel}
-            onSelectAsset={selectAsset}
-            onDeleteAsset={handleDeleteAsset}
-          />
-        </aside>
-
-        {/* Center: input editor */}
-        <section className="border-r border-slate-200 bg-slate-50 p-4">
-          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-            Parámetros · {selection?.modelName ?? ""}
-          </h2>
-          {center}
-        </section>
-
-        {/* Right: financial output */}
-        <main className="space-y-5 p-5">
-          {isEmbed && (
-            <div className="flex items-center justify-end gap-3">
-              {recalcBadge}
-              {selection && (
-                <Toolbar
-                  modelId={selection.modelId}
-                  modelName={selection.modelName}
-                  overrides={overrides}
-                  onSaved={refreshCartera}
-                />
-              )}
-            </div>
-          )}
-
-          {selection?.savedAt && (
-            <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-              Simulación guardada el {fmtDateTime(selection.savedAt)}
-            </div>
-          )}
-
-          {!result ? (
-            <div className="grid h-64 place-items-center text-sm text-slate-400">
-              Calculando…
-            </div>
-          ) : (
-            <>
-              <KpiCards data={result} />
-              {!hybrid && result.income_statement && (
-                <IncomeStatementTable data={result.income_statement} />
-              )}
-              {!hybrid && result.cash_flow && (
-                <CashFlowTable data={result.cash_flow} />
-              )}
-              <Charts data={result} />
-            </>
-          )}
+      {view === "portfolio" ? (
+        <main className="flex-1 overflow-y-auto p-5 lg:p-8">
+          <PortfolioOverview onOpenAsset={selectAsset} />
         </main>
-      </div>
+      ) : (
+        <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[260px_320px_1fr]">
+          {/* Left: asset navigator */}
+          <aside className="border-r border-slate-200 bg-white p-4">
+            <AssetPanel
+              selectedModelId={selection?.modelId ?? null}
+              selectedAssetId={selection?.assetId ?? null}
+              onSelectModel={selectModel}
+              onSelectAsset={selectAsset}
+              onDeleteAsset={handleDeleteAsset}
+            />
+          </aside>
+
+          {/* Center: input editor */}
+          <section className="border-r border-slate-200 bg-slate-50 p-4">
+            <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+              Parámetros · {selection?.modelName ?? ""}
+            </h2>
+            {center}
+          </section>
+
+          {/* Right: financial output */}
+          <main className="space-y-5 p-5">
+            {isEmbed && (
+              <div className="flex items-center justify-end gap-3">
+                {recalcBadge}
+                {selection && (
+                  <Toolbar
+                    modelId={selection.modelId}
+                    modelName={selection.modelName}
+                    overrides={overrides}
+                    onSaved={refreshCartera}
+                  />
+                )}
+              </div>
+            )}
+
+            {selection?.savedAt && (
+              <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                Simulación guardada el {fmtDateTime(selection.savedAt)}
+              </div>
+            )}
+
+            {!result ? (
+              <div className="grid h-64 place-items-center text-sm text-slate-400">
+                Calculando…
+              </div>
+            ) : (
+              <>
+                <KpiCards data={result} />
+                {!hybrid && result.income_statement && (
+                  <IncomeStatementTable data={result.income_statement} />
+                )}
+                {!hybrid && result.cash_flow && (
+                  <CashFlowTable data={result.cash_flow} />
+                )}
+                <Charts data={result} />
+              </>
+            )}
+          </main>
+        </div>
+      )}
     </div>
   );
 }
