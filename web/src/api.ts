@@ -216,6 +216,10 @@ export type PortfolioAsset = {
   npv: number;
   revenue_y1: number;
   capex: number;
+  /** Internal rate of return, decimal (e.g. 0.06 = 6%). */
+  irr: number;
+  /** Yield = VAN / CAPEX, decimal. */
+  yield_pct: number;
 };
 
 export type PortfolioTotals = {
@@ -223,6 +227,8 @@ export type PortfolioTotals = {
   capex: number;
   revenue_y1: number;
   count: number;
+  /** CAPEX-weighted IRR across included assets, decimal. */
+  irr_weighted?: number;
 };
 
 export type Portfolio = {
