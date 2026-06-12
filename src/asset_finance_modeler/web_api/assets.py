@@ -14,12 +14,19 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from asset_finance_modeler.assets.business.loader import load_business_preset
 from asset_finance_modeler.core.scenario import Scenario, new_scenario_id
 from asset_finance_modeler.deals.svj import run_svj
 from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
 from asset_finance_modeler.web_api.auth import require_token
 from asset_finance_modeler.web_api.introspect import set_by_path
-from asset_finance_modeler.web_api.models import _coerce, _preset_ids, _run_config
+from asset_finance_modeler.web_api.models import (
+    _BUSINESS_IDS,
+    _coerce,
+    _preset_ids,
+    _run_business_config,
+    _run_config,
+)
 
 from asset_finance_modeler.assets.infrastructure.loader import load_preset  # isort: skip
 
@@ -50,6 +57,11 @@ def _run_model(model_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
     top-level 'kpis' key). Mirrors web_api.models.model_run dispatch."""
     if model_id == "svj_hybrid":
         return run_svj(overrides)
+    if model_id in _BUSINESS_IDS:
+        cfg = load_business_preset(model_id).model_dump()
+        for path, value in (overrides or {}).items():
+            cfg = set_by_path(cfg, path, _coerce(cfg, path, value))
+        return _run_business_config(cfg)
     if model_id not in _preset_ids():
         raise HTTPException(status_code=404, detail=f"unknown model: {model_id}")
     cfg = load_preset(model_id).model_dump()
@@ -121,3 +133,61 @@ def get_asset(asset_id: str) -> dict[str, Any]:
 def delete_asset(asset_id: str) -> dict[str, Any]:
     _store().delete(asset_id)
     return {"ok": True}
+
+
+portfolio_router = APIRouter(prefix="/api/portfolio", dependencies=[Depends(require_token)])
+
+
+def _normalize_run(result: dict[str, Any]) -> dict[str, float]:
+    """Normalize the two run-result shapes (generic vs svj_hybrid) to a flat
+    set of portfolio metrics."""
+    kpis = result.get("kpis", {}) or {}
+    npv = kpis.get("npv", kpis.get("npv_hybrid", 0)) or 0
+    capex = kpis.get("total_capex", 0) or 0
+    revenue_y1: float = 0
+    income = result.get("income_statement") or {}
+    rows = income.get("rows") or {}
+    revenue = rows.get("revenue") or []
+    if revenue:
+        revenue_y1 = revenue[0] or 0
+    return {"npv": float(npv), "capex": float(capex), "revenue_y1": float(revenue_y1)}
+
+
+@portfolio_router.get("")
+def portfolio(ids: str | None = None) -> dict[str, Any]:
+    """Aggregate saved (non-deleted) assets by re-running each one fresh, so
+    valuations reflect current inputs. Optional ?ids=id1,id2 limits the set.
+    Assets that fail to run are skipped (not fatal)."""
+    wanted: set[str] | None = None
+    if ids:
+        wanted = {i.strip() for i in ids.split(",") if i.strip()}
+
+    assets: list[dict[str, Any]] = []
+    totals = {"npv": 0.0, "capex": 0.0, "revenue_y1": 0.0, "count": 0}
+    for s in _store().list():
+        if wanted is not None and s.id not in wanted:
+            continue
+        snapshot = s.inputs_snapshot or {}
+        model_id = snapshot.get("model_id", s.base_model)
+        overrides = snapshot.get("overrides", s.overrides) or {}
+        try:
+            result = _run_model(model_id, overrides)
+            metrics = _normalize_run(result)
+        except Exception:  # noqa: BLE001 — skip assets that fail to run, don't 500
+            continue
+        assets.append(
+            {
+                "id": s.id,
+                "name": s.name,
+                "model_id": model_id,
+                "npv": metrics["npv"],
+                "revenue_y1": metrics["revenue_y1"],
+                "capex": metrics["capex"],
+            }
+        )
+        totals["npv"] += metrics["npv"]
+        totals["capex"] += metrics["capex"]
+        totals["revenue_y1"] += metrics["revenue_y1"]
+        totals["count"] += 1
+
+    return {"assets": assets, "totals": totals}
