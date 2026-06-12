@@ -144,13 +144,23 @@ def _normalize_run(result: dict[str, Any]) -> dict[str, float]:
     kpis = result.get("kpis", {}) or {}
     npv = kpis.get("npv", kpis.get("npv_hybrid", 0)) or 0
     capex = kpis.get("total_capex", 0) or 0
+    irr = kpis.get("irr", kpis.get("irr_project", 0)) or 0
     revenue_y1: float = 0
     income = result.get("income_statement") or {}
     rows = income.get("rows") or {}
     revenue = rows.get("revenue") or []
     if revenue:
         revenue_y1 = revenue[0] or 0
-    return {"npv": float(npv), "capex": float(capex), "revenue_y1": float(revenue_y1)}
+    else:
+        revenue_y1 = kpis.get("revenue_y1", 0) or 0
+    yield_pct = round(float(npv) / float(capex), 4) if capex else 0.0
+    return {
+        "npv": float(npv),
+        "capex": float(capex),
+        "revenue_y1": float(revenue_y1),
+        "irr": float(irr),
+        "yield_pct": float(yield_pct),
+    }
 
 
 @portfolio_router.get("")
@@ -163,7 +173,8 @@ def portfolio(ids: str | None = None) -> dict[str, Any]:
         wanted = {i.strip() for i in ids.split(",") if i.strip()}
 
     assets: list[dict[str, Any]] = []
-    totals = {"npv": 0.0, "capex": 0.0, "revenue_y1": 0.0, "count": 0}
+    totals = {"npv": 0.0, "capex": 0.0, "revenue_y1": 0.0, "count": 0, "irr_weighted": 0.0}
+    _irr_capex_sum = 0.0
     for s in _store().list():
         if wanted is not None and s.id not in wanted:
             continue
@@ -181,13 +192,19 @@ def portfolio(ids: str | None = None) -> dict[str, Any]:
                 "name": s.name,
                 "model_id": model_id,
                 "npv": metrics["npv"],
+                "irr": metrics["irr"],
                 "revenue_y1": metrics["revenue_y1"],
                 "capex": metrics["capex"],
+                "yield_pct": metrics["yield_pct"],
             }
         )
         totals["npv"] += metrics["npv"]
         totals["capex"] += metrics["capex"]
         totals["revenue_y1"] += metrics["revenue_y1"]
         totals["count"] += 1
+        _irr_capex_sum += metrics["irr"] * metrics["capex"]
+
+    if totals["capex"]:
+        totals["irr_weighted"] = round(_irr_capex_sum / totals["capex"], 4)
 
     return {"assets": assets, "totals": totals}
