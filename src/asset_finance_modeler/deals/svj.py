@@ -138,6 +138,12 @@ def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
     fv_ebitda = _annual(fv_out.pnl["ebitda"])
     bess_ebitda = _annual(bess_out.pnl["ebitda"])
 
+    # --- Hybrid CAPEX and year-1 revenue (for portfolio aggregation) ---
+    total_capex = float(fv_out.summary["total_capex"]) + float(bess_out.summary["total_capex"])
+    fv_rev_y1 = _annual(fv_out.pnl["revenue"])
+    bess_rev_y1 = _annual(bess_out.pnl["revenue"])
+    revenue_y1 = (fv_rev_y1[0] if fv_rev_y1 else 0.0) + (bess_rev_y1[0] if bess_rev_y1 else 0.0)
+
     # --- Investor metrics from the consolidated hybrid with the capital stack ---
     sub_rate = float(overrides.get("sub_rate", 0.085))
     sub_tenor = int(overrides.get("sub_tenor_years", 7))
@@ -171,6 +177,9 @@ def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
             "dscr_senior_min": round(hr.dscr_senior_min, 2),
             "moic_sub": round(hr.moic_subordinated, 3),
             "recovery": round(hr.recovery_going_concern, 2),
+            "total_capex": round(total_capex),
+            "revenue_y1": round(revenue_y1),
+            "irr": round(hr.irr, 4),
         },
         "cashflows": {
             "years": years,
