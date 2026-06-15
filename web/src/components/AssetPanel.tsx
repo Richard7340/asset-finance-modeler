@@ -35,7 +35,7 @@ export default function AssetPanel({
   onDeleteAsset,
 }: Props) {
   const modelsQuery = useQuery({ queryKey: ["models"], queryFn: listModels });
-  const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: listAssets });
+  const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: () => listAssets() });
 
   const models = modelsQuery.data ?? [];
   const assets = assetsQuery.data ?? [];

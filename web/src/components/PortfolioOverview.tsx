@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
@@ -21,6 +22,10 @@ import Reveal, { useStaggerReveal } from "./Reveal";
 type Props = {
   /** Open a saved asset in the detail editor (drill-in). */
   onOpenAsset: (a: SavedAssetSummary) => void;
+  /** Restrict the listing+aggregate to one lifecycle bucket. */
+  lifecycle?: import("../api").Lifecycle;
+  /** Optional action column rendered per row (e.g. "Marcar en operación"). */
+  rowAction?: (a: SavedAssetSummary) => React.ReactNode;
 };
 
 const NPV_BAR = "#4f46e5"; // indigo-600
@@ -106,8 +111,11 @@ function Kpi({
   );
 }
 
-export default function PortfolioOverview({ onOpenAsset }: Props) {
-  const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: listAssets });
+export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }: Props) {
+  const assetsQuery = useQuery({
+    queryKey: ["assets", lifecycle ?? "all"],
+    queryFn: () => listAssets(lifecycle),
+  });
   const allAssets = assetsQuery.data ?? [];
 
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
@@ -119,8 +127,9 @@ export default function PortfolioOverview({ onOpenAsset }: Props) {
 
   const allIncluded = excluded.size === 0;
   const portfolioQuery = useQuery({
-    queryKey: ["portfolio", allIncluded ? "all" : includedIds.join(",")],
-    queryFn: () => getPortfolio(allIncluded ? undefined : includedIds),
+    queryKey: ["portfolio", lifecycle ?? "all", allIncluded ? "all" : includedIds.join(",")],
+    queryFn: () =>
+      getPortfolio({ lifecycle, ids: allIncluded ? undefined : includedIds }),
   });
 
   const portfolio = portfolioQuery.data;
@@ -219,17 +228,7 @@ export default function PortfolioOverview({ onOpenAsset }: Props) {
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-            Vista de cartera
-          </h2>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Centro de control de activos · valoración consolidada
-          </p>
-        </div>
-        {recalcBadge}
-      </div>
+      <div className="flex justify-end">{recalcBadge}</div>
 
       {/* Aggregate KPIs */}
       <div
@@ -375,6 +374,9 @@ export default function PortfolioOverview({ onOpenAsset }: Props) {
               <th className="px-3 py-2.5 text-right font-medium">Ingresos año 1</th>
               <th className="px-3 py-2.5 text-right font-medium">CAPEX</th>
               <th className="px-3 py-2.5 text-right font-medium">% VAN</th>
+              {rowAction && (
+                <th className="px-3 py-2.5 text-right font-medium">Acción</th>
+              )}
             </tr>
           </thead>
           <tbody ref={rowsRef}>
@@ -446,6 +448,14 @@ export default function PortfolioOverview({ onOpenAsset }: Props) {
                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
                     {m && isIncluded ? pct(contrib) : "—"}
                   </td>
+                  {rowAction && (
+                    <td className="px-3 py-2.5 text-right">
+                      {(() => {
+                        const a = allAssets.find((x) => x.id === r.id);
+                        return a ? rowAction(a) : null;
+                      })()}
+                    </td>
+                  )}
                 </tr>
               );
             })}

@@ -16,7 +16,7 @@ import type {
 import { useRun } from "./hooks/useRun";
 import { fmtDateTime } from "./format";
 import AssetPanel from "./components/AssetPanel";
-import PortfolioOverview from "./components/PortfolioOverview";
+import Dashboard from "./components/Dashboard";
 import DynamicInputs from "./components/DynamicInputs";
 import CurvesPanel from "./components/CurvesPanel";
 import KpiCards from "./components/KpiCards";
@@ -181,7 +181,7 @@ export default function App() {
                     : "text-slate-300 hover:bg-white/5 hover:text-white"
                 }`}
               >
-                Cartera
+                Inicio
               </button>
               {recalcBadge}
               {view === "detail" && selection && (
@@ -200,7 +200,7 @@ export default function App() {
       <ViewTransition viewKey={view}>
         {view === "portfolio" ? (
           <main className="flex-1 overflow-y-auto p-5 lg:p-8">
-            <PortfolioOverview onOpenAsset={selectAsset} />
+            <Dashboard onOpenAsset={selectAsset} />
           </main>
         ) : (
           <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[264px_336px_1fr]">
