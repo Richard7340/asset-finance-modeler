@@ -25,7 +25,11 @@ def test_svj_hybrid_default_unchanged_and_deep_override(monkeypatch):
     from asset_finance_modeler.deals.svj import run_svj  # noqa: PLC0415
 
     base = run_svj({})
-    assert abs(base["kpis"]["npv_hybrid"] - 1_031_876) < 50_000  # default still matches
+    # FV merchant capture is now curve-driven (solar_capture_es, Agere): year-1
+    # capture is ~36 EUR/MWh straight from the curve instead of base 36 x 0.85
+    # capture_ratio, lifting FV (and thus hybrid) revenue. NPV moved from the
+    # old base+escalation figure (~1,031,876) to the curve-driven ~1,317,143.
+    assert abs(base["kpis"]["npv_hybrid"] - 1_317_143) < 50_000
     assert abs(base["kpis"]["moic_sub"] - 1.37) < 0.05
     # legacy key still works
     leg = run_svj({"fv_ppa_price": 60})

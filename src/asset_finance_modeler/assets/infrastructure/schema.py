@@ -109,6 +109,15 @@ class MerchantStream(BaseModel):
     base_price_eur_per_unit: float
     volume_fraction: float = 0.3
     capture_ratio: float = 0.90
+    # Curve-driven realized capture price (EUR/MWh) per year. When set, the
+    # per-year price comes from the curve directly (it already embeds the
+    # capture effect), overriding base_price × capture_ratio × escalation.
+    # `price_curve_name` references a library curve (e.g. solar_capture_es) and
+    # surfaces in the CurvesPanel with its consultant source; `price_points`
+    # carries explicit per-year values (e.g. a user-edited override). The legacy
+    # `price_curve` is kept as an alias for explicit points.
+    price_curve_name: str | None = None
+    price_points: list[float] | None = None
     price_curve: list[float] | None = None
     escalation_pct_yr: float = 0.01
 

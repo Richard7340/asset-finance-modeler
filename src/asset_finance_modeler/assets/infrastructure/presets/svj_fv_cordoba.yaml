@@ -30,6 +30,11 @@ revenue:
     tenor_years: 30
   - type: merchant
     name: Merchant
+    # Curve-driven realized capture price (Agere "captura solar Espana"):
+    # ~36 EUR/MWh in 2025 decaying with apuntamiento to ~29. The curve embeds
+    # the capture effect, so capture_ratio/escalation/base_price below are only
+    # the fallback if the curve is cleared. Surfaces in CurvesPanel with source.
+    price_curve_name: solar_capture_es
     base_price_eur_per_unit: 36.0
     volume_fraction: 0.50
     capture_ratio: 0.85

@@ -144,10 +144,41 @@ def _merchant(
     periods: int,
     ppy: int,
 ) -> list[float]:
-    """production_mwh[t] × volume_fraction × base_price × capture_ratio × (1 + esc)^(t/ppy)"""
+    """Per-period merchant revenue.
+
+    Curve-driven (preferred when available): the realized capture price per
+    year comes straight from a curve — a library curve (``price_curve_name``,
+    e.g. ``solar_capture_es``) or explicit per-year points (``price_points`` /
+    legacy ``price_curve``). The curve already embeds the capture effect and
+    consultant view of price decay, so ``capture_ratio`` and ``escalation`` are
+    NOT re-applied on top of it::
+
+        revenue[t] = production_mwh[t] × volume_fraction × capture_price[year]
+
+    Fallback (no curve): base price escalated, with capture ratio::
+
+        revenue[t] = production_mwh[t] × volume_fraction × base_price
+                     × capture_ratio × (1 + escalation)^(t/ppy)
+    """
+    vf = cfg.volume_fraction
+    n_years = (periods + ppy - 1) // ppy
+
+    # Per-year realized capture price: library curve > explicit points > None.
+    capture_by_year: list[float] | None = None
+    if cfg.price_curve_name is not None:
+        capture_by_year = Curve.from_library(cfg.price_curve_name).to_list(n_years)
+    elif cfg.price_points is not None:
+        capture_by_year = Curve.from_points(cfg.price_points).to_list(n_years)
+    elif cfg.price_curve is not None:
+        capture_by_year = Curve.from_points(cfg.price_curve).to_list(n_years)
+
+    if capture_by_year is not None:
+        return [
+            production_mwh[t] * vf * capture_by_year[t // ppy] for t in range(periods)
+        ]
+
     esc = cfg.escalation_pct_yr
     price = cfg.base_price_eur_per_unit
-    vf = cfg.volume_fraction
     cr = cfg.capture_ratio
     return [
         production_mwh[t] * vf * price * cr * (1.0 + esc) ** (t / ppy)
