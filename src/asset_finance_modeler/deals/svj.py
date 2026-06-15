@@ -92,6 +92,42 @@ def _annual(series: list[float]) -> list[float]:
     return [sum(series[y * _PPY : (y + 1) * _PPY]) for y in range(len(series) // _PPY)]
 
 
+def _consolidated_statements(
+    fv_out: FinancialOutput, bess_out: FinancialOutput
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Consolidated (FV + BESS) annual P&L and cash flow, shaped like the
+    generic /api/models payload (income_statement + cash_flow) so a generic
+    client consumes the hybrid like any other model (P3-2).
+
+    The consolidation is the sum of the two asset legs, each run with its own
+    leverage, aggregated to annual buckets. This is the operating/accounting
+    view of the deal; the headline investor NPV/DSCR/MOIC keys are unchanged.
+    """
+
+    def _add(a: list[float], b: list[float]) -> list[float]:
+        m = max(len(a), len(b))
+        a = a + [0.0] * (m - len(a))
+        b = b + [0.0] * (m - len(b))
+        return [a[i] + b[i] for i in range(m)]
+
+    income_rows: dict[str, list[float]] = {}
+    for k in ("revenue", "ebitda", "ebit", "interest_expense", "ebt", "tax", "net_income"):
+        if k in fv_out.pnl or k in bess_out.pnl:
+            fv_a = _annual(fv_out.pnl.get(k, []))
+            bess_a = _annual(bess_out.pnl.get(k, []))
+            income_rows[k] = [round(v) for v in _add(fv_a, bess_a)]
+    n_years = len(next(iter(income_rows.values()))) if income_rows else 0
+    income_statement = {"years": list(range(1, n_years + 1)), "rows": income_rows}
+
+    cash_flow: dict[str, Any] = {"years": list(range(1, n_years + 1))}
+    for k in ("cfo", "cfi", "cff"):
+        if k in fv_out.cashflow or k in bess_out.cashflow:
+            fv_a = _annual(fv_out.cashflow.get(k, []))
+            bess_a = _annual(bess_out.cashflow.get(k, []))
+            cash_flow[k] = [round(v) for v in _add(fv_a, bess_a)]
+    return income_statement, cash_flow
+
+
 def _apply_legacy(
     overrides: dict[str, Any],
     fv: dict[str, Any],
@@ -234,6 +270,9 @@ def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
     )
     hr = hybrid.run()
 
+    # --- Consolidated P&L / CF (generic client payload, P3-2) ---
+    income_statement, cash_flow = _consolidated_statements(fv_out, bess_out)
+
     # --- Per-year subordinated DSCR profile over the sub tenor (operating
     #     periods only — debt aligned to the project COD via IDC) ---
     dscr_profile = _dscr_profile(
@@ -269,6 +308,10 @@ def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
         },
         "bridge": {"fv": round(npv_fv), "bess": round(npv_bess), "hybrid": round(npv_hybrid)},
         "dscr_profile": dscr_profile,
+        # P3-2: consolidated P&L / CF so a generic client consumes the hybrid
+        # like any other model (legacy keys above are kept for back-compat).
+        "income_statement": income_statement,
+        "cash_flow": cash_flow,
     }
 
 
