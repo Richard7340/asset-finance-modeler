@@ -7,16 +7,19 @@ where reconciliation is still open (NPV convention, ancillary-curve-driven
 subordinated DSCR, recovery basis) the bounds are wide and honest — they assert
 only what is TRUE of the calibrated model.
 
-Exact actuals at time of calibration (documented in the report):
+Exact actuals POST-FIX (FIX 1 BESS DoD/RTE 0.80/0.85 + FIX 2 phased-curve
+off-by-one; documented in docs/superpowers/svj_validation_report.md):
   FV production         = 7,530 MWh/yr        (target ~7,530)   MATCH
   FV total_capex        = 4,440,000           (target ~4.44M)   MATCH
-  FV revenue Y1         = 278,352             (target ~293k)    -5%
-  FV project NPV plain  = -1,999,370          (target -1.22M)   open
-  BESS project NPV plain= +1,228,573          (target +2.17M)   open
-  hybrid NPV plain      = -770,797            (target +1.64M)   open
-  dscr_subordinated_min = 0.697               (target 1.14)     open
-  dscr_senior_min       = 1.653                                  ok
+  FV revenue Y1         = 298,103             (target ~293k)    +2% (curve-driven)
+  FV project NPV (bridge)  = -716,461         (target -1.22M)   conservative
+  BESS project NPV (bridge)= +1,673,210       (target +2.17M)   conservative
+  hybrid NPV (bridge)      = +956,749         (target +1.64M)   conservative
+  dscr_subordinated_min = 0.94                (target 1.14)     conservative
+  dscr_senior_min       = 2.06                                  ok
   moic_subordinated     = 1.368               (target 1.37)     MATCH
+  (synergy ~692k and aggressive merchant view omitted = conservative;
+   CAPEX includes the year-15 repowering)
   recovery_going_concern= 3.167               (target ~1.4)     open
 """
 
@@ -55,12 +58,12 @@ def test_fv_revenue_calibrated_to_excel() -> None:
     """PR double-application removed -> 4.76*1582*1.0 = 7,530 MWh/yr -> revenue.
 
     Production isn't exposed on FinancialOutput, so we assert via revenue Y1,
-    which is the deliverable target and directly reflects the 7,530 MWh volume
-    at the ~36.96 EUR/MWh blended price. Actual 278,352; Excel target ~293k
-    (the residual ~5% is a pricing-curve gap, see report)."""
+    which is the deliverable target and directly reflects the 7,530 MWh volume.
+    Now curve-driven (solar_capture_es ~36 EUR/MWh Y1, phased curve corrected by
+    FIX 2): GOLDEN actual 298,103; Excel target ~293k (+2%, see report)."""
     out = InfrastructureModel(load_preset("svj_fv_cordoba")).run()
     rev_y1 = out.summary["revenue_y1"]
-    assert 270_000 < rev_y1 < 300_000  # calibrated 278k; target ~293k
+    assert abs(rev_y1 - 298_103) < 5  # GOLDEN (tightened, FIX 5)
 
 
 def test_fv_capex_trimmed_to_excel() -> None:

@@ -25,10 +25,9 @@ def test_svj_hybrid_default_unchanged_and_deep_override(monkeypatch):
     from asset_finance_modeler.deals.svj import run_svj  # noqa: PLC0415
 
     base = run_svj({})
-    # FIX 1 (BESS arbitrage now honors the preset DoD 0.80 / RTE 0.85 instead of
-    # the hardcoded 0.90 / 0.88 defaults): BESS arbitrage revenue and NPV drop,
-    # moving hybrid NPV from the old 1,317,143 to the corrected ~915,475.
-    assert abs(base["kpis"]["npv_hybrid"] - 915_475) < 50_000
+    # Post-fix golden (FIX 1 BESS DoD/RTE 0.80/0.85 + FIX 2 phased-curve
+    # off-by-one): hybrid NPV moved from the old 1,317,143 to 956,749.
+    assert abs(base["kpis"]["npv_hybrid"] - 956_749) <= 1
     assert abs(base["kpis"]["moic_sub"] - 1.37) < 0.05
     # legacy key still works
     leg = run_svj({"fv_ppa_price": 60})
