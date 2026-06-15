@@ -9,6 +9,7 @@ import {
 } from "./api";
 import type {
   ModelSummary,
+  OverrideValue,
   Overrides,
   SavedAssetSummary,
 } from "./api";
@@ -17,6 +18,7 @@ import { fmtDateTime } from "./format";
 import AssetPanel from "./components/AssetPanel";
 import PortfolioOverview from "./components/PortfolioOverview";
 import DynamicInputs from "./components/DynamicInputs";
+import CurvesPanel from "./components/CurvesPanel";
 import KpiCards from "./components/KpiCards";
 import IncomeStatementTable from "./components/IncomeStatement";
 import CashFlowTable from "./components/CashFlowTable";
@@ -97,6 +99,20 @@ export default function App() {
     );
   };
 
+  // Generic override setter: curve selection (string), custom points (number[])
+  // or clearing a key (undefined). Also clears the "reviewing saved asset" flag.
+  const setOverride = (path: string, value: OverrideValue | undefined) => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      if (value === undefined) delete next[path];
+      else next[path] = value;
+      return next;
+    });
+    setSelection((prev) =>
+      prev && prev.assetId ? { ...prev, assetId: null, savedAt: null } : prev,
+    );
+  };
+
   const recalcBadge = isFetching ? (
     <span className="flex items-center gap-1.5 text-xs text-slate-300">
       <span className="h-2 w-2 animate-pulse rounded-full bg-accent-400" />
@@ -129,6 +145,7 @@ export default function App() {
         schema={schemaQuery.data}
         overrides={overrides}
         onChangeNumber={setOne}
+        onChangeOverride={setOverride}
       />
     );
   }, [modelId, schemaQuery.isLoading, schemaQuery.error, schemaQuery.data, overrides]);
@@ -235,6 +252,9 @@ export default function App() {
               ) : (
                 <>
                   <KpiCards data={result} />
+                  {schemaQuery.data && (
+                    <CurvesPanel schema={schemaQuery.data} overrides={overrides} />
+                  )}
                   <Charts data={result} />
                   {!hybrid && result.income_statement && (
                     <IncomeStatementTable data={result.income_statement} />
