@@ -101,6 +101,41 @@ def test_business_ev_matches_discounted_unlevered_fcf():
     assert out.valuation["enterprise_value"] == pytest.approx(expected_ev, rel=1e-9)
 
 
+def test_business_tax_loss_carryforward():
+    """P0-5: a year-1 loss offsets year-2 taxable income.
+
+    Year 1 EBT = -410k, year 2 EBT = +400k. With carryforward the year-2 tax
+    is 0 (400k fully offset by the 410k loss), not 100k. The flag was a no-op.
+    """
+    cfg = BusinessModelConfig(
+        meta={"name": "CF", "horizon": {"periods": 2, "frequency": "Y"}},
+        revenue=[{"name": "Ventas", "year1_amount": 90_000, "growth_pct_yr": 0.0}],
+        cogs={"pct_of_revenue": 0.0},
+        # Year 1: revenue 90k - opex 500k = -410k. Year 2 revenue same; we add a
+        # one-off boost via a second revenue line that only exists year 2? Simpler:
+        # use a single line but engineer year-2 EBT via growth. Instead, make
+        # opex a fixed 500k year1 and rev grow so year-2 EBT=+400k.
+        opex={"fixed_lines": [{"name": "Burn", "year1_amount": 500_000}], "escalation_pct_yr": 0.0},
+        capex={"items": []},
+        taxes={"corporate_income_tax_rate": 0.25, "tax_loss_carryforward": True},
+        valuation={"discount_rate_annual": 0.10, "terminal_method": "none"},
+    )
+    # Engineer revenues directly: year1=90k (EBT -410k), year2=900k (EBT +400k).
+    cfg.revenue[0].year1_amount = 90_000
+    cfg.revenue[0].growth_pct_yr = 9.0  # year2 = 90k*(1+9)=900k → EBT 400k
+    out = BusinessModel(cfg).run()
+    # frequency Y, ppy=1 → per-period == per-year
+    assert out.pnl["ebt"][0] == pytest.approx(-410_000)
+    assert out.pnl["ebt"][1] == pytest.approx(400_000)
+    assert out.pnl["tax"][1] == pytest.approx(0.0)  # fully offset, not 100k
+
+    # Disabling the flag → year-2 tax is the full 100k.
+    cfg_off = cfg.model_copy(deep=True)
+    cfg_off.taxes.tax_loss_carryforward = False
+    out_off = BusinessModel(cfg_off).run()
+    assert out_off.pnl["tax"][1] == pytest.approx(100_000)
+
+
 def test_business_cfo_stays_levered():
     """P0-4: the cash-flow statement CFO remains levered (real cash, interest paid).
 
