@@ -263,6 +263,22 @@ def test_preset_solar_enterprise_value_positive():
     assert result.valuation["enterprise_value"] != 0  # may be negative if WACC > growth but not 0
 
 
+def test_finite_life_preset_no_terminal_value():
+    """P0-3: finite-life infra presets carry no Gordon perpetuity in their EV.
+
+    The EV must equal the PV of the explicit FCF only (no terminal value).
+    """
+    from asset_finance_modeler.assets.infrastructure.loader import load_preset
+
+    for name in ("solar_pv_50mw_spain", "wind_onshore_30mw_spain", "bess_20mw_4h", "datacenter_10mw_tier3"):
+        cfg = load_preset(name)
+        result = InfrastructureModel(cfg).run()
+        val = result.valuation
+        assert val["terminal_value"] == 0.0, name
+        assert val["pv_terminal"] == 0.0, name
+        assert val["enterprise_value"] == pytest.approx(val["pv_explicit"]), name
+
+
 def test_load_yaml_roundtrip(tmp_path):
     """load_yaml should produce the same config as load_preset for the same data."""
     import shutil

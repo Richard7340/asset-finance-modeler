@@ -8,7 +8,7 @@ def compute_dcf(
     wacc_annual: float,
     terminal_growth: float,
     periods_per_year: int,
-    terminal_method: Literal["gordon", "exit_multiple"] = "gordon",
+    terminal_method: Literal["none", "gordon", "exit_multiple"] = "gordon",
     exit_arr: float | None = None,
     exit_multiple_arr: float | None = None,
     exit_ebitda: float | None = None,
@@ -22,6 +22,17 @@ def compute_dcf(
     pv_explicit = 0.0
     for t, fcf in enumerate(fcf_series, start=1):
         pv_explicit += fcf / ((1 + period_rate) ** t)
+
+    if terminal_method == "none":
+        # No terminal value — appropriate for finite-life assets (solar, wind,
+        # BESS, datacenter) whose cashflows end at the modelling horizon. EV is
+        # the PV of the explicit FCF only.
+        return {
+            "pv_explicit": pv_explicit,
+            "terminal_value": 0.0,
+            "pv_terminal": 0.0,
+            "enterprise_value": pv_explicit,
+        }
 
     if terminal_method == "gordon":
         if wacc_annual <= terminal_growth:

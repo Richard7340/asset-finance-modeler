@@ -81,4 +81,6 @@ taxes:
 valuation:
   discount_rate_annual: 0.07
   terminal_growth_rate: 0.0
-  terminal_method: gordon
+  # P0-3: finite-life asset (25y) → no terminal value. A Gordon perpetuity
+  # would value cashflows the plant cannot generate past decommissioning.
+  terminal_method: none

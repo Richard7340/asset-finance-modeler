@@ -91,4 +91,5 @@ taxes:
 valuation:
   discount_rate_annual: 0.065
   terminal_growth_rate: 0.0
-  terminal_method: gordon
+  # P0-3: finite-life asset → no terminal value (was Gordon perpetuity).
+  terminal_method: none
