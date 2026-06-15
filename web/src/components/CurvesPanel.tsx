@@ -206,6 +206,31 @@ function CurveCardResolved({
   const cellRefs = useRef<Array<HTMLInputElement | null>>([]);
   const editPanelRef = useRef<HTMLDivElement | null>(null);
 
+  // ---- Drag-to-edit on the chart --------------------------------------
+  // Index of the year currently being dragged (null = no drag in progress).
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // Linear map from a screen Y pixel to a value, captured at pointerdown so
+  // the mapping is stable for the whole drag gesture. Derived from two
+  // rendered dots (their exact recharts cy/value pairs), which inherently
+  // captures the plot-area bounds, axis margins and Y-domain padding.
+  const pixelToValueRef = useRef<((clientY: number) => number) | null>(null);
+  // Live record of every rendered dot: screen-space Y pixel + its value.
+  // Keyed by year index; refreshed by the custom dot renderer each paint.
+  const dotsRef = useRef<Map<number, { pageY: number; value: number }>>(new Map());
+  // Plot-area screen bounds (top/bottom in clientY), used as a fallback scale.
+  const chartBoundsRef = useRef<{ top: number; bottom: number } | null>(null);
+
+  // A sane value domain for clamping (>= 0): current working range padded.
+  const valueDomain = useMemo(() => {
+    const vals = (editing ? working : baseValues).filter((v) => Number.isFinite(v));
+    if (vals.length === 0) return { min: 0, max: 1 };
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const span = hi - lo || Math.abs(hi) || 1;
+    const pad = span * 0.15;
+    return { min: Math.max(0, lo - pad), max: hi + pad };
+  }, [editing, working, baseValues]);
+
   // Re-seed the working array whenever we (re)enter edit mode or the underlying
   // curve changes while not editing.
   useEffect(() => {
@@ -237,6 +262,61 @@ function CurveCardResolved({
   const liveValues = editing ? working : baseValues;
   const chartData = liveValues.map((v, i) => ({ year: i + 1, value: v }));
   const showChart = chartData.length > 0;
+
+  // Custom dot: records its live screen-space position (for the drag scale)
+  // and, in edit mode, renders a generous transparent hit target so points
+  // are easy to grab and drag vertically. Returns a plain SVG group.
+  type DotProps = {
+    cx?: number;
+    cy?: number;
+    index?: number;
+    payload?: { value: number };
+  };
+  const renderDot = (props: DotProps) => {
+    const { cx, cy, index, payload } = props;
+    if (cx == null || cy == null || index == null) {
+      return <g key={`dot-empty-${index ?? Math.random()}`} />;
+    }
+    const value = payload?.value ?? 0;
+    const dragging = dragIndex === index;
+    const recordPos = (el: SVGCircleElement | null) => {
+      if (!el) {
+        dotsRef.current.delete(index);
+        return;
+      }
+      const r = el.getBoundingClientRect();
+      dotsRef.current.set(index, { pageY: r.top + r.height / 2, value });
+      // Capture plot band bounds from the owning SVG for the fallback scale.
+      const svg = el.ownerSVGElement;
+      if (svg) {
+        const sr = svg.getBoundingClientRect();
+        chartBoundsRef.current = { top: sr.top + 6, bottom: sr.bottom - 6 };
+      }
+    };
+    return (
+      <g key={`dot-${index}`}>
+        <circle
+          ref={recordPos}
+          cx={cx}
+          cy={cy}
+          r={dragging ? 4.5 : 2.5}
+          fill={dragging ? C.accent : "#fff"}
+          stroke={C.accent}
+          strokeWidth={1.5}
+        />
+        {editing && (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={9}
+            fill="transparent"
+            style={{ cursor: "ns-resize", touchAction: "none" }}
+            onPointerDown={(e) => onDotPointerDown(index, e)}
+          />
+        )}
+      </g>
+    );
+  };
 
   const setCell = (index: number, raw: number) => {
     setWorking((prev) => {
@@ -274,6 +354,81 @@ function CurveCardResolved({
       return next;
     });
   };
+
+  // Build the pixel->value scale for the active drag from the rendered dots.
+  // Uses the two dots with the largest Y separation for numerical stability;
+  // falls back to the plot-area bounds + value domain if only one dot is known.
+  const buildPixelToValue = (): ((clientY: number) => number) => {
+    const dots = Array.from(dotsRef.current.values());
+    if (dots.length >= 2) {
+      let a = dots[0];
+      let b = dots[1];
+      for (let i = 0; i < dots.length; i += 1) {
+        for (let j = i + 1; j < dots.length; j += 1) {
+          if (Math.abs(dots[i].pageY - dots[j].pageY) > Math.abs(a.pageY - b.pageY)) {
+            a = dots[i];
+            b = dots[j];
+          }
+        }
+      }
+      const dPix = b.pageY - a.pageY;
+      if (Math.abs(dPix) > 0.5) {
+        const slope = (b.value - a.value) / dPix; // value units per pixel
+        return (clientY: number) => a.value + (clientY - a.pageY) * slope;
+      }
+    }
+    // Fallback: map the visible plot band linearly onto the value domain.
+    const band = chartBoundsRef.current;
+    if (band) {
+      const { top, bottom } = band;
+      const { min, max } = valueDomain;
+      return (clientY: number) => {
+        const frac = (bottom - clientY) / Math.max(1, bottom - top);
+        return min + frac * (max - min);
+      };
+    }
+    return (_clientY: number) => working[dragIndex ?? 0] ?? 0;
+  };
+
+  const onDotPointerDown = (index: number, e: React.PointerEvent) => {
+    if (!editing) return;
+    e.stopPropagation();
+    e.preventDefault();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    setFocusYear(index + 1);
+    setDragIndex(index);
+    pixelToValueRef.current = buildPixelToValue();
+  };
+
+  // Window-level move/up so the drag survives leaving the dot's hit area.
+  useEffect(() => {
+    if (dragIndex == null) return;
+    const onMove = (e: PointerEvent) => {
+      const map = pixelToValueRef.current;
+      if (!map) return;
+      const raw = map(e.clientY);
+      const clamped = Math.max(0, Number.isFinite(raw) ? raw : 0);
+      const rounded = Number(clamped.toFixed(4));
+      setWorking((prev) => {
+        if (prev[dragIndex] === rounded) return prev;
+        const next = prev.slice();
+        next[dragIndex] = rounded;
+        return next;
+      });
+    };
+    const onUp = () => {
+      setDragIndex(null);
+      pixelToValueRef.current = null;
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [dragIndex]);
 
   const apply = () => {
     if (!onChangeOverride) return;
@@ -406,22 +561,14 @@ function CurveCardResolved({
                 type="monotone"
                 dataKey="value"
                 stroke={C.accent}
-                dot={
-                  editing
-                    ? {
-                        r: 2.5,
-                        stroke: C.accent,
-                        fill: "#fff",
-                        strokeWidth: 1.5,
-                      }
-                    : false
-                }
+                dot={editing ? renderDot : false}
                 activeDot={
                   editing
-                    ? { r: 5, fill: C.accent, cursor: "pointer" }
+                    ? { r: 5, fill: C.accent, cursor: "ns-resize" }
                     : { r: 4 }
                 }
                 strokeWidth={2}
+                isAnimationActive={!editing}
                 animationDuration={editing ? 0 : 600}
               />
             </LineChart>
@@ -515,7 +662,8 @@ function CurveCardResolved({
 
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] text-slate-400">
-              Pulsa un punto del gráfico para editar ese año.
+              Arrastra un punto del gráfico para ajustar ese año, o púlsalo para
+              editarlo en la cuadrícula.
             </span>
             <div className="flex items-center gap-2">
               <button
