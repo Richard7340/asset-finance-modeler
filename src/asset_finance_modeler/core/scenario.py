@@ -43,6 +43,11 @@ class Scenario(BaseModel):
     is_deleted: bool = False
     user_id: str = "default"
     workspace_id: str | None = None
+    # --- Ciclo de vida (v3 asset management) ---
+    lifecycle: str = "opportunity"  # "opportunity" | "operational"
+    commissioning_date: datetime | None = None
+    base_locked: bool = False
+    tracking_frequency: str | None = None  # "daily" | "monthly" | "quarterly"
 
 
 def _set_by_path(d: dict[str, Any], path: str, value: Any) -> None:
