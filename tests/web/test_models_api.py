@@ -29,3 +29,32 @@ def test_model_run_with_override_and_statements(monkeypatch):
     assert len(base["income_statement"]["years"]) >= 1
     up = c.post("/api/models/bess_20mw_4h/run?t=tk", json={"overrides": {"production.power_mw": 40}}).json()
     assert up["income_statement"]["rows"]["revenue"][0] != base["income_statement"]["rows"]["revenue"][0]
+
+
+def test_svj_hybrid_run_has_statements(monkeypatch):
+    """P3-2: svj_hybrid /run returns income_statement + cash_flow (consolidated
+    P&L/CF of the hybrid) so a generic client consumes it like any other model,
+    while keeping the legacy keys (bridge/cashflows/curves/dscr_profile/kpis)."""
+    c = _client(monkeypatch)
+    out = c.post("/api/models/svj_hybrid/run?t=tk", json={"overrides": {}}).json()
+    # legacy keys preserved
+    for k in ("bridge", "cashflows", "curves", "dscr_profile", "kpis"):
+        assert k in out, f"missing legacy key {k}"
+    # new generic keys
+    assert "income_statement" in out and "cash_flow" in out
+    rows = out["income_statement"]["rows"]
+    assert "revenue" in rows and len(rows["revenue"]) >= 1
+    assert out["income_statement"]["years"][0] == 1
+    assert "cfo" in out["cash_flow"]
+
+
+def test_invalid_override_path_returns_400(monkeypatch):
+    """P3-3: a bad override path is a client error (400 with the offending
+    path), not a server 500."""
+    c = _client(monkeypatch)
+    r = c.post(
+        "/api/models/bess_20mw_4h/run?t=tk",
+        json={"overrides": {"production.does_not_exist.deep": 5}},
+    )
+    assert r.status_code == 400
+    assert "production.does_not_exist.deep" in r.json()["detail"]

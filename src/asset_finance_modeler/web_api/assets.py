@@ -20,10 +20,9 @@ from asset_finance_modeler.core.scenario import Scenario, new_scenario_id
 from asset_finance_modeler.deals.svj import run_svj
 from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
 from asset_finance_modeler.web_api.auth import require_token
-from asset_finance_modeler.web_api.introspect import set_by_path
 from asset_finance_modeler.web_api.models import (
     _BUSINESS_IDS,
-    _coerce,
+    _apply_overrides,
     _preset_ids,
     _run_business_config,
     _run_config,
@@ -60,14 +59,12 @@ def _run_model(model_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
         return run_svj(overrides)
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()
-        for path, value in (overrides or {}).items():
-            cfg = set_by_path(cfg, path, _coerce(cfg, path, value))
+        cfg = _apply_overrides(cfg, overrides)
         return _run_business_config(cfg)
     if model_id not in _preset_ids():
         raise HTTPException(status_code=404, detail=f"unknown model: {model_id}")
     cfg = load_preset(model_id).model_dump()
-    for path, value in (overrides or {}).items():
-        cfg = set_by_path(cfg, path, _coerce(cfg, path, value))
+    cfg = _apply_overrides(cfg, overrides)
     return _run_config(cfg)
 
 

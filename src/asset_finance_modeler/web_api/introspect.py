@@ -63,15 +63,32 @@ def schema_tree(config: dict[str, Any], _path: str = "") -> list[dict[str, Any]]
     return leaves
 
 
+class InvalidPathError(ValueError):
+    """An override path does not resolve against the model config. Carries the
+    offending ``path`` so the web layer can return a 400 (not a 500)."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        super().__init__(f"invalid override path: {path}")
+
+
 def set_by_path(config: dict[str, Any], path: str, value: Any) -> dict[str, Any]:
     """Return a deep copy of config with `value` set at the dotted/indexed
-    path (e.g. 'financing.senior.interest_rate' or 'revenue[0].price')."""
+    path (e.g. 'financing.senior.interest_rate' or 'revenue[0].price').
+
+    Raises ``InvalidPathError`` (a ValueError carrying ``path``) when the path
+    does not resolve, so callers can surface a 400 instead of a 500."""
     out = copy.deepcopy(config)
     keys: list[Any] = []
     for name, idx in re.findall(r"(\w+)|\[(\d+)\]", path):
         keys.append(name if name else int(idx))
+    if not keys:
+        raise InvalidPathError(path)
     node: Any = out
-    for k in keys[:-1]:
-        node = node[k]
-    node[keys[-1]] = value
+    try:
+        for k in keys[:-1]:
+            node = node[k]
+        node[keys[-1]] = value
+    except (KeyError, IndexError, TypeError) as exc:
+        raise InvalidPathError(path) from exc
     return out
