@@ -125,12 +125,18 @@ export async function getCurve(name: string): Promise<Curve> {
   return getJson<Curve>(`/api/curves/${encodeURIComponent(name)}`);
 }
 
+export type Lifecycle = "opportunity" | "operational";
+export type TrackingFrequency = "daily" | "monthly" | "quarterly";
+
 export type SavedAssetSummary = {
   id: string;
   name: string;
   model_id: string;
   created_at: string;
   kpis: Kpis;
+  lifecycle: Lifecycle;
+  commissioning_date: string | null;
+  tracking_frequency: TrackingFrequency | null;
 };
 
 export type SavedAsset = {
@@ -209,8 +215,9 @@ export async function downloadExcel(
 // Persistence (Mi cartera)
 // ---------------------------------------------------------------------------
 
-export async function listAssets(): Promise<SavedAssetSummary[]> {
-  const d = await getJson<{ assets: SavedAssetSummary[] }>("/api/assets");
+export async function listAssets(lifecycle?: Lifecycle): Promise<SavedAssetSummary[]> {
+  const q = lifecycle ? `?lifecycle=${lifecycle}` : "";
+  const d = await getJson<{ assets: SavedAssetSummary[] }>(`/api/assets${q}`);
   return d.assets;
 }
 
@@ -235,6 +242,19 @@ export async function saveAsset(
 export async function deleteAsset(id: string): Promise<void> {
   const r = await fetch(withToken(`/api/assets/${id}`), { method: "DELETE" });
   if (!r.ok) throw new Error(`delete failed: ${r.status}`);
+}
+
+export async function setLifecycle(
+  id: string,
+  body: { lifecycle: Lifecycle; tracking_frequency?: TrackingFrequency; commissioning_date?: string },
+): Promise<{ id: string; lifecycle: Lifecycle; base_locked: boolean; commissioning_date: string | null; tracking_frequency: TrackingFrequency | null }> {
+  const r = await fetch(withToken(`/api/assets/${id}/lifecycle`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`lifecycle update failed: ${r.status}`);
+  return r.json();
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +288,13 @@ export type Portfolio = {
   totals: PortfolioTotals;
 };
 
-export async function getPortfolio(ids?: string[]): Promise<Portfolio> {
-  const q = ids && ids.length > 0 ? `?ids=${ids.map(encodeURIComponent).join(",")}` : "";
+export async function getPortfolio(
+  opts?: { ids?: string[]; lifecycle?: Lifecycle },
+): Promise<Portfolio> {
+  const qs: string[] = [];
+  if (opts?.ids && opts.ids.length > 0)
+    qs.push(`ids=${opts.ids.map(encodeURIComponent).join(",")}`);
+  if (opts?.lifecycle) qs.push(`lifecycle=${opts.lifecycle}`);
+  const q = qs.length ? `?${qs.join("&")}` : "";
   return getJson<Portfolio>(`/api/portfolio${q}`);
 }
