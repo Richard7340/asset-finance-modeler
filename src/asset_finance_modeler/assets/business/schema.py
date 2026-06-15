@@ -75,6 +75,12 @@ class ValuationB(BaseModel):
     cost_of_equity_annual: float | None = None
     terminal_growth_rate: float = 0.0
     terminal_method: str = "gordon"
+    # Residual / exit sale value of the underlying asset at the end of the
+    # modelling horizon (e.g. a real-estate sale). Added as a discounted cash
+    # inflow in the final valuation year, so finite-horizon asset-backed deals
+    # recover their capital instead of showing a structurally negative VAN
+    # (P0-7). None = no residual.
+    residual_value: float | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -120,6 +120,11 @@ class BusinessModel:
         fcf_annual = [
             nopat_y[y] + dep_y[y] + cfi_y[y] + delta_wc_y[y] for y in range(years)
         ]
+        # P0-7: residual / exit sale of the underlying asset at horizon end is a
+        # cash inflow in the final modelled year — recovers capital for
+        # finite-horizon asset-backed deals (e.g. a real-estate sale).
+        if cfg.valuation.residual_value and years > 0:
+            fcf_annual[-1] += cfg.valuation.residual_value
         try:
             val = compute_dcf(
                 fcf_series=fcf_annual,
