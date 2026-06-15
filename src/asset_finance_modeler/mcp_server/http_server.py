@@ -31,6 +31,7 @@ from pydantic import BaseModel
 
 from asset_finance_modeler.web_api.assets import portfolio_router
 from asset_finance_modeler.web_api.assets import router as assets_router
+from asset_finance_modeler.web_api.curves import router as curves_router
 from asset_finance_modeler.web_api.models import router as models_router
 from asset_finance_modeler.web_api.routes import router as svj_router
 
@@ -89,6 +90,9 @@ app.include_router(models_router)
 app.include_router(assets_router)
 # Portfolio aggregation router /api/portfolio (re-runs saved assets → totals).
 app.include_router(portfolio_router)
+# Curves catalog router /api/curves (consultant price curves + sources, read-only
+# transparency for TDD). Before the static mount so /api wins over the catch-all.
+app.include_router(curves_router)
 
 # Static SPA mount (AFTER include_router so /api wins). The built SPA lives at
 # `web/dist`. Prefer SIM_WEB_DIST (set in the Docker image where the package is
