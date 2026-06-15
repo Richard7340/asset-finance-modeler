@@ -28,6 +28,25 @@ from asset_finance_modeler.core.curves import Curve
 __all__ = ["compute_revenue"]
 
 
+def _curve_by_year(
+    curve_name: str | None,
+    points: list[float] | None,
+    n_years: int,
+) -> list[float] | None:
+    """Resolve a per-year value series for a curve-driven price/value field.
+
+    Precedence (same pattern as merchant/arbitrage): library curve > explicit
+    points > None (caller falls back to the base × escalation formula). A curve
+    embeds the consultant price path, so the caller MUST NOT re-apply escalation
+    or capture on top of the returned series — only volume factors.
+    """
+    if curve_name is not None:
+        return Curve.from_library(curve_name).to_list(n_years)
+    if points is not None:
+        return Curve.from_points(points).to_list(n_years)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Public dispatcher
 # ---------------------------------------------------------------------------
@@ -86,7 +105,7 @@ def compute_revenue(
             series = _offtake(stream, production_output, production_mwh, periods, ppy)
             key = stream.name
         elif isinstance(stream, CertificateStream):
-            series = _certificate(stream, production_mwh, periods)
+            series = _certificate(stream, production_mwh, periods, ppy)
             key = stream.name
         elif isinstance(stream, RentalStream):
             series = _rental(stream, capacity_mw, periods, ppy)
@@ -123,10 +142,17 @@ def _ppa(
     periods: int,
     ppy: int,
 ) -> list[float]:
-    """production_mwh[t] × volume_fraction × price × (1 + escalation)^(t/ppy)"""
+    """Curve-driven (preferred): production × volume_fraction × price_curve[year]
+    (curve embeds escalation, NOT re-applied). Fallback: production ×
+    volume_fraction × price × (1 + escalation)^(t/ppy)."""
+    vf = cfg.volume_fraction
+    n_years = (periods + ppy - 1) // ppy
+    price_by_year = _curve_by_year(cfg.price_curve_name, cfg.price_points, n_years)
+    if price_by_year is not None:
+        return [production_mwh[t] * vf * price_by_year[t // ppy] for t in range(periods)]
+
     esc = cfg.escalation_pct_yr
     price = cfg.price_eur_per_unit
-    vf = cfg.volume_fraction
     return [
         production_mwh[t] * vf * price * (1.0 + esc) ** (t / ppy)
         for t in range(periods)
@@ -268,7 +294,12 @@ def _capacity(
     periods: int,
     ppy: int,
 ) -> list[float]:
-    """eur_per_mw_yr × capacity_mw / ppy"""
+    """Curve-driven (preferred): price_curve[year] × capacity_mw / ppy.
+    Fallback: eur_per_mw_yr × capacity_mw / ppy (flat)."""
+    n_years = (periods + ppy - 1) // ppy
+    price_by_year = _curve_by_year(cfg.price_curve_name, cfg.price_points, n_years)
+    if price_by_year is not None:
+        return [price_by_year[t // ppy] * capacity_mw / ppy for t in range(periods)]
     per_period = cfg.eur_per_mw_yr * capacity_mw / ppy
     return [per_period] * periods
 
@@ -285,25 +316,24 @@ def _offtake(
     periods: int,
     ppy: int,
 ) -> list[float]:
-    """
-    If production_kg available: production_kg[t] × volume_fraction × price × (1+esc)^(t/ppy)
-    Else: like PPA using production_mwh
-    """
+    """Curve-driven (preferred): volume × volume_fraction × price_curve[year]
+    (curve embeds escalation, NOT re-applied). Fallback: volume ×
+    volume_fraction × price × (1+esc)^(t/ppy). Volume = production_kg when
+    available (H2), else production_mwh (biomethane/generic commodity)."""
+    vf = cfg.volume_fraction
+    volume: list[float] = production_output.get("production_kg", production_mwh)
+
+    n_years = (periods + ppy - 1) // ppy
+    price_by_year = _curve_by_year(cfg.price_curve_name, cfg.price_points, n_years)
+    if price_by_year is not None:
+        return [volume[t] * vf * price_by_year[t // ppy] for t in range(periods)]
+
     esc = cfg.escalation_pct_yr
     price = cfg.price_eur_per_unit
-    vf = cfg.volume_fraction
-
-    if "production_kg" in production_output:
-        prod_kg: list[float] = production_output["production_kg"]
-        return [
-            prod_kg[t] * vf * price * (1.0 + esc) ** (t / ppy)
-            for t in range(periods)
-        ]
-    else:
-        return [
-            production_mwh[t] * vf * price * (1.0 + esc) ** (t / ppy)
-            for t in range(periods)
-        ]
+    return [
+        volume[t] * vf * price * (1.0 + esc) ** (t / ppy)
+        for t in range(periods)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -315,10 +345,16 @@ def _certificate(
     cfg: CertificateStream,
     production_mwh: list[float],
     periods: int,
+    ppy: int,
 ) -> list[float]:
-    """production_mwh[t] × eligible_fraction × price"""
-    price = cfg.price_eur_per_unit
+    """Curve-driven (preferred): production × eligible_fraction × price_curve[year].
+    Fallback: production × eligible_fraction × price (flat)."""
     ef = cfg.eligible_fraction
+    n_years = (periods + ppy - 1) // ppy
+    price_by_year = _curve_by_year(cfg.price_curve_name, cfg.price_points, n_years)
+    if price_by_year is not None:
+        return [production_mwh[t] * ef * price_by_year[t // ppy] for t in range(periods)]
+    price = cfg.price_eur_per_unit
     return [production_mwh[t] * ef * price for t in range(periods)]
 
 
@@ -333,9 +369,16 @@ def _rental(
     periods: int,
     ppy: int,
 ) -> list[float]:
-    """price_per_unit × capacity_mw × occupancy × (1+esc)^(t/ppy)"""
+    """Curve-driven (preferred): price_curve[year] × capacity_mw × occupancy
+    (curve embeds escalation, NOT re-applied; occupancy is a volume factor).
+    Fallback: price_per_unit × capacity_mw × occupancy × (1+esc)^(t/ppy)."""
+    occ = cfg.occupancy_rate
+    n_years = (periods + ppy - 1) // ppy
+    price_by_year = _curve_by_year(cfg.price_curve_name, cfg.price_points, n_years)
+    if price_by_year is not None:
+        return [price_by_year[t // ppy] * capacity_mw * occ for t in range(periods)]
     esc = cfg.escalation_pct_yr
-    base = cfg.price_per_unit_period * capacity_mw * cfg.occupancy_rate
+    base = cfg.price_per_unit_period * capacity_mw * occ
     return [base * (1.0 + esc) ** (t / ppy) for t in range(periods)]
 
 
@@ -351,7 +394,12 @@ def _sla(
     periods: int,
     ppy: int,
 ) -> list[float]:
-    """price_per_mw_month × capacity_mw_it (or capacity_mw)"""
+    """Curve-driven (preferred): price_curve[year] × capacity_mw_it.
+    Fallback: price_per_mw_month × capacity_mw_it (flat)."""
     cap_it: float = float(production_output.get("capacity_mw_it", capacity_mw))
+    n_years = (periods + ppy - 1) // ppy
+    price_by_year = _curve_by_year(cfg.price_curve_name, cfg.price_points, n_years)
+    if price_by_year is not None:
+        return [price_by_year[t // ppy] * cap_it for t in range(periods)]
     per_period = cfg.price_per_mw_month * cap_it
     return [per_period] * periods

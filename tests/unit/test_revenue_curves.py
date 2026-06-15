@@ -196,3 +196,136 @@ def test_ancillary_curve_points_multiply_base() -> None:
 
     assert curved[0] == flat[0]
     assert curved[12] == flat[12] * 1.5
+
+
+# ---------------------------------------------------------------------------
+# P1-1: curve fields for PPA / Offtake / Capacity / Certificate / Rental / SLA
+# ---------------------------------------------------------------------------
+
+from asset_finance_modeler.assets.infrastructure.engines.revenue import (  # noqa: E402
+    _capacity,
+    _certificate,
+    _offtake,
+    _ppa,
+    _rental,
+    _sla,
+)
+from asset_finance_modeler.assets.infrastructure.schema import (  # noqa: E402
+    CapacityStream,
+    CertificateStream,
+    OfftakeStream,
+    PPAStream,
+    RentalStream,
+    SLAStream,
+)
+
+
+def test_ppa_curve_fields_optional() -> None:
+    p = PPAStream(price_eur_per_unit=43.0)
+    assert p.price_curve_name is None
+    assert p.price_points is None
+    assert (
+        PPAStream(price_eur_per_unit=43.0, price_curve_name="solar_capture_es").price_curve_name
+        == "solar_capture_es"
+    )
+
+
+def test_ppa_price_points_drive_price_directly_no_escalation() -> None:
+    ppy = 12
+    periods = 24
+    prod = [1000.0] * periods
+    series = _ppa(
+        PPAStream(
+            price_eur_per_unit=99.0,  # ignored when curve present
+            volume_fraction=0.5,
+            escalation_pct_yr=0.05,  # NOT re-applied on top of curve
+            price_points=[40.0, 30.0],
+        ),
+        prod,
+        periods,
+        ppy,
+    )
+    # volume_fraction still applies (it's volume, not price); price from curve.
+    assert series[0] == 1000.0 * 0.5 * 40.0
+    assert series[12] == 1000.0 * 0.5 * 30.0
+
+
+def test_offtake_price_points_drive_price_directly() -> None:
+    ppy = 12
+    periods = 24
+    prod_out = {"production_kg": [2000.0] * periods}
+    series = _offtake(
+        OfftakeStream(
+            price_eur_per_unit=99.0,
+            volume_fraction=1.0,
+            escalation_pct_yr=0.05,
+            price_points=[5.0, 6.0],
+        ),
+        prod_out,
+        [0.0] * periods,
+        periods,
+        ppy,
+    )
+    assert series[0] == 2000.0 * 5.0
+    assert series[12] == 2000.0 * 6.0
+
+
+def test_capacity_price_points_drive_value() -> None:
+    ppy = 12
+    periods = 24
+    flat = _capacity(CapacityStream(eur_per_mw_yr=35_000), capacity_mw=20.0, periods=periods, ppy=ppy)
+    curved = _capacity(
+        CapacityStream(eur_per_mw_yr=35_000, price_points=[40_000, 60_000]),
+        capacity_mw=20.0,
+        periods=periods,
+        ppy=ppy,
+    )
+    assert curved[0] == 40_000 * 20.0 / 12
+    assert curved[12] == 60_000 * 20.0 / 12
+    assert flat[0] == 35_000 * 20.0 / 12
+
+
+def test_certificate_price_points_drive_price() -> None:
+    periods = 24
+    series = _certificate(
+        CertificateStream(price_eur_per_unit=10.0, eligible_fraction=1.0, price_points=[8.0, 12.0]),
+        [1000.0] * periods,
+        periods,
+        ppy=12,
+    )
+    assert series[0] == 1000.0 * 8.0
+    assert series[12] == 1000.0 * 12.0
+
+
+def test_rental_price_points_drive_price_occupancy_kept() -> None:
+    ppy = 12
+    periods = 24
+    series = _rental(
+        RentalStream(
+            price_per_unit_period=99.0,
+            occupancy_rate=0.9,
+            escalation_pct_yr=0.05,
+            price_points=[100.0, 120.0],
+        ),
+        capacity_mw=10.0,
+        periods=periods,
+        ppy=ppy,
+    )
+    # occupancy (volume) still applies; price from curve, no escalation.
+    assert series[0] == 100.0 * 10.0 * 0.9
+    assert series[12] == 120.0 * 10.0 * 0.9
+
+
+def test_sla_price_points_drive_price() -> None:
+    ppy = 12
+    periods = 24
+    prod_out = {"capacity_mw_it": 5.0}
+    series = _sla(
+        SLAStream(price_per_mw_month=99.0, price_points=[1000.0, 1500.0]),
+        prod_out,
+        capacity_mw=5.0,
+        periods=periods,
+        ppy=ppy,
+    )
+    assert series[0] == 1000.0 * 5.0
+    assert series[12] == 1500.0 * 5.0
