@@ -212,12 +212,14 @@ def _normalize_run(result: dict[str, Any]) -> dict[str, float]:
 def portfolio(ids: str | None = None, lifecycle: str | None = None) -> dict[str, Any]:
     """Aggregate saved (non-deleted) assets by re-running each one fresh, so
     valuations reflect current inputs. Optional ?ids=id1,id2 limits the set.
-    Assets that fail to run are skipped (not fatal)."""
+    Assets that fail to run are reported in `skipped` (not silently dropped,
+    not fatal) so a broken asset stays visible (FIX 4)."""
     wanted: set[str] | None = None
     if ids:
         wanted = {i.strip() for i in ids.split(",") if i.strip()}
 
     assets: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
     totals = {"npv": 0.0, "capex": 0.0, "revenue_y1": 0.0, "count": 0, "irr_weighted": 0.0}
     _irr_capex_sum = 0.0
     for s in _store().list(lifecycle=lifecycle):
@@ -229,7 +231,10 @@ def portfolio(ids: str | None = None, lifecycle: str | None = None) -> dict[str,
         try:
             result = _run_model(model_id, overrides)
             metrics = _normalize_run(result)
-        except Exception:  # noqa: BLE001 — skip assets that fail to run, don't 500
+        except Exception as exc:  # noqa: BLE001 — surface failures, don't 500
+            skipped.append(
+                {"id": s.id, "name": s.name, "model_id": model_id, "error": str(exc)}
+            )
             continue
         assets.append(
             {
@@ -252,4 +257,4 @@ def portfolio(ids: str | None = None, lifecycle: str | None = None) -> dict[str,
     if totals["capex"]:
         totals["irr_weighted"] = round(_irr_capex_sum / totals["capex"], 4)
 
-    return {"assets": assets, "totals": totals}
+    return {"assets": assets, "totals": totals, "skipped": skipped}
