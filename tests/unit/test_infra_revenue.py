@@ -165,3 +165,32 @@ def test_rental_stream():
     prod = {"production_mwh": [0.0] * 12, "capacity_mw": 10}
     out = compute_revenue(streams, prod, periods=12, periods_per_year=12)
     assert out["total_revenue"][0] == pytest.approx(47500)
+
+
+def test_bess_price_profile_reshapes_arbitrage_revenue():
+    # P2-4: a BESS price_profile reshapes the intra-year arbitrage spread.
+    from asset_finance_modeler.assets.infrastructure.engines.production import (
+        compute_production,
+    )
+    from asset_finance_modeler.assets.infrastructure.schema import (
+        ArbitrageStream,
+        BESSProduction,
+    )
+
+    deg = [1.0] * 12
+    profile = [0.5, 1.5] * 6  # mean 1.0
+    base_cfg = BESSProduction(power_mw=20, duration_hours=4, cycles_per_day=1.5)
+    shaped_cfg = BESSProduction(
+        power_mw=20, duration_hours=4, cycles_per_day=1.5, price_profile=profile
+    )
+    arb = [ArbitrageStream(avg_spread_eur_mwh=40)]
+
+    base_out = compute_production(base_cfg, deg, 12, 12)
+    shaped_out = compute_production(shaped_cfg, deg, 12, 12)
+    base_rev = compute_revenue(arb, base_out, 12, 12)["total_revenue"]
+    shaped_rev = compute_revenue(arb, shaped_out, 12, 12)["total_revenue"]
+
+    # Period 0 down (×0.5), period 1 up (×1.5); annual total preserved.
+    assert shaped_rev[0] < base_rev[0]
+    assert shaped_rev[1] > base_rev[1]
+    assert sum(shaped_rev) == pytest.approx(sum(base_rev), rel=1e-9)
