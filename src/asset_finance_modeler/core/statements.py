@@ -139,17 +139,21 @@ class BalanceBuilder:
     ap_balance: list[float]
     equity_initial: float
     dta_balance: list[float] | None = None
+    dsra_balance: list[float] | None = None
 
     def build(self) -> dict[str, list[float]]:
         n = len(self.cash)
+        # Restricted cash (DSRA, P2-1) is an asset held alongside free cash.
+        dsra = self.dsra_balance if self.dsra_balance is not None else [0.0] * n
         if self.dta_balance is not None:
             total_assets = [
-                self.cash[t] + self.ar_balance[t] + self.fixed_assets_net[t] + self.dta_balance[t]
+                self.cash[t] + self.ar_balance[t] + self.fixed_assets_net[t]
+                + self.dta_balance[t] + dsra[t]
                 for t in range(n)
             ]
         else:
             total_assets = [
-                self.cash[t] + self.ar_balance[t] + self.fixed_assets_net[t]
+                self.cash[t] + self.ar_balance[t] + self.fixed_assets_net[t] + dsra[t]
                 for t in range(n)
             ]
         total_liabilities = [self.debt_outstanding[t] + self.ap_balance[t] for t in range(n)]
@@ -163,6 +167,7 @@ class BalanceBuilder:
             "ap": list(self.ap_balance),
             "total_liabilities": total_liabilities,
             "equity": equity,
+            "dsra": list(dsra),
         }
         if self.dta_balance is not None:
             result["dta"] = list(self.dta_balance)

@@ -32,6 +32,7 @@ from asset_finance_modeler.core.degradation import (
 from asset_finance_modeler.core.drivers import AmortizationSchedule
 from asset_finance_modeler.core.financing import (
     DebtEngine,
+    compute_dsra,
     compute_waterfall_dscr,
     size_debt,
 )
@@ -261,6 +262,28 @@ class InfrastructureModel:
             mezz_ds,
         ) = self._compute_debt(pnl["ebitda"], cap, n, ppy, cfg, cod)
 
+        # 8b-bis. Cash sweep (P2-2): when enabled, excess operating cash above the
+        #         trigger DSCR prepays senior debt, accelerating the paydown and
+        #         cutting future interest. Recomputes debt_interest / principal /
+        #         balance in place (drawdowns untouched). Disabled → no change.
+        total_ds = [senior_ds[t] + mezz_ds[t] + sub_ds[t] for t in range(n)]
+        if cfg.financing.cash_sweep.enabled:
+            debt_interest, debt_principal, debt_balance = self._apply_cash_sweep(
+                cfads=pnl["ebitda"],
+                total_debt_service=total_ds,
+                interest=debt_interest,
+                principal=debt_principal,
+                balance=debt_balance,
+                drawdowns=debt_drawdowns,
+                sweep=cfg.financing.cash_sweep,
+                ppy=ppy,
+                senior_rate=(
+                    cfg.financing.senior.interest_rate
+                    if cfg.financing.senior is not None
+                    else 0.0
+                ),
+            )
+
         # 8c. Rebuild P&L with actual interest
         pnl = self._build_pnl(
             total_revenue=total_revenue,
@@ -269,6 +292,27 @@ class InfrastructureModel:
             interest_expense=debt_interest,
             taxes=cfg.taxes,
         )
+
+        # 8d. DSRA (P2-1): a debt service reserve account funded to dsra_months of
+        #     forward debt service. The reserve is RESTRICTED cash — funding it
+        #     (when the target rises) is a cash use; releasing it (as debt winds
+        #     down) is a cash source. We model the per-period change in the
+        #     reserve as a financing outflow/inflow so free cash reflects the
+        #     tied-up reserve, and hold the reserve balance on the balance sheet.
+        # ``total_ds`` is the scheduled (pre-sweep) debt service: it defines the
+        # forward reserve requirement regardless of sweep prepayments.
+        dsra_balance = compute_dsra(
+            debt_service=total_ds,
+            dsra_months=cfg.financing.reserves.dsra_months,
+            periods_per_year=ppy,
+        )
+        # Change in reserve per period: +funding (cash out), -release (cash in).
+        dsra_funding = [
+            dsra_balance[t] - (dsra_balance[t - 1] if t > 0 else 0.0)
+            for t in range(n)
+        ]
+        # A reserve build is a financing USE of cash → negative funding flow.
+        funding_flows = [-dsra_funding[t] for t in range(n)]
 
         # 9. Cash Flow
         cf = CashFlowBuilder(
@@ -279,7 +323,7 @@ class InfrastructureModel:
             dso_days=0,
             dpo_days=0,
             capex=cap["capex_spend"],
-            funding_drawdowns=[0.0] * n,
+            funding_drawdowns=funding_flows,
             debt_drawdowns=debt_drawdowns,
             debt_principal_repaid=debt_principal,
             origination_fees=[0.0] * n,
@@ -297,6 +341,7 @@ class InfrastructureModel:
             ap_balance=cf["ap_balance"],
             equity_initial=cfg.meta.initial_cash,
             dta_balance=dta_balance,
+            dsra_balance=dsra_balance,
         ).build()
 
         # 11. Debt metrics
@@ -385,6 +430,64 @@ class InfrastructureModel:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _apply_cash_sweep(
+        cfads: list[float],
+        total_debt_service: list[float],
+        interest: list[float],
+        principal: list[float],
+        balance: list[float],
+        drawdowns: list[float],
+        sweep,
+        ppy: int,
+        senior_rate: float,
+    ) -> tuple[list[float], list[float], list[float]]:
+        """Sweep excess operating cash to prepay debt (P2-2).
+
+        Per period, the available excess cash is CFADS net of the scheduled debt
+        service. When the period DSCR (CFADS / scheduled service) clears the
+        ``trigger_dscr``, ``sweep_pct`` of that excess is applied as EXTRA
+        principal prepayment, reducing the outstanding balance. Interest in
+        subsequent periods is recomputed on the (lower) outstanding balance at
+        the senior period rate, so the sweep both accelerates paydown and cuts
+        total interest. Drawdowns are untouched.
+
+        This is an aggregate-tranche approximation (one blended balance at the
+        senior rate); it is conservative and disabled by default, so it never
+        affects a config that does not opt in.
+        """
+        n = len(balance)
+        period_rate = senior_rate / ppy
+        new_interest = list(interest)
+        new_principal = list(principal)
+        new_balance = list(balance)
+
+        extra_paid_cum = 0.0  # cumulative extra principal already swept
+        for t in range(n):
+            # Outstanding at start of t, net of prior sweeps.
+            begin_bal = (balance[t - 1] if t > 0 else 0.0) - extra_paid_cum
+            begin_bal = max(begin_bal, 0.0)
+            # Recompute interest on the reduced balance (scheduled interest was
+            # on the original, higher balance).
+            new_interest[t] = begin_bal * period_rate
+
+            scheduled_ds = total_debt_service[t]
+            dscr = cfads[t] / scheduled_ds if scheduled_ds > 0 else float("inf")
+            # Balance after the scheduled principal repayment this period.
+            sched_balance = max(balance[t] - extra_paid_cum, 0.0)
+
+            sweep_amt = 0.0
+            if dscr >= sweep.trigger_dscr and sched_balance > 0:
+                excess = cfads[t] - scheduled_ds
+                if excess > 0:
+                    sweep_amt = min(sweep.sweep_pct * excess, sched_balance)
+
+            extra_paid_cum += sweep_amt
+            new_principal[t] = principal[t] + sweep_amt
+            new_balance[t] = max(balance[t] - extra_paid_cum, 0.0)
+
+        return new_interest, new_principal, new_balance
 
     @staticmethod
     def _depreciate_capex_events(cap: dict, events, n: int, ppy: int) -> None:

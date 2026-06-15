@@ -515,3 +515,78 @@ def test_no_mezzanine_unchanged():
     # Zero-config (no mezzanine) leaves the KPI at its default.
     base = InfrastructureModel(_solar_with_senior_mezz(with_mezz=False)).run()
     assert base.project_kpis.dscr_mezzanine_min == 0.0
+
+
+# ---------------------------------------------------------------------------
+# P2-1: DSRA (debt service reserve account) is funded and held as cash
+# ---------------------------------------------------------------------------
+
+
+def _solar_with_debt_for_reserves(periods: int = 120, dsra_months: int = 0):
+    from asset_finance_modeler.assets.infrastructure.schema import ReservesConfig
+
+    cfg = _solar_config(periods)
+    cfg.timeline = PermitsTimeline()  # no deferral — isolate the reserve change
+    cfg.financing = ProjectFinanceConfig(
+        senior=SeniorDebtConfig(
+            tenor_years=10, interest_rate=0.045, dscr_target=1.30, auto_size=True
+        ),
+        reserves=ReservesConfig(dsra_months=dsra_months),
+        max_leverage=0.80,
+    )
+    return cfg
+
+
+def test_dsra_funds_a_reserve_and_changes_cash():
+    base = InfrastructureModel(_solar_with_debt_for_reserves(dsra_months=0)).run()
+    dsra = InfrastructureModel(_solar_with_debt_for_reserves(dsra_months=6)).run()
+    # A DSRA is held as restricted cash on the balance sheet (non-zero early).
+    assert "dsra" in dsra.balance
+    assert max(dsra.balance["dsra"]) > 0
+    assert max(base.balance.get("dsra", [0.0])) == 0.0
+    # Funding the reserve at COD consumes cash → free cash differs vs no-DSRA.
+    assert dsra.cashflow["cash"] != base.cashflow["cash"]
+
+
+def test_dsra_zero_months_unchanged():
+    base = InfrastructureModel(_solar_with_debt_for_reserves(dsra_months=0)).run()
+    # Default (no DSRA) is unchanged: the reserve column is all zero.
+    assert all(v == 0.0 for v in base.balance.get("dsra", [0.0]))
+
+
+# ---------------------------------------------------------------------------
+# P2-2: cash sweep prepays debt with excess cash
+# ---------------------------------------------------------------------------
+
+
+def _solar_with_sweep(periods: int = 120, sweep_enabled: bool = False):
+    from asset_finance_modeler.assets.infrastructure.schema import CashSweepConfig
+
+    cfg = _solar_config(periods)
+    cfg.timeline = PermitsTimeline()
+    cfg.financing = ProjectFinanceConfig(
+        senior=SeniorDebtConfig(
+            tenor_years=15, interest_rate=0.045, dscr_target=1.30, auto_size=True
+        ),
+        cash_sweep=CashSweepConfig(
+            enabled=sweep_enabled, trigger_dscr=1.20, sweep_pct=0.50
+        ),
+        max_leverage=0.80,
+    )
+    return cfg
+
+
+def test_cash_sweep_prepays_debt_faster():
+    base = InfrastructureModel(_solar_with_sweep(sweep_enabled=False)).run()
+    swept = InfrastructureModel(_solar_with_sweep(sweep_enabled=True)).run()
+    # With the sweep on, the debt balance pays down faster (lower at mid-life)
+    # and less interest is paid over the life.
+    mid = len(base.balance["debt"]) // 2
+    assert swept.balance["debt"][mid] < base.balance["debt"][mid]
+    assert sum(swept.pnl["interest_expense"]) < sum(base.pnl["interest_expense"])
+
+
+def test_cash_sweep_disabled_unchanged():
+    base = InfrastructureModel(_solar_with_sweep(sweep_enabled=False)).run()
+    again = InfrastructureModel(_solar_with_sweep(sweep_enabled=False)).run()
+    assert base.balance["debt"] == again.balance["debt"]
