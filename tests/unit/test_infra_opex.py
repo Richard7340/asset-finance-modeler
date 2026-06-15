@@ -1,7 +1,12 @@
 import pytest
 
 from asset_finance_modeler.assets.infrastructure.engines.opex import compute_opex
-from asset_finance_modeler.assets.infrastructure.schema import InfraOPEXConfig, MaintenanceEvent
+from asset_finance_modeler.assets.infrastructure.schema import (
+    BESSProduction,
+    H2Production,
+    InfraOPEXConfig,
+    MaintenanceEvent,
+)
 
 
 def test_fixed_om():
@@ -187,6 +192,54 @@ def test_zero_capex_zero_insurance():
     assert all(v == 0.0 for v in out["insurance"])
 
 
+def test_h2_electricity_cost_in_opex():
+    """P0-2: green H2 must pay for the electricity it consumes.
+
+    production_mwh for H2 is electricity consumed. With electricity_cost_eur_mwh
+    the OPEX must include electricity = cost × MWh consumed. It was ignored.
+    """
+    cfg = InfraOPEXConfig(opex_escalation_pct_yr=0)
+    prod = H2Production(electrolyzer_mw=20, electricity_cost_eur_mwh=40.0)
+    consumed = [13_870.0] * 12  # ~ 20 MW × 0.95 × 730 h/month
+    out = compute_opex(
+        cfg,
+        capacity_mw=20,
+        total_capex=0,
+        production_mwh=consumed,
+        periods=12,
+        periods_per_year=12,
+        production_config=prod,
+    )
+    assert out["electricity"][0] == pytest.approx(40.0 * 13_870.0)
+    assert out["total_opex"][0] == pytest.approx(out["total_opex"][0])
+    assert out["total_opex"][0] >= out["electricity"][0]
+
+
+def test_h2_higher_electricity_cost_raises_opex():
+    """P0-2: raising the electricity price raises total OPEX."""
+    cfg = InfraOPEXConfig(opex_escalation_pct_yr=0)
+    consumed = [13_870.0] * 12
+    cheap = compute_opex(
+        cfg, 20, 0, consumed, 12, 12,
+        production_config=H2Production(electrolyzer_mw=20, electricity_cost_eur_mwh=30.0),
+    )
+    pricey = compute_opex(
+        cfg, 20, 0, consumed, 12, 12,
+        production_config=H2Production(electrolyzer_mw=20, electricity_cost_eur_mwh=80.0),
+    )
+    assert pricey["total_opex"][0] > cheap["total_opex"][0]
+
+
+def test_non_h2_has_no_electricity_cost():
+    """P0-2: technologies without an electricity_cost field add zero electricity."""
+    cfg = InfraOPEXConfig()
+    out = compute_opex(
+        cfg, 20, 0, [5000.0] * 12, 12, 12,
+        production_config=BESSProduction(power_mw=20),
+    )
+    assert all(v == 0.0 for v in out["electricity"])
+
+
 def test_output_keys_present():
     cfg = InfraOPEXConfig()
     out = compute_opex(
@@ -197,6 +250,6 @@ def test_output_keys_present():
         periods=12,
         periods_per_year=12,
     )
-    for key in ("fixed_om", "variable_om", "insurance", "land", "management", "other", "maintenance", "total_opex"):
+    for key in ("fixed_om", "variable_om", "insurance", "land", "management", "other", "maintenance", "electricity", "total_opex"):
         assert key in out
         assert len(out[key]) == 12

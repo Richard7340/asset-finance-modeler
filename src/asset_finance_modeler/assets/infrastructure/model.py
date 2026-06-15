@@ -115,6 +115,7 @@ class InfrastructureModel:
             prod["production_mwh"],
             n,
             ppy,
+            production_config=cfg.production,
         )
 
         # 6. Incentives

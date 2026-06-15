@@ -11,6 +11,8 @@ compute_opex(config, capacity_mw, total_capex, production_mwh, periods, periods_
 
 from __future__ import annotations
 
+from typing import Any
+
 from asset_finance_modeler.assets.infrastructure.schema import InfraOPEXConfig
 
 __all__ = ["compute_opex"]
@@ -23,6 +25,7 @@ def compute_opex(
     production_mwh: list[float],
     periods: int,
     periods_per_year: int,
+    production_config: Any | None = None,
 ) -> dict[str, list[float]]:
     """Compute per-period OPEX broken down by category.
 
@@ -125,6 +128,16 @@ def compute_opex(
             maintenance[ep] += event.cost
 
     # ------------------------------------------------------------------
+    # Electricity cost  — variable, driven by energy consumed.
+    # Technologies whose production config exposes ``electricity_cost_eur_mwh``
+    # (notably green hydrogen, whose ``production_mwh`` is the electricity it
+    # *consumes*) pay for that energy. Was previously ignored, giving H2 an
+    # unrealistically high IRR. No escalation here — price is a real input.
+    # ------------------------------------------------------------------
+    elec_cost = float(getattr(production_config, "electricity_cost_eur_mwh", 0.0) or 0.0)
+    electricity = [elec_cost * production_mwh[t] for t in range(periods)]
+
+    # ------------------------------------------------------------------
     # Total OPEX
     # ------------------------------------------------------------------
     total_opex = [
@@ -135,6 +148,7 @@ def compute_opex(
         + management[t]
         + other[t]
         + maintenance[t]
+        + electricity[t]
         for t in range(periods)
     ]
 
@@ -146,5 +160,6 @@ def compute_opex(
         "management": management,
         "other": other,
         "maintenance": maintenance,
+        "electricity": electricity,
         "total_opex": total_opex,
     }
