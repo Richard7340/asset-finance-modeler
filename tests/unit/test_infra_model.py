@@ -462,3 +462,56 @@ def test_preset_datacenter_loads_and_runs():
     result = InfrastructureModel(cfg).run()
     assert isinstance(result, FinancialOutput)
     assert result.summary["total_capex"] > 0
+
+
+# ---------------------------------------------------------------------------
+# P2-3: mezzanine tranche wires into the debt stack + waterfall
+# ---------------------------------------------------------------------------
+
+
+def _solar_with_senior_mezz(periods: int = 120, with_mezz: bool = False):
+    from asset_finance_modeler.assets.infrastructure.schema import MezzanineDebtConfig
+
+    cfg = _solar_config(periods)
+    cfg.timeline = PermitsTimeline()  # no deferral — isolate the debt change
+    mezz = (
+        MezzanineDebtConfig(tenor_years=8, interest_rate=0.08, dscr_target=1.10)
+        if with_mezz
+        else None
+    )
+    cfg.financing = ProjectFinanceConfig(
+        senior=SeniorDebtConfig(
+            tenor_years=12, interest_rate=0.045, dscr_target=1.30, auto_size=True
+        ),
+        mezzanine=mezz,
+        max_leverage=0.80,
+    )
+    return cfg
+
+
+def test_mezzanine_increases_total_debt_drawn():
+    # Adding a mezzanine tranche on top of senior raises total debt drawn at
+    # close (mezz sits between senior and sub) and reduces equity outlay.
+    base = InfrastructureModel(_solar_with_senior_mezz(with_mezz=False)).run()
+    mezz = InfrastructureModel(_solar_with_senior_mezz(with_mezz=True)).run()
+    base_drawn = base.cashflow["cff"][0]
+    mezz_drawn = mezz.cashflow["cff"][0]
+    assert mezz_drawn > base_drawn  # extra mezzanine principal drawn at close
+    # Total debt balance at COD is higher with the mezzanine.
+    assert mezz.balance["debt"][0] > base.balance["debt"][0]
+
+
+def test_mezzanine_dscr_is_net_of_senior():
+    # The mezzanine DSCR is computed net of senior debt service (waterfall) and
+    # surfaces on the KPIs.
+    mezz = InfrastructureModel(_solar_with_senior_mezz(with_mezz=True)).run()
+    k = mezz.project_kpis
+    assert k.dscr_mezzanine_min > 0
+    # Senior is the most senior; its DSCR should exceed the (subordinate) mezz.
+    assert k.dscr_senior_min >= k.dscr_mezzanine_min
+
+
+def test_no_mezzanine_unchanged():
+    # Zero-config (no mezzanine) leaves the KPI at its default.
+    base = InfrastructureModel(_solar_with_senior_mezz(with_mezz=False)).run()
+    assert base.project_kpis.dscr_mezzanine_min == 0.0
