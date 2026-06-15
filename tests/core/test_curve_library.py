@@ -15,6 +15,24 @@ def test_load_curve_spread_da_es():
     assert c.at(0) > 0
 
 
+def test_p1_consultant_curves_present():
+    names = list_curves()
+    for n in (
+        "wind_capture_es",
+        "h2_offtake_eu",
+        "biomethane_offtake_eu",
+        "ppa_solar_es",
+    ):
+        assert n in names, f"missing curve {n}"
+    # Each has a non-empty source label and 30 usable values.
+    for n in ("wind_capture_es", "h2_offtake_eu", "biomethane_offtake_eu", "ppa_solar_es"):
+        c = load_curve(n)
+        assert c.source != ""
+        vals = c.to_list(30)
+        assert len(vals) == 30
+        assert all(v > 0 for v in vals)
+
+
 def test_load_unknown_curve_raises():
     with pytest.raises(KeyError):
         load_curve("does_not_exist_xyz")
