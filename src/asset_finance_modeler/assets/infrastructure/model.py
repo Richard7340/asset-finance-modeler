@@ -208,6 +208,12 @@ class InfrastructureModel:
                 for e in cfg.capex_events
                 if 0 <= e.year * ppy < n
             )
+            # 4c. Depreciate each event from its event period. Straight-line over
+            #     the REMAINING periods to horizon end, so the event is fully
+            #     expensed within the model and total book depreciation
+            #     reconciles to total_capex (P1-5). Fixed-assets-net steps up by
+            #     the event amount and then declines with the added depreciation.
+            self._depreciate_capex_events(cap, cfg.capex_events, n, ppy)
 
         # 5. OPEX
         opx = compute_opex(
@@ -377,6 +383,36 @@ class InfrastructureModel:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _depreciate_capex_events(cap: dict, events, n: int, ppy: int) -> None:
+        """Depreciate each capex event from its event period (mutates ``cap``).
+
+        Each event is straight-lined over the periods remaining from its event
+        period to the horizon end, so it is fully expensed within the model and
+        total book/tax depreciation reconciles to total_capex (P1-5). The book
+        value (fixed_assets_net) steps up by the event amount at the event period
+        and then declines with the added depreciation.
+        """
+        book = cap["book_depreciation"]
+        tax = cap["tax_depreciation"]
+        fan = cap["fixed_assets_net"]
+        for e in events:
+            start = e.year * ppy
+            if start < 0 or start >= n:
+                continue
+            remaining = n - start
+            per_period = e.amount / remaining
+            book_add = [0.0] * n
+            for t in range(start, n):
+                book[t] += per_period
+                tax[t] += per_period
+                book_add[t] = per_period
+            # Book value: + event amount at start, then -cumulative added depr.
+            cumulative = 0.0
+            for t in range(start, n):
+                cumulative += book_add[t]
+                fan[t] += max(e.amount - cumulative, 0.0)
 
     @staticmethod
     def _zero_production_before(prod: dict, cod: int, n: int) -> dict:

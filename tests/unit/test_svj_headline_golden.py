@@ -15,6 +15,16 @@ Post-fix actuals (after FIX 1 DoD/RTE + FIX 2 phased-curve off-by-one):
   revenue_y1  = 851,952
   dscr_sub_min= 0.94
   moic_sub    = 1.368
+
+P1 UPDATE (timeline + capex-event depreciation):
+  npv_fv      = -924,669   (P1-4: FV revenue deferred 29mo to COD)
+  npv_bess    = +1,842,952 (P1-4 deferral 11mo + P1-5 repowering tax shield)
+  npv_hybrid  = +918,282
+  revenue_y1  = 554,418    (P1-4: calendar yr1 is mostly construction — FV=0,
+                            BESS partial; first OPERATING year is higher)
+  dscr_sub_min= 0.48       (P1-4: BESS COD 11mo defers cashflow vs the 7yr sub
+                            tenor that still starts at close — sub DSCR drops)
+  moic_sub    = 1.368      (unchanged — sub debt service is timeline-independent)
 """
 
 from asset_finance_modeler.core.financing import compute_waterfall_dscr
@@ -25,11 +35,12 @@ from asset_finance_modeler.deals.svj import run_svj
 def test_svj_headline_golden() -> None:
     """Pin the exact post-fix headline KPIs (±1 EUR / tight on ratios)."""
     k = run_svj({})["kpis"]
-    assert abs(k["npv_fv"] - (-716_461)) <= 1
-    assert abs(k["npv_bess"] - 1_673_210) <= 1
-    assert abs(k["npv_hybrid"] - 956_749) <= 1
-    assert abs(k["revenue_y1"] - 851_952) <= 1
-    assert abs(k["dscr_sub_min"] - 0.94) <= 0.01
+    # P1 GOLDEN (timeline deferral P1-4 + capex-event depreciation P1-5).
+    assert abs(k["npv_fv"] - (-924_669)) <= 1
+    assert abs(k["npv_bess"] - 1_842_952) <= 1
+    assert abs(k["npv_hybrid"] - 918_282) <= 1
+    assert abs(k["revenue_y1"] - 554_418) <= 1
+    assert abs(k["dscr_sub_min"] - 0.48) <= 0.01
     assert abs(k["moic_sub"] - 1.368) <= 0.001
     assert abs(k["total_capex"] - 7_269_533) <= 1
 
@@ -40,8 +51,10 @@ def test_bridge_is_sum_of_unlevered_legs_no_terminal_value() -> None:
     r = run_svj({})
     b = r["bridge"]
     k = r["kpis"]
-    # Bridge == sum of legs.
-    assert b["hybrid"] == b["fv"] + b["bess"]
+    # Bridge == sum of legs (±1 EUR: hybrid is round(unrounded_fv +
+    # unrounded_bess) while the legs are rounded independently, so summing the
+    # rounded legs can differ by a euro — additive, no-synergy invariant holds).
+    assert abs(b["hybrid"] - (b["fv"] + b["bess"])) <= 1
     # Bridge legs == headline NPVs (same unlevered convention).
     assert b["fv"] == k["npv_fv"]
     assert b["bess"] == k["npv_bess"]
