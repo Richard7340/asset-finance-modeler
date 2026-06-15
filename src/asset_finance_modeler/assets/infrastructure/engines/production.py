@@ -28,6 +28,30 @@ __all__ = ["compute_production"]
 _ENGINES: dict[type, Any] = {}
 
 
+def _profile_multipliers(
+    profile: list[float] | None,
+    periods: int,
+    periods_per_year: int,
+) -> list[float]:
+    """Per-period multipliers from a seasonal/annual profile (P2-4).
+
+    A profile is a per-period-within-year shape (e.g. 12 monthly factors). It is
+    NORMALISED to mean 1.0 so it only reshapes the intra-year distribution — the
+    annual total is preserved — and TILED across the horizon so the same shape
+    repeats every year. A profile shorter/longer than ``periods_per_year`` is
+    used cyclically by ``t % len(profile)``. ``None`` (the default) → all 1.0,
+    i.e. unchanged legacy behaviour.
+    """
+    if not profile:
+        return [1.0] * periods
+    mean = sum(profile) / len(profile)
+    if mean == 0:
+        return [1.0] * periods
+    norm = [p / mean for p in profile]
+    m = len(norm)
+    return [norm[t % m] for t in range(periods)]
+
+
 # ---------------------------------------------------------------------------
 # Public dispatcher
 # ---------------------------------------------------------------------------
@@ -91,7 +115,12 @@ def _solar(
     )
     base_per_period = annual_mwh / periods_per_year
 
-    production_mwh = [base_per_period * degradation[t] for t in range(periods)]
+    # P2-4: a seasonal irradiation profile reshapes the intra-year distribution
+    # (normalised to mean 1.0 so the annual total is preserved).
+    prof = _profile_multipliers(cfg.irradiation_profile, periods, periods_per_year)
+    production_mwh = [
+        base_per_period * degradation[t] * prof[t] for t in range(periods)
+    ]
 
     return {
         "production_mwh": production_mwh,
@@ -123,7 +152,12 @@ def _wind(
         * hours
     )
 
-    production_mwh = [base_per_period * degradation[t] for t in range(periods)]
+    # P2-4: a seasonal production profile reshapes the intra-year distribution
+    # (normalised to mean 1.0 so the annual total is preserved).
+    prof = _profile_multipliers(cfg.production_profile, periods, periods_per_year)
+    production_mwh = [
+        base_per_period * degradation[t] * prof[t] for t in range(periods)
+    ]
 
     return {
         "production_mwh": production_mwh,
@@ -160,7 +194,7 @@ def _bess(
 
     production_mwh = [base_per_period * degradation[t] for t in range(periods)]
 
-    return {
+    out = {
         "production_mwh": production_mwh,
         "capacity_mw": cfg.power_mw,
         "energy_capacity_mwh": energy_cap_mwh,
@@ -169,6 +203,17 @@ def _bess(
         "depth_of_discharge": cfg.depth_of_discharge,
         "round_trip_efficiency": cfg.round_trip_efficiency,
     }
+    # P2-4: surface a per-period price-shape multiplier so the arbitrage revenue
+    # engine reshapes the intra-year spread (normalised to mean 1.0 → preserves
+    # the annual revenue total). Only emitted when a profile is configured — when
+    # absent the key is omitted entirely so the production dict (and anything
+    # iterating its series, e.g. the construction-window zeroing) is byte-
+    # identical to legacy behaviour.
+    if cfg.price_profile:
+        out["price_profile_mult"] = _profile_multipliers(
+            cfg.price_profile, periods, periods_per_year
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------

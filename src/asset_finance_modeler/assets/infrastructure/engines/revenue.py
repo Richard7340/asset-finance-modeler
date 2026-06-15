@@ -258,7 +258,14 @@ def _arbitrage(
     # Constant part of the revenue formula (spread applied per-period below).
     base = energy_cap * dod * rte * cycles * days * cfg.spread_capture_ratio
 
-    return [base * spread_by_year[t // ppy] * degradation[t] for t in range(periods)]
+    # P2-4: intra-year price-shape multiplier (BESS price_profile, normalised to
+    # mean 1.0 so the annual total is preserved). Absent → all 1.0 (unchanged).
+    price_mult = production_output.get("price_profile_mult") or [1.0] * periods
+
+    return [
+        base * spread_by_year[t // ppy] * degradation[t] * price_mult[t]
+        for t in range(periods)
+    ]
 
 
 # ---------------------------------------------------------------------------

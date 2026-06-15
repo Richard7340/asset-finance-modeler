@@ -141,3 +141,50 @@ def test_generic_degradation_applied():
     deg = [1.0] * 12 + [0.98] * 12
     out = compute_production(cfg, deg, periods=24, periods_per_year=12)
     assert out["production_mwh"][12] < out["production_mwh"][0]
+
+
+# ---------------------------------------------------------------------------
+# P2-4: seasonal production / irradiation / price profiles reshape per period
+# ---------------------------------------------------------------------------
+
+
+def test_solar_irradiation_profile_reshapes_but_preserves_annual_total():
+    # A 12-month seasonal shape (sums/averages such that the YEAR total is
+    # preserved): higher in summer, lower in winter.
+    profile = [0.5, 0.6, 0.9, 1.1, 1.3, 1.5, 1.5, 1.4, 1.1, 0.9, 0.6, 0.6]
+    base = SolarProduction(capacity_mwp=50)
+    shaped = SolarProduction(capacity_mwp=50, irradiation_profile=profile)
+    deg = [1.0] * 12
+    out_base = compute_production(base, deg, periods=12, periods_per_year=12)
+    out_shaped = compute_production(shaped, deg, periods=12, periods_per_year=12)
+    # Per-period shape changed: summer (period 5) up, winter (period 0) down.
+    assert out_shaped["production_mwh"][0] < out_base["production_mwh"][0]
+    assert out_shaped["production_mwh"][5] > out_base["production_mwh"][5]
+    # Annual total preserved (profile is normalised to mean 1.0).
+    assert sum(out_shaped["production_mwh"]) == pytest.approx(
+        sum(out_base["production_mwh"]), rel=1e-9
+    )
+
+
+def test_wind_production_profile_reshapes():
+    profile = [1.4, 1.3, 1.2, 1.0, 0.8, 0.6, 0.6, 0.7, 0.9, 1.1, 1.2, 1.2]
+    base = WindProduction(capacity_mw=30)
+    shaped = WindProduction(capacity_mw=30, production_profile=profile)
+    deg = [1.0] * 12
+    out_base = compute_production(base, deg, periods=12, periods_per_year=12)
+    out_shaped = compute_production(shaped, deg, periods=12, periods_per_year=12)
+    assert out_shaped["production_mwh"][0] > out_base["production_mwh"][0]
+    assert sum(out_shaped["production_mwh"]) == pytest.approx(
+        sum(out_base["production_mwh"]), rel=1e-9
+    )
+
+
+def test_solar_profile_tiles_across_years():
+    profile = [0.5, 1.5] * 6  # 12-month, mean 1.0
+    cfg = SolarProduction(capacity_mwp=10, irradiation_profile=profile)
+    deg = [1.0] * 24
+    out = compute_production(cfg, deg, periods=24, periods_per_year=12)
+    # The same seasonal shape repeats in year 2.
+    assert out["production_mwh"][0] == pytest.approx(out["production_mwh"][12])
+    assert out["production_mwh"][1] == pytest.approx(out["production_mwh"][13])
+    assert out["production_mwh"][1] > out["production_mwh"][0]
