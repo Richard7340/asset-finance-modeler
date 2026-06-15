@@ -209,7 +209,7 @@ def _normalize_run(result: dict[str, Any]) -> dict[str, float]:
 
 
 @portfolio_router.get("")
-def portfolio(ids: str | None = None) -> dict[str, Any]:
+def portfolio(ids: str | None = None, lifecycle: str | None = None) -> dict[str, Any]:
     """Aggregate saved (non-deleted) assets by re-running each one fresh, so
     valuations reflect current inputs. Optional ?ids=id1,id2 limits the set.
     Assets that fail to run are skipped (not fatal)."""
@@ -220,7 +220,7 @@ def portfolio(ids: str | None = None) -> dict[str, Any]:
     assets: list[dict[str, Any]] = []
     totals = {"npv": 0.0, "capex": 0.0, "revenue_y1": 0.0, "count": 0, "irr_weighted": 0.0}
     _irr_capex_sum = 0.0
-    for s in _store().list():
+    for s in _store().list(lifecycle=lifecycle):
         if wanted is not None and s.id not in wanted:
             continue
         snapshot = s.inputs_snapshot or {}
