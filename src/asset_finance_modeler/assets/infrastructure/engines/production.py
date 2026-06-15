@@ -202,6 +202,10 @@ def _bess(
         # honors them instead of falling back to hardcoded defaults (FIX 1).
         "depth_of_discharge": cfg.depth_of_discharge,
         "round_trip_efficiency": cfg.round_trip_efficiency,
+        # P3-5: cycles_per_day is owned by BESS production (single source of
+        # truth). The arbitrage revenue stream reads THIS value instead of its
+        # own field, so the two can never silently diverge.
+        "cycles_per_day": cfg.cycles_per_day,
     }
     # P2-4: surface a per-period price-shape multiplier so the arbitrage revenue
     # engine reshapes the intra-year spread (normalised to mean 1.0 → preserves
