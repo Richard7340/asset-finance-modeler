@@ -242,7 +242,11 @@ def _arbitrage(
     # Default BESS params — use schema defaults if not in production_output
     dod: float = float(production_output.get("depth_of_discharge", 0.90))
     rte: float = float(production_output.get("round_trip_efficiency", 0.88))
-    cycles: float = cfg.cycles_per_day
+    # P3-5: BESS production owns cycles_per_day (single source of truth). When
+    # production provides it, key off that value so the production and arbitrage
+    # cycle counts cannot silently diverge; the stream field is only a fallback
+    # for arbitrage attached to a non-BESS production that doesn't emit cycles.
+    cycles: float = float(production_output.get("cycles_per_day", cfg.cycles_per_day))
     days = 365.0 / ppy
 
     n_years = (periods + ppy - 1) // ppy

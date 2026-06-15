@@ -131,6 +131,34 @@ def test_arbitrage_stream():
     assert out["total_revenue"][0] > 0
 
 
+def test_arbitrage_cycles_single_source_of_truth():
+    """P3-5: BESS production cycles_per_day is the single source of truth.
+
+    The ArbitrageStream's own cycles_per_day must NOT silently override the
+    battery's configured cycles — when BESS production provides cycles, the
+    arbitrage revenue keys off the production value so the two cannot diverge.
+    """
+    from asset_finance_modeler.assets.infrastructure.engines.production import (
+        compute_production,
+    )
+    from asset_finance_modeler.assets.infrastructure.schema import (
+        ArbitrageStream,
+        BESSProduction,
+    )
+
+    deg = [1.0] * 12
+    bess_cfg = BESSProduction(power_mw=20, duration_hours=4, cycles_per_day=0.9)
+    prod = compute_production(bess_cfg, deg, 12, 12)
+
+    # Arbitrage stream left at its default (1.5) — must be ignored in favour of
+    # the production's 0.9, so revenue matches the 0.9 case, not 1.5.
+    arb_default = [ArbitrageStream(avg_spread_eur_mwh=40)]
+    arb_matching = [ArbitrageStream(avg_spread_eur_mwh=40, cycles_per_day=0.9)]
+    rev_default = compute_revenue(arb_default, prod, 12, 12)["total_revenue"][0]
+    rev_matching = compute_revenue(arb_matching, prod, 12, 12)["total_revenue"][0]
+    assert rev_default == pytest.approx(rev_matching)
+
+
 def test_ancillary_stream():
     streams = [AncillaryStream(fcr_eur_mw_yr=25000, afrr_eur_mw_yr=10000)]
     prod = {"production_mwh": [0.0] * 12, "capacity_mw": 20}
