@@ -15,12 +15,12 @@ from dataclasses import dataclass
 
 from asset_finance_modeler.assets.business.engines import (
     opex_series,
-    pnl_rows,
     revenue_series,
 )
 from asset_finance_modeler.assets.business.schema import BusinessModelConfig
 from asset_finance_modeler.core.drivers import AmortizationSchedule
 from asset_finance_modeler.core.financing import size_debt
+from asset_finance_modeler.core.statements import PnLBuilder
 from asset_finance_modeler.core.protocols import FinancialOutput, ProjectKPIs
 from asset_finance_modeler.core.valuation import (
     compute_dcf,
@@ -69,15 +69,19 @@ class BusinessModel:
             rev_y, opex_y, dep_y, years, ppy
         )
 
-        # 4. P&L (annual)
-        rows = pnl_rows(
-            rev_y,
-            cfg.cogs.pct_of_revenue,
-            opex_y,
-            dep_y,
-            int_y,
-            cfg.taxes.corporate_income_tax_rate,
-        )
+        # 4. P&L (annual). Use the core PnLBuilder so tax loss carryforward is
+        #    honored (P0-5) — the previous pnl_rows taxed each year in isolation
+        #    and ignored the taxes.tax_loss_carryforward flag entirely.
+        cogs_y = [r * cfg.cogs.pct_of_revenue for r in rev_y]
+        rows = PnLBuilder(
+            revenue=rev_y,
+            cogs=cogs_y,
+            opex=opex_y,
+            depreciation=dep_y,
+            interest_expense=int_y,
+            corporate_tax_rate=cfg.taxes.corporate_income_tax_rate,
+            carryforward_enabled=cfg.taxes.tax_loss_carryforward,
+        ).build()
 
         # 5. Expand annual rows → per-period (length n), spreading evenly so that
         #    summing each year's ppy periods recovers the annual figure.
