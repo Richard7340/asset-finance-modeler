@@ -761,24 +761,47 @@ class InfrastructureModel:
     ) -> list[float]:
         """Per-period total debt service (interest + principal), padded to n.
 
+        P3-1 — amortization convention: the per-tranche debt service is built on
+        the ANNUAL convention (one amortization row per year) and then spread
+        EVENLY across the ``ppy`` periods of each year. This is the SAME
+        convention as the consolidated/SVJ path
+        (``HybridProject._tranche_debt_service``), so the SAME loan produces the
+        SAME annual debt service in both paths. (Previously this series amortized
+        monthly — periods_per_year=ppy, term=tenor*ppy — which over-counted
+        interest within the year by ~1-3% vs the annual path, an inconsistency.)
+
+        Term/grace/deferral are passed in PERIODS (the caller's convention) and
+        converted to YEARS for the annual schedule. The resulting annual payment
+        is divided by ``ppy`` so the per-period DSCR series keeps its length and
+        the cash-sweep / DSRA consumers see a smooth service profile whose annual
+        sum equals the annual-convention service.
+
         ``deferral_periods`` defers amortization to COD (no service during
         construction; face-value principal — construction interest funded by
         equity/IDC reserve)."""
         series = [0.0] * n
+        # Period -> year conversions (round to the nearest whole year; callers
+        # pass whole-year tenors * ppy, grace/deferral in months).
+        term_years = max(1, round(term_periods / ppy))
+        grace_years = round(grace_periods / ppy)
+        deferral_years = round(deferral_periods / ppy)
         rows = AmortizationSchedule(
             principal=principal,
             annual_rate=annual_rate,
-            term_periods=term_periods,
-            periods_per_year=ppy,
+            term_periods=term_years,
+            periods_per_year=1,
             kind=amortization,
-            grace_periods=grace_periods,
-            deferral_periods=deferral_periods,
+            grace_periods=grace_years,
+            deferral_periods=deferral_years,
         ).rows()
-        for i, row in enumerate(rows):
-            t = drawdown_period + i
-            if t >= n:
-                break
-            series[t] += row["total_payment"]
+        for year, row in enumerate(rows):
+            # Spread the annual payment evenly across this year's ppy periods.
+            per_period = row["total_payment"] / ppy
+            for sub in range(ppy):
+                t = drawdown_period + year * ppy + sub
+                if t >= n:
+                    return series
+                series[t] += per_period
         return series
 
     def _compute_kpis(
