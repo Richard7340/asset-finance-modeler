@@ -76,4 +76,6 @@ taxes:
 valuation:
   discount_rate_annual: 0.09
   terminal_growth_rate: 0.02
-  terminal_method: gordon
+  # P0-3: finite-life asset (20y horizon) → no terminal value. The Gordon
+  # perpetuity was injecting a negative terminal that distorted EV.
+  terminal_method: none

@@ -63,6 +63,24 @@ def test_dcf_gordon_invalid_when_wacc_le_g():
         )
 
 
+def test_dcf_terminal_none_no_perpetuity():
+    """P0-3: terminal_method='none' → TV=0, EV = PV of explicit FCF only.
+
+    Finite-life assets (solar/wind/BESS/datacenter) must not get a perpetuity.
+    """
+    result = compute_dcf(
+        fcf_series=[100] * 5,
+        wacc_annual=0.10,
+        terminal_growth=0.02,
+        periods_per_year=1,
+        terminal_method="none",
+    )
+    expected_pv = sum(100 / (1.1 ** t) for t in range(1, 6))
+    assert result["terminal_value"] == 0.0
+    assert result["pv_terminal"] == 0.0
+    assert result["enterprise_value"] == pytest.approx(expected_pv, rel=1e-9)
+
+
 def test_sensitivity_grid_2d():
     grid = compute_sensitivity_grid(
         fcf_series=[100] * 5,

@@ -234,7 +234,10 @@ class ValuationConfig(BaseModel):
     terminal_growth_rate: float = Field(default=0.025, ge=0)
     exit_multiple_arr: float | None = None
     exit_multiple_ebitda: float | None = None
-    terminal_method: Literal["gordon", "exit_multiple"] = "gordon"
+    # Default "none": no terminal value. Finite-life assets (solar/wind/BESS/
+    # datacenter) end at the horizon, so a Gordon perpetuity overstates EV.
+    # Going-concern models (SaaS, business) opt into "gordon"/"exit_multiple".
+    terminal_method: Literal["none", "gordon", "exit_multiple"] = "none"
     sensitivity_grid: SensitivityGrid | None = None
 
 
