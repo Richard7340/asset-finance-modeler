@@ -258,6 +258,7 @@ class InfrastructureModel:
             debt_balance,
             senior_ds,
             sub_ds,
+            mezz_ds,
         ) = self._compute_debt(pnl["ebitda"], cap, n, ppy, cfg, cod)
 
         # 8c. Rebuild P&L with actual interest
@@ -343,6 +344,7 @@ class InfrastructureModel:
             debt_metrics=debt_metrics,
             senior_ds=senior_ds,
             sub_ds=sub_ds,
+            mezz_ds=mezz_ds,
             prod=prod,
             opx=opx,
             val=val,
@@ -462,14 +464,20 @@ class InfrastructureModel:
         cfg: InfrastructureModelConfig,
         cod: int = 0,
     ) -> tuple[
-        list[float], list[float], list[float], list[float], list[float], list[float]
+        list[float], list[float], list[float], list[float],
+        list[float], list[float], list[float],
     ]:
-        """Size and schedule senior (+ subordinated) debt.
+        """Size and schedule senior (+ mezzanine + subordinated) debt.
 
-        Returns (interest, principal, drawdowns, balance, senior_ds, sub_ds)
-        where senior_ds / sub_ds are the per-period total debt-service series
-        for the senior and subordinated tranches (zeros if absent). Interest /
-        principal / drawdowns / balance aggregate both tranches.
+        Returns (interest, principal, drawdowns, balance, senior_ds, sub_ds,
+        mezz_ds) where senior_ds / mezz_ds / sub_ds are the per-period total
+        debt-service series for each tranche (zeros if absent). Interest /
+        principal / drawdowns / balance aggregate all tranches.
+
+        Seniority order is senior > mezzanine > subordinated. The mezzanine
+        (P2-3) is auto-sized on residual CFADS (EBITDA proxy net of the senior
+        debt service) to its own ``dscr_target``, drawn at financial close and
+        deferred to COD like the senior tranche.
 
         ``cod`` is the commercial-operation offset in periods (from the
         construction/permitting timeline). With cod>0 the standard project-
@@ -485,8 +493,10 @@ class InfrastructureModel:
         debt_balance = [0.0] * n
         senior_ds = [0.0] * n
         sub_ds = [0.0] * n
+        mezz_ds = [0.0] * n
 
         instruments: list[DebtInstrument] = []
+        senior_amount = 0.0
 
         if cfg.financing.senior is not None:
             sr = cfg.financing.senior
@@ -523,12 +533,59 @@ class InfrastructureModel:
                         deferral_periods=cod,
                     )
                 )
+                senior_amount = debt_amount
                 senior_ds = self._debt_service_series(
                     principal=debt_amount,
                     annual_rate=sr.interest_rate,
                     term_periods=sr.tenor_years * ppy,
                     grace_periods=sr.grace_period_months,
                     amortization=sr.amortization,
+                    drawdown_period=0,
+                    n=n,
+                    ppy=ppy,
+                    deferral_periods=cod,
+                )
+
+        # Mezzanine (P2-3): auto-sized on residual CFADS net of the senior debt
+        # service, to its own DSCR target. Sits between senior and sub in the
+        # stack/waterfall; drawn at close, amortization deferred to COD.
+        mezz = cfg.financing.mezzanine
+        if mezz is not None:
+            residual_cfads = [ebitda[t] - senior_ds[t] for t in range(n)]
+            headroom_capex = max(cap["total_capex"] - senior_amount, 0.0)
+            mezz_sizing = size_debt(
+                cfads=residual_cfads,
+                dscr_target=mezz.dscr_target,
+                dscr_mode="min",
+                interest_rate=mezz.interest_rate,
+                tenor_periods=mezz.tenor_years * ppy,
+                periods_per_year=ppy,
+                max_leverage=1.0,  # cap is the remaining (post-senior) capex
+                total_capex=headroom_capex,
+                amortization="french",
+                grace_periods=0,
+                deferral_periods=cod,
+            )
+            mezz_amount = mezz_sizing.max_debt if mezz_sizing.feasible else 0.0
+            if mezz_amount > 0:
+                instruments.append(
+                    DebtInstrument(
+                        name="Mezzanine",
+                        principal=mezz_amount,
+                        drawdown_period=0,
+                        interest_rate_annual=mezz.interest_rate,
+                        term_months=mezz.tenor_years * ppy,
+                        grace_period_months=0,
+                        amortization="french",
+                        deferral_periods=cod,
+                    )
+                )
+                mezz_ds = self._debt_service_series(
+                    principal=mezz_amount,
+                    annual_rate=mezz.interest_rate,
+                    term_periods=mezz.tenor_years * ppy,
+                    grace_periods=0,
+                    amortization="french",
                     drawdown_period=0,
                     n=n,
                     ppy=ppy,
@@ -572,6 +629,7 @@ class InfrastructureModel:
                 debt_balance,
                 senior_ds,
                 sub_ds,
+                mezz_ds,
             )
 
         debt_out = DebtEngine(instruments, periods=n, periods_per_year=ppy).compute()
@@ -583,6 +641,7 @@ class InfrastructureModel:
             debt_out["balance_outstanding"],
             senior_ds,
             sub_ds,
+            mezz_ds,
         )
 
     @staticmethod
@@ -631,6 +690,7 @@ class InfrastructureModel:
         debt_metrics: dict,
         senior_ds: list[float],
         sub_ds: list[float],
+        mezz_ds: list[float],
         prod: dict,
         opx: dict,
         val: dict,
@@ -684,13 +744,21 @@ class InfrastructureModel:
         dscr_avg = sum(positive_dscr) / len(positive_dscr) if positive_dscr else 0.0
 
         # Per-tranche DSCR via the seniority waterfall: each tranche sees CFADS
-        # (EBITDA proxy) net of all more-senior tranches' debt service.
+        # (EBITDA proxy) net of all more-senior tranches' debt service. Order:
+        # senior > mezzanine > subordinated.
         cfads = pnl["ebitda"]
         tranches = [senior_ds]
+        has_mezz = cfg.financing.mezzanine is not None and any(ds > 0 for ds in mezz_ds)
+        mezz_idx = -1
+        if has_mezz:
+            mezz_idx = len(tranches)
+            tranches.append(mezz_ds)
         has_sub = cfg.financing.subordinated is not None and any(
             ds > 0 for ds in sub_ds
         )
+        sub_idx = -1
         if has_sub:
+            sub_idx = len(tranches)
             tranches.append(sub_ds)
         tranche_dscrs = compute_waterfall_dscr(cfads, tranches)
 
@@ -701,12 +769,18 @@ class InfrastructureModel:
             return min(active), sum(active) / len(active)
 
         dscr_senior_min, dscr_senior_avg = _reduce(tranche_dscrs[0])
+        dscr_mezzanine_min = 0.0
+        dscr_mezzanine_avg = 0.0
+        if has_mezz:
+            dscr_mezzanine_min, dscr_mezzanine_avg = _reduce(tranche_dscrs[mezz_idx])
         dscr_subordinated_min = 0.0
         dscr_subordinated_avg = 0.0
         moic_subordinated = 0.0
         recovery_going_concern = 0.0
         if has_sub:
-            dscr_subordinated_min, dscr_subordinated_avg = _reduce(tranche_dscrs[1])
+            dscr_subordinated_min, dscr_subordinated_avg = _reduce(
+                tranche_dscrs[sub_idx]
+            )
             sub = cfg.financing.subordinated
             assert sub is not None  # narrowed by has_sub
             moic_subordinated = compute_moic(sub_ds, sub.principal)
@@ -742,6 +816,8 @@ class InfrastructureModel:
             dscr_subordinated_avg=dscr_subordinated_avg,
             moic_subordinated=moic_subordinated,
             recovery_going_concern=recovery_going_concern,
+            dscr_mezzanine_min=dscr_mezzanine_min,
+            dscr_mezzanine_avg=dscr_mezzanine_avg,
         )
 
     def _compute_degradation(self, periods: int, ppy: int) -> list[float]:

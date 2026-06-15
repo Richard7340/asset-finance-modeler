@@ -38,6 +38,8 @@ class ProjectKPIs:
     dscr_subordinated_avg: float = 0.0
     moic_subordinated: float = 0.0
     recovery_going_concern: float = 0.0
+    dscr_mezzanine_min: float = 0.0
+    dscr_mezzanine_avg: float = 0.0
 
 
 @dataclass
