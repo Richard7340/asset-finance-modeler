@@ -107,6 +107,8 @@ class AmortizationSchedule:
     kind: AmortKind = "french"
     grace_periods: int = 0
     custom_schedule: list[float] | None = None
+    idc_periods: int = 0
+    deferral_periods: int = 0
 
     @property
     def period_rate(self) -> float:
@@ -122,6 +124,40 @@ class AmortizationSchedule:
 
         rows: list[dict[str, float]] = []
         balance = self.principal
+
+        # Construction DEFERRAL (no IDC roll-up): the asset produces no cash
+        # until COD, so amortization is deferred to COD on the FACE principal.
+        # The construction-phase interest is assumed funded outside the debt
+        # balance (equity / a dedicated IDC reserve), so the balance is NOT
+        # grossed up. This is the treatment that reconciles with the validated
+        # SVJ Excel (sub-DSCR ~1.14-1.31 over the operating years). Mutually
+        # exclusive with idc_periods. ``deferral_periods == 0`` => legacy.
+        for _ in range(self.deferral_periods):
+            rows.append({
+                "balance_start": balance,
+                "interest": 0.0,
+                "principal_payment": 0.0,
+                "total_payment": 0.0,
+                "balance_end": balance,
+            })
+
+        # Interest During Construction (IDC): standard project-finance treatment.
+        # The debt is drawn at financial close but the asset produces no cash
+        # until commercial operation (COD). During the ``idc_periods`` before
+        # COD, interest is CAPITALIZED into the balance (no cash debt service)
+        # rather than paid. Amortization below then runs on the grossed-up
+        # balance starting at COD. ``idc_periods == 0`` => no construction phase,
+        # behaviour is byte-identical to the legacy schedule.
+        for _ in range(self.idc_periods):
+            capitalized = balance * rate
+            rows.append({
+                "balance_start": balance,
+                "interest": 0.0,
+                "principal_payment": 0.0,
+                "total_payment": 0.0,
+                "balance_end": balance + capitalized,
+            })
+            balance += capitalized
 
         for _ in range(n_grace):
             interest = balance * rate

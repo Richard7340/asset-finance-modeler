@@ -192,6 +192,14 @@ class DebtInstrument(BaseModel):
     amortization: Literal["french", "bullet", "linear", "custom"] = "french"
     custom_schedule: list[float] | None = None
     origination_fee_pct: float = Field(default=0, ge=0, le=1)
+    # Interest During Construction: periods between drawdown and COD over which
+    # interest is capitalized into the balance (no cash service) before
+    # amortization begins. 0 = no construction phase (legacy behaviour).
+    idc_periods: NonNegativeInt = 0
+    # Construction deferral: amortization deferred to COD on the FACE principal
+    # (construction interest funded by equity/IDC reserve, balance NOT grossed
+    # up). 0 = legacy. Mutually exclusive with idc_periods.
+    deferral_periods: NonNegativeInt = 0
 
     @model_validator(mode="after")
     def _validate_custom(self) -> "DebtInstrument":

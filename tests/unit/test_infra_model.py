@@ -13,7 +13,9 @@ from asset_finance_modeler.assets.infrastructure.schema import (
     PermitsTimeline,
     PPAStream,
     ProjectFinanceConfig,
+    SeniorDebtConfig,
     SolarProduction,
+    SubordinatedDebtConfig,
     TimeDegradation,
     BESSProduction,
     CapacityStream,
@@ -181,11 +183,63 @@ def test_timeline_spreads_capex_over_construction():
 
 
 # ---------------------------------------------------------------------------
-# Protocol conformance
+# Debt aligns to COD (interest capitalized during construction; DSCR over
+# operating periods only) — standard project finance.
 # ---------------------------------------------------------------------------
 
 
-def test_implements_protocol():
+def _solar_with_debt(periods: int = 120) -> InfrastructureModelConfig:
+    cfg = _solar_config(periods)
+    cfg.financing = ProjectFinanceConfig(
+        senior=SeniorDebtConfig(
+            tenor_years=10, interest_rate=0.04, dscr_target=1.30, auto_size=False
+        ),
+        subordinated=SubordinatedDebtConfig(
+            principal=2_000_000.0, interest_rate=0.085, tenor_years=7
+        ),
+        max_leverage=0.7,
+    )
+    return cfg
+
+
+def test_debt_service_starts_at_cod_not_period_zero():
+    """With a construction timeline, the debt-service series carries NO payment
+    during the construction window (interest capitalized = IDC) and the first
+    debt service lands at COD."""
+    cfg = _solar_with_debt(120)
+    cfg.timeline = PermitsTimeline(
+        development_months=0, permitting_months=0,
+        construction_months=12, grid_connection_months=0,
+    )  # COD = 12 monthly periods
+    result = InfrastructureModel(cfg).run()
+    ds = result.debt_metrics["dscr"]
+    # Construction periods (no revenue) are NOT scored as DSCR < 1 — they carry
+    # no debt service, so DSCR there is inf (no obligation) and is excluded.
+    interest = result.pnl["interest_expense"]
+    principal = result.cashflow.get("debt_principal_repaid")
+    # No interest OR principal paid in the construction window (IDC capitalized).
+    assert all(interest[t] == 0.0 for t in range(12))
+    if principal is not None:
+        assert all(principal[t] == 0.0 for t in range(12))
+    # First debt service lands at COD.
+    assert interest[12] > 0.0
+    # DSCR min is measured over operating periods → no spurious sub-1.0 from a
+    # zero-revenue construction period.
+    kpis = result.project_kpis
+    assert kpis.dscr_senior_min > 0.0
+    del ds
+
+
+def test_zero_timeline_debt_service_unchanged():
+    """A zero-timeline asset (COD = period 0) produces the SAME debt service as
+    before the COD alignment — no regression."""
+    base = _solar_with_debt(120)
+    base.timeline = PermitsTimeline()  # all zero → COD = 0
+    result = InfrastructureModel(base).run()
+    interest = result.pnl["interest_expense"]
+    # Debt service starts at period 0 (drawdown + first amortization), exactly
+    # as the legacy behaviour.
+    assert interest[0] > 0.0
     assert isinstance(InfrastructureModel(_solar_config()), FinancialModel)
 
 
