@@ -101,6 +101,12 @@ class PPAStream(BaseModel):
     volume_fraction: float = 0.7
     escalation_pct_yr: float = 0.02
     tenor_years: int = 15
+    # Curve-driven contract price (EUR/unit) per year. Same pattern as merchant:
+    # library curve > explicit points > base × escalation. A curve embeds the
+    # consultant price path, so escalation is NOT re-applied on top of it.
+    # volume_fraction (a volume factor) is always applied.
+    price_curve_name: str | None = None
+    price_points: list[float] | None = None
 
 
 class MerchantStream(BaseModel):
@@ -145,6 +151,10 @@ class CapacityStream(BaseModel):
     type: Literal["capacity"] = "capacity"
     name: str = "Capacity Payment"
     eur_per_mw_yr: float
+    # Curve-driven capacity price (EUR/MW·yr) per year: library curve > points >
+    # flat scalar. Curve embeds the price path (capacity-market auction clears).
+    price_curve_name: str | None = None
+    price_points: list[float] | None = None
 
 
 class OfftakeStream(BaseModel):
@@ -154,6 +164,10 @@ class OfftakeStream(BaseModel):
     volume_fraction: float = 1.0
     escalation_pct_yr: float = 0.02
     tenor_years: int = 15
+    # Curve-driven offtake price (EUR/unit — e.g. EUR/kg H2, EUR/MWh biomethane)
+    # per year: library curve > points > base × escalation (no double-escalation).
+    price_curve_name: str | None = None
+    price_points: list[float] | None = None
 
 
 class CertificateStream(BaseModel):
@@ -162,6 +176,11 @@ class CertificateStream(BaseModel):
     price_eur_per_unit: float
     eligible_fraction: float = 1.0
     certificate_type: Literal["go", "rec", "rfnbo", "carbon_credit"] = "go"
+    # Curve-driven certificate price (EUR/unit) per year: library curve > points
+    # > flat scalar. Certificate prices (GO/REC/carbon) are notoriously volatile,
+    # so a consultant curve is the realistic input.
+    price_curve_name: str | None = None
+    price_points: list[float] | None = None
 
 
 class RentalStream(BaseModel):
@@ -170,6 +189,11 @@ class RentalStream(BaseModel):
     price_per_unit_period: float
     occupancy_rate: float = 0.95
     escalation_pct_yr: float = 0.02
+    # Curve-driven rent (per unit) per year: library curve > points > base ×
+    # escalation. occupancy_rate (a volume factor) is always applied; the curve
+    # supplies the price path so escalation is NOT re-applied on top of it.
+    price_curve_name: str | None = None
+    price_points: list[float] | None = None
 
 
 class SLAStream(BaseModel):
@@ -177,6 +201,10 @@ class SLAStream(BaseModel):
     name: str = "SLA Hosting"
     price_per_mw_month: float
     uptime_target: float = 0.999
+    # Curve-driven hosting price (EUR/MW·month) per year: library curve > points
+    # > flat scalar. Lets colocation price step-downs/escalators be modelled.
+    price_curve_name: str | None = None
+    price_points: list[float] | None = None
 
 
 RevenueStream = Annotated[
