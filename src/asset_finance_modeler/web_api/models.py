@@ -82,10 +82,14 @@ def _run_financial_output(out: FinancialOutput, ppy: int) -> dict[str, Any]:
             cash_flow[k] = [round(x) for x in _annual(cf[k], ppy)]
 
     kp = out.project_kpis
+
+    def _round_irr(v: float | None) -> float | None:
+        return round(v, 4) if v is not None else None  # None -> "n/a" (FIX 3)
+
     kpis = {
         "npv": round(getattr(kp, "npv", 0)),
-        "irr_project": round(getattr(kp, "irr_project", 0), 4),
-        "irr_equity": round(getattr(kp, "irr_equity", 0), 4),
+        "irr_project": _round_irr(getattr(kp, "irr_project", 0)),
+        "irr_equity": _round_irr(getattr(kp, "irr_equity", 0)),
         "dscr_min": round(getattr(kp, "dscr_min", 0), 2),
         "total_capex": round(out.summary.get("total_capex", 0)),
     }
