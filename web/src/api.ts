@@ -91,7 +91,39 @@ export function isHybridResult(r: RunResult): r is HybridResult {
   return !r.income_statement && !!r.cashflows;
 }
 
-export type Overrides = Record<string, number>;
+/**
+ * Override values can be:
+ *  - number  → a scalar input
+ *  - string  → a curve selector (e.g. `spread_curve_name` = "spread_da_es")
+ *  - number[] → a custom curve supplied by the user (e.g. `spread_points`)
+ */
+export type OverrideValue = number | string | number[];
+export type Overrides = Record<string, OverrideValue>;
+
+// ---------------------------------------------------------------------------
+// Price curves (consultant catalogue) — TDD transparency surface
+// ---------------------------------------------------------------------------
+
+export type Curve = {
+  name: string;
+  /** Consultant citation, e.g. "Agere TB2 España + Modo Energy". */
+  source: string;
+  /** Parameter the curve drives, e.g. "spread_eur_mwh". */
+  parameter: string;
+  asset_type: string;
+  bankable: boolean;
+  /** 30-year yearly values. */
+  values: number[];
+};
+
+export async function getCurves(parameter?: string): Promise<{ curves: Curve[] }> {
+  const q = parameter ? `?parameter=${encodeURIComponent(parameter)}` : "";
+  return getJson<{ curves: Curve[] }>(`/api/curves${q}`);
+}
+
+export async function getCurve(name: string): Promise<Curve> {
+  return getJson<Curve>(`/api/curves/${encodeURIComponent(name)}`);
+}
 
 export type SavedAssetSummary = {
   id: string;
