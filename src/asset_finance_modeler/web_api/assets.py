@@ -8,8 +8,9 @@ SVJ hybrid deal.
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -98,8 +99,8 @@ def save_asset(body: SaveAssetBody) -> dict[str, Any]:
 
 
 @router.get("")
-def list_assets() -> dict[str, Any]:
-    scenarios = _store().list()
+def list_assets(lifecycle: str | None = None) -> dict[str, Any]:
+    scenarios = _store().list(lifecycle=lifecycle)
     return {
         "assets": [
             {
@@ -108,6 +109,11 @@ def list_assets() -> dict[str, Any]:
                 "model_id": s.base_model,
                 "created_at": s.created_at.isoformat(),
                 "kpis": s.results_snapshot.get("kpis", {}),
+                "lifecycle": s.lifecycle,
+                "commissioning_date": (
+                    s.commissioning_date.isoformat() if s.commissioning_date else None
+                ),
+                "tracking_frequency": s.tracking_frequency,
             }
             for s in scenarios
         ]
@@ -133,6 +139,45 @@ def get_asset(asset_id: str) -> dict[str, Any]:
 def delete_asset(asset_id: str) -> dict[str, Any]:
     _store().delete(asset_id)
     return {"ok": True}
+
+
+class LifecycleBody(BaseModel):
+    lifecycle: Literal["opportunity", "operational"]
+    tracking_frequency: Literal["daily", "monthly", "quarterly"] | None = None
+    commissioning_date: str | None = None  # ISO; si falta al promover, se usa ahora
+
+
+@router.patch("/{asset_id}/lifecycle")
+def set_lifecycle(asset_id: str, body: LifecycleBody) -> dict[str, Any]:
+    store = _store()
+    s = store.get(asset_id)
+    if s is None or s.is_deleted:
+        raise HTTPException(status_code=404, detail=f"unknown asset: {asset_id}")
+    if body.lifecycle == "operational":
+        s.lifecycle = "operational"
+        s.base_locked = True
+        s.is_canonical = True
+        s.tracking_frequency = body.tracking_frequency or s.tracking_frequency or "monthly"
+        if body.commissioning_date:
+            s.commissioning_date = datetime.fromisoformat(body.commissioning_date)
+        elif s.commissioning_date is None:
+            s.commissioning_date = datetime.now(UTC)
+    else:  # demote -> opportunity
+        s.lifecycle = "opportunity"
+        s.base_locked = False
+        s.is_canonical = False
+        s.commissioning_date = None
+        s.tracking_frequency = None
+    store.save(s)
+    return {
+        "id": s.id,
+        "lifecycle": s.lifecycle,
+        "base_locked": s.base_locked,
+        "commissioning_date": (
+            s.commissioning_date.isoformat() if s.commissioning_date else None
+        ),
+        "tracking_frequency": s.tracking_frequency,
+    }
 
 
 portfolio_router = APIRouter(prefix="/api/portfolio", dependencies=[Depends(require_token)])
