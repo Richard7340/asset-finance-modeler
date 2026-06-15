@@ -95,8 +95,21 @@ class BusinessModel:
             "cff": self._expand(cff_y, ppy, n),
         }
 
-        # 7. Valuation — DCF on annual project FCF (CFO + CFI)
-        fcf_annual = [cfo_y[y] + cfi_y[y] for y in range(years)]
+        # 7. Valuation — DCF on UNLEVERED annual FCF, financing-independent:
+        #    FCF = EBIT*(1-t) + D&A - capex (±ΔWC). Using CFO (which carries the
+        #    interest deduction) while dropping the debt principal/drawdown made
+        #    the project EV depend on financing and silently undercounted the
+        #    debt — see P0-4. Equity NPV (levered, to Ke) is handled separately.
+        tax_rate = cfg.taxes.corporate_income_tax_rate
+        nopat_y = [
+            rows["ebit"][y] * (1.0 - tax_rate) if rows["ebit"][y] > 0 else rows["ebit"][y]
+            for y in range(years)
+        ]
+        # cfi_y is negative capex spend; cfo carries the ΔWC already (see step 6).
+        delta_wc_y = [cfo_y[y] - (rows["net_income"][y] + dep_y[y]) for y in range(years)]
+        fcf_annual = [
+            nopat_y[y] + dep_y[y] + cfi_y[y] + delta_wc_y[y] for y in range(years)
+        ]
         try:
             val = compute_dcf(
                 fcf_series=fcf_annual,
