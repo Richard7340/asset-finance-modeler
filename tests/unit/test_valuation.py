@@ -89,6 +89,19 @@ def test_compute_irr_monthly():
     assert irr > 0
 
 
+def test_compute_irr_no_real_root_returns_none():
+    """All-positive cashflows have no IRR (no sign change) -> None, not 0.0.
+
+    Returning 0.0 was a silent lie (FIX 3): callers must surface 'n/a'."""
+    irr = compute_irr([100.0, 200.0, 300.0], periods_per_year=1)
+    assert irr is None
+
+
+def test_compute_irr_all_negative_returns_none():
+    irr = compute_irr([-100.0, -200.0, -300.0], periods_per_year=12)
+    assert irr is None
+
+
 def test_compute_lcoe():
     lcoe = compute_lcoe(total_costs_pv=50_000_000, total_energy_pv=1_200_000)
     assert lcoe == pytest.approx(41.67, abs=0.01)

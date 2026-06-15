@@ -39,7 +39,7 @@ class HybridResult:
     total_capex: float
     asset_total_capex: list[float]
     npv: float
-    irr: float
+    irr: float | None
     consolidated_ebitda: list[float] | None = None
     dscr_senior_min: float = 0.0
     dscr_senior_avg: float = 0.0

@@ -20,8 +20,8 @@ class DebtSizingResult:
 
 @dataclass
 class ProjectKPIs:
-    irr_project: float
-    irr_equity: float
+    irr_project: float | None
+    irr_equity: float | None
     npv: float
     lcoe: float | None
     lcos: float | None

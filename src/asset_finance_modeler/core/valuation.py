@@ -82,12 +82,17 @@ def compute_sensitivity_grid(
     return grid
 
 
-def compute_irr(cashflows: list[float], periods_per_year: int) -> float:
+def compute_irr(cashflows: list[float], periods_per_year: int) -> float | None:
+    """Annualised IRR, or None when no real root exists.
+
+    Returns None (so callers can surface "n/a") instead of a misleading 0.0
+    when ``npf.irr`` finds no sign change / no real root (FIX 3).
+    """
     import math
 
     period_irr = npf.irr(cashflows)
     if period_irr is None or not isinstance(period_irr, float) or math.isnan(period_irr):
-        return 0.0
+        return None
     return (1 + period_irr) ** periods_per_year - 1
 
 

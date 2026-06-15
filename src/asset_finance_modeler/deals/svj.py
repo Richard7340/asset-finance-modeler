@@ -253,7 +253,7 @@ def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
             "recovery": round(hr.recovery_going_concern, 2),
             "total_capex": round(total_capex),
             "revenue_y1": round(revenue_y1),
-            "irr": round(hr.irr, 4),
+            "irr": round(hr.irr, 4) if hr.irr is not None else None,
         },
         "cashflows": {
             "years": years,
