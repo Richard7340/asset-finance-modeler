@@ -13,7 +13,15 @@ class ModelMeta(BaseModel):
     name: str = Field(description="Model name (e.g. 'gestnova')")
     base_currency: str = Field(default="EUR", description="ISO 4217 base currency")
     fx_rates: dict[str, float] = Field(default_factory=dict, description="FX rates to base_currency keyed by ISO 4217")
-    inflation_annual: float = Field(default=0.025, description="Annual inflation rate for real terms")
+    inflation_annual: float = Field(
+        default=0.025,
+        description=(
+            "Annual inflation rate. In the SaaS model it escalates the scalar "
+            "fixed-opex buckets (infra/marketing/legal/other) at each year "
+            "boundary; buckets supplied as explicit per-period lists are not "
+            "auto-escalated."
+        ),
+    )
     horizon: HorizonConfig
     start_date: date = Field(description="First period start date")
     initial_cash: NonNegativeFloat = Field(description="Cash on hand at t=0")

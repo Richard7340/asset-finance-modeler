@@ -51,20 +51,29 @@ class SaasModel:
         period_days = _PERIOD_DAYS[cfg.meta.horizon.frequency]
 
         # 1. Revenue
-        rev = CohortRevenueEngine(cfg.revenue.sources, periods=n).compute()
+        rev = CohortRevenueEngine(
+            cfg.revenue.sources, periods=n, periods_per_year=ppy
+        ).compute()
 
         # 2. COGS
         cogs = COGSEngine(
             cfg.cost_of_revenue,
             active_units=rev["active_units"],
             active_customers=rev["active_customers"],
+            new_customers=rev["new_customers"],
         ).compute()
 
         # 3. CapEx + depreciation
         capex_eng = CapExEngine(cfg.capital.capex_schedule, periods=n, periods_per_year=ppy).compute()
 
         # 4. Opex
-        opex = OpexEngine(cfg.operating_expenses, periods=n).compute()
+        opex = OpexEngine(
+            cfg.operating_expenses,
+            periods=n,
+            payroll_taxes_pct=cfg.taxes.payroll_taxes_pct,
+            inflation_annual=cfg.meta.inflation_annual,
+            periods_per_year=ppy,
+        ).compute()
 
         # 5. CAC spend for unit economics
         cac_spend = [
@@ -143,13 +152,19 @@ class SaasModel:
         years = n // ppy
         fcf_annual = [sum(fcf_period[y * ppy:(y + 1) * ppy]) for y in range(years)] if years > 0 else fcf_period
 
+        # P2-5: honor exit_multiple_arr — when set (and the user has not asked
+        # for a specific terminal_method), value the terminal on the ARR exit
+        # multiple instead of leaving it inert with terminal_method="none".
+        terminal_method = cfg.valuation.terminal_method
+        if cfg.valuation.exit_multiple_arr and terminal_method == "none":
+            terminal_method = "exit_multiple"
         try:
             val = compute_dcf(
                 fcf_series=fcf_annual,
                 wacc_annual=cfg.valuation.discount_rate_annual,
                 terminal_growth=cfg.valuation.terminal_growth_rate,
                 periods_per_year=1,
-                terminal_method=cfg.valuation.terminal_method,
+                terminal_method=terminal_method,
                 exit_arr=pnl["revenue"][-1] * ppy if cfg.valuation.exit_multiple_arr else None,
                 exit_multiple_arr=cfg.valuation.exit_multiple_arr,
             )

@@ -1,1 +1,1 @@
-{'revenue_y1': 196852.91, 'revenue_end_period': 206783.39, 'ebitda_margin_end': 0.8, 'active_customers_end': 265.04, 'active_units_end': 662.61, 'cash_end': 3591847.81, 'runway_months': 3.0, 'ltv_cac_end': 45.28, 'enterprise_value': 4715275.42}
+{'revenue_y1': 195230.73, 'revenue_end_period': 212361.69, 'ebitda_margin_end': 0.77, 'active_customers_end': 265.04, 'active_units_end': 662.61, 'cash_end': 3380102.79, 'runway_months': 2.0, 'ltv_cac_end': 46.6, 'enterprise_value': 4549590.68}
