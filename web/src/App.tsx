@@ -253,7 +253,11 @@ export default function App() {
                 <>
                   <KpiCards data={result} />
                   {schemaQuery.data && (
-                    <CurvesPanel schema={schemaQuery.data} overrides={overrides} />
+                    <CurvesPanel
+                      schema={schemaQuery.data}
+                      overrides={overrides}
+                      onChangeOverride={setOverride}
+                    />
                   )}
                   <Charts data={result} />
                   {!hybrid && result.income_statement && (
