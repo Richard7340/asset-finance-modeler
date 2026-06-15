@@ -87,9 +87,15 @@ class BusinessModel:
         #    summing each year's ppy periods recovers the annual figure.
         pnl = {k: self._expand(v, ppy, n) for k, v in rows.items()}
 
-        # 6. Cash flow (annual → per-period). Working capital left simple: with
-        #    zero WC days the change is nil, so CFO = net_income + depreciation.
-        cfo_y = [rows["net_income"][y] + dep_y[y] for y in range(years)]
+        # 6. Cash flow (annual → per-period). Apply working-capital changes
+        #    (P0-6): receivable/payable/inventory days build balances off
+        #    revenue/COGS; the period-over-period change in net working capital
+        #    moves cash. Growing AR/inventory consumes cash; growing AP frees
+        #    it. Previously the WC days were a no-op (CFO = NI + depreciation).
+        delta_wc_y = self._delta_working_capital(rows["revenue"], rows["cogs"], years)
+        cfo_y = [
+            rows["net_income"][y] + dep_y[y] - delta_wc_y[y] for y in range(years)
+        ]
         cfi_y = self._capex_annual(years, ppy)
         cff_y = [drawdown_total[y] - principal_y[y] for y in range(years)]
 
@@ -167,6 +173,34 @@ class BusinessModel:
         if len(out) < n:
             out.extend([0.0] * (n - len(out)))
         return out[:n]
+
+    def _delta_working_capital(
+        self, revenue_y: list[float], cogs_y: list[float], years: int
+    ) -> list[float]:
+        """Year-over-year change in net working capital (positive = cash used).
+
+        AR  = revenue × receivable_days / 365  (cash tied up)
+        INV = COGS    × inventory_days  / 365  (cash tied up)
+        AP  = COGS    × payable_days    / 365  (cash released)
+
+        NWC = AR + INV − AP. ΔNWC[y] = NWC[y] − NWC[y-1] (NWC[-1] = 0). A rising
+        NWC consumes cash, so CFO subtracts ΔNWC.
+        """
+        wc = self.config.working_capital
+        nwc: list[float] = []
+        for y in range(years):
+            rev = revenue_y[y] if y < len(revenue_y) else 0.0
+            cogs = cogs_y[y] if y < len(cogs_y) else 0.0
+            ar = rev * wc.receivable_days / 365.0
+            inv = cogs * wc.inventory_days / 365.0
+            ap = cogs * wc.payable_days / 365.0
+            nwc.append(ar + inv - ap)
+        delta: list[float] = []
+        prev = 0.0
+        for y in range(years):
+            delta.append(nwc[y] - prev)
+            prev = nwc[y]
+        return delta
 
     def _depreciation_annual(self, years: int, ppy: int) -> list[float]:
         dep = [0.0] * years

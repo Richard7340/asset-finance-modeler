@@ -145,3 +145,46 @@ def test_business_cfo_stays_levered():
     unlevered = BusinessModel(_cfg_annual(financed=False)).run()
     # Interest reduces net income → levered CFO total < unlevered CFO total.
     assert sum(levered.cashflow["cfo"]) < sum(unlevered.cashflow["cfo"])
+
+
+def _cfg_wc(receivable_days=0.0, payable_days=0.0, inventory_days=0.0):
+    return BusinessModelConfig(
+        meta={"name": "WC", "horizon": {"periods": 3, "frequency": "Y"}},
+        revenue=[{"name": "Ventas", "year1_amount": 1_000_000, "growth_pct_yr": 0.10}],
+        cogs={"pct_of_revenue": 0.40},
+        opex={"fixed_lines": [{"name": "Personal", "year1_amount": 200_000}], "escalation_pct_yr": 0.0},
+        capex={"items": []},
+        working_capital={
+            "receivable_days": receivable_days,
+            "payable_days": payable_days,
+            "inventory_days": inventory_days,
+        },
+        taxes={"corporate_income_tax_rate": 0.25},
+        valuation={"discount_rate_annual": 0.10, "terminal_method": "none"},
+    )
+
+
+def test_business_working_capital_changes_cfo():
+    """P0-6: raising receivable_days 0→90 reduces CFO (cash tied up in AR).
+
+    With zero WC days the CFO was net_income + dep; the days were a no-op.
+    """
+    base = BusinessModel(_cfg_wc(receivable_days=0)).run()
+    with_ar = BusinessModel(_cfg_wc(receivable_days=90)).run()
+    assert sum(with_ar.cashflow["cfo"]) != pytest.approx(sum(base.cashflow["cfo"]))
+    # Growing AR consumes cash → total CFO lower with 90 days of receivables.
+    assert sum(with_ar.cashflow["cfo"]) < sum(base.cashflow["cfo"])
+
+
+def test_business_payable_days_release_cash():
+    """P0-6: raising payable_days frees cash (supplier financing) → higher CFO."""
+    base = BusinessModel(_cfg_wc(payable_days=0)).run()
+    with_ap = BusinessModel(_cfg_wc(payable_days=60)).run()
+    assert sum(with_ap.cashflow["cfo"]) > sum(base.cashflow["cfo"])
+
+
+def test_business_inventory_days_consume_cash():
+    """P0-6: raising inventory_days ties up cash → lower CFO."""
+    base = BusinessModel(_cfg_wc(inventory_days=0)).run()
+    with_inv = BusinessModel(_cfg_wc(inventory_days=45)).run()
+    assert sum(with_inv.cashflow["cfo"]) < sum(base.cashflow["cfo"])
