@@ -164,6 +164,10 @@ def _bess(
         "production_mwh": production_mwh,
         "capacity_mw": cfg.power_mw,
         "energy_capacity_mwh": energy_cap_mwh,
+        # Surface the configured battery params so the arbitrage revenue engine
+        # honors them instead of falling back to hardcoded defaults (FIX 1).
+        "depth_of_discharge": cfg.depth_of_discharge,
+        "round_trip_efficiency": cfg.round_trip_efficiency,
     }
 
 
