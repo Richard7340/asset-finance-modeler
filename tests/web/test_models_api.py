@@ -48,6 +48,26 @@ def test_svj_hybrid_run_has_statements(monkeypatch):
     assert "cfo" in out["cash_flow"]
 
 
+def test_saas_listed_schema_and_run(monkeypatch):
+    """P3-6: a SaaS model is reachable via /api/models like any other model —
+    listed, schema introspectable, and runs into kpis+income_statement+cash_flow.
+    """
+    c = _client(monkeypatch)
+    models = c.get("/api/models?t=tk").json()["models"]
+    saas = [m for m in models if m["asset_type"] == "saas"]
+    assert saas, "no SaaS model listed"
+    sid = saas[0]["id"]
+
+    leaves = c.get(f"/api/models/{sid}/schema?t=tk").json()["inputs"]
+    assert leaves and any(l["section"] == "revenue" for l in leaves)
+
+    out = c.post(f"/api/models/{sid}/run?t=tk", json={"overrides": {}}).json()
+    assert "kpis" in out and "income_statement" in out and "cash_flow" in out
+    rows = out["income_statement"]["rows"]
+    assert "revenue" in rows and len(rows["revenue"]) >= 1
+    assert "npv" in out["kpis"]  # EV exposed as npv for portfolio compatibility
+
+
 def test_invalid_override_path_returns_400(monkeypatch):
     """P3-3: a bad override path is a client error (400 with the offending
     path), not a server 500."""

@@ -23,6 +23,10 @@ from asset_finance_modeler.assets.infrastructure import presets as _presets_pkg
 from asset_finance_modeler.assets.infrastructure.loader import load_preset
 from asset_finance_modeler.assets.infrastructure.model import InfrastructureModel
 from asset_finance_modeler.assets.infrastructure.schema import InfrastructureModelConfig
+from asset_finance_modeler.assets.saas import presets as _saas_presets_pkg
+from asset_finance_modeler.assets.saas.loader import load_preset as load_saas_preset
+from asset_finance_modeler.assets.saas.model import ModelResults, SaasModel
+from asset_finance_modeler.assets.saas.schema import SaasModelConfig
 from asset_finance_modeler.core.protocols import FinancialOutput
 from asset_finance_modeler.deals.svj import run_svj, svj_input_spec
 from asset_finance_modeler.web_api.auth import require_token
@@ -48,6 +52,16 @@ def _preset_ids() -> list[str]:
     """Robustly derive preset ids from the presets package directory."""
     presets_dir = Path(_presets_pkg.__file__).resolve().parent
     return sorted(q.stem for q in presets_dir.glob("*.yaml"))
+
+
+def _saas_preset_ids() -> list[str]:
+    """SaaS preset ids, namespaced ``saas_<stem>`` so they never collide with
+    infra/business ids and the asset_type is unambiguous."""
+    presets_dir = Path(_saas_presets_pkg.__file__).resolve().parent
+    return sorted("saas_" + q.stem for q in presets_dir.glob("*.yaml"))
+
+
+_SAAS_IDS: set[str] = set(_saas_preset_ids())
 
 
 def _annual(series: list[float], ppy: int) -> list[float]:
@@ -116,6 +130,53 @@ def _run_business_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     return _run_financial_output(out, _ppy_of(cfg_dict))
 
 
+def _run_saas_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
+    """Validate, run, and shape a SaaS config dict into the generic payload
+    (P3-6). ``SaasModel.run`` returns ``ModelResults`` (not ``FinancialOutput``),
+    so we adapt its pnl/cashflow/valuation into the same
+    kpis+income_statement+cash_flow shape every other model exposes.
+
+    SaaS is a P&L/valuation model with no project IRR or DSCR, so those KPIs are
+    ``None`` (rendered "n/a"); the enterprise value is surfaced as ``npv`` so the
+    portfolio aggregation (which keys off ``npv``) works uniformly.
+    """
+    cfg = SaasModelConfig.model_validate(cfg_dict)
+    out: ModelResults = SaasModel(cfg).run()
+    ppy = _ppy_of(cfg_dict)
+
+    pnl = out.pnl
+    income_rows = {
+        k: [round(x) for x in _annual(pnl[k], ppy)]
+        for k in ("revenue", "ebitda", "ebit", "interest_expense", "ebt", "tax", "net_income")
+        if k in pnl
+    }
+    n_years = len(next(iter(income_rows.values()))) if income_rows else 0
+    income_statement = {"years": list(range(1, n_years + 1)), "rows": income_rows}
+
+    cash_flow: dict[str, Any] = {"years": list(range(1, n_years + 1))}
+    for k in ("cfo", "cfi", "cff"):
+        if k in out.cashflow:
+            cash_flow[k] = [round(x) for x in _annual(out.cashflow[k], ppy)]
+
+    ev = out.valuation.get("enterprise_value", 0.0)
+    kpis = {
+        "npv": round(ev),
+        "irr_project": None,
+        "irr_equity": None,
+        "dscr_min": None,
+        "total_capex": round(float(out.summary.get("total_capex", 0)) or 0),
+    }
+
+    payload = {
+        "kpis": kpis,
+        "income_statement": income_statement,
+        "cash_flow": cash_flow,
+        "summary": dict(out.summary),
+    }
+    result: dict[str, Any] = json.loads(json.dumps(payload, default=str))
+    return result
+
+
 def _apply_overrides(cfg: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     """Apply override-by-path values, converting an invalid path into a 400
     (with the offending path) instead of a 500 (P3-3)."""
@@ -161,6 +222,14 @@ def list_models() -> dict[str, Any]:
                 "asset_type": "real_estate" if bid.startswith("real_estate") else "business",
             }
         )
+    for sid in _saas_preset_ids():
+        models.append(
+            {
+                "id": sid,
+                "name": sid.replace("_", " ").title(),
+                "asset_type": "saas",
+            }
+        )
     return {"models": models}
 
 
@@ -171,6 +240,10 @@ def model_schema(model_id: str) -> dict[str, Any]:
 
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()
+        return {"inputs": schema_tree(cfg)}
+
+    if model_id in _SAAS_IDS:
+        cfg = load_saas_preset(model_id[len("saas_") :]).model_dump()
         return {"inputs": schema_tree(cfg)}
 
     if model_id not in _preset_ids():
@@ -189,6 +262,11 @@ def model_run(model_id: str, body: RunBody) -> dict[str, Any]:
         cfg = load_business_preset(model_id).model_dump()
         cfg = _apply_overrides(cfg, overrides)
         return _run_business_config(cfg)
+
+    if model_id in _SAAS_IDS:
+        cfg = load_saas_preset(model_id[len("saas_") :]).model_dump()
+        cfg = _apply_overrides(cfg, overrides)
+        return _run_saas_config(cfg)
 
     if model_id not in _preset_ids():
         raise HTTPException(status_code=404, detail=f"unknown model: {model_id}")
