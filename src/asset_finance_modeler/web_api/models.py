@@ -26,7 +26,11 @@ from asset_finance_modeler.assets.infrastructure.schema import InfrastructureMod
 from asset_finance_modeler.core.protocols import FinancialOutput
 from asset_finance_modeler.deals.svj import run_svj, svj_input_spec
 from asset_finance_modeler.web_api.auth import require_token
-from asset_finance_modeler.web_api.introspect import schema_tree, set_by_path
+from asset_finance_modeler.web_api.introspect import (
+    InvalidPathError,
+    schema_tree,
+    set_by_path,
+)
 
 _FREQ_PPY = {"M": 12, "Q": 4, "Y": 1}
 
@@ -112,6 +116,19 @@ def _run_business_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     return _run_financial_output(out, _ppy_of(cfg_dict))
 
 
+def _apply_overrides(cfg: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    """Apply override-by-path values, converting an invalid path into a 400
+    (with the offending path) instead of a 500 (P3-3)."""
+    for path, value in (overrides or {}).items():
+        try:
+            cfg = set_by_path(cfg, path, _coerce(cfg, path, value))
+        except InvalidPathError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"invalid override path: {exc.path}"
+            ) from exc
+    return cfg
+
+
 router = APIRouter(prefix="/api/models", dependencies=[Depends(require_token)])
 
 
@@ -170,16 +187,14 @@ def model_run(model_id: str, body: RunBody) -> dict[str, Any]:
 
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()
-        for path, value in overrides.items():
-            cfg = set_by_path(cfg, path, _coerce(cfg, path, value))
+        cfg = _apply_overrides(cfg, overrides)
         return _run_business_config(cfg)
 
     if model_id not in _preset_ids():
         raise HTTPException(status_code=404, detail=f"unknown model: {model_id}")
 
     cfg = load_preset(model_id).model_dump()
-    for path, value in overrides.items():
-        cfg = set_by_path(cfg, path, _coerce(cfg, path, value))
+    cfg = _apply_overrides(cfg, overrides)
     return _run_config(cfg)
 
 
