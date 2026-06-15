@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS scenarios (
     is_deleted INTEGER NOT NULL DEFAULT 0,
     user_id TEXT NOT NULL DEFAULT 'default',
     workspace_id TEXT,
+    lifecycle TEXT NOT NULL DEFAULT 'opportunity',
+    commissioning_date TEXT,
+    base_locked INTEGER NOT NULL DEFAULT 0,
+    tracking_frequency TEXT,
     FOREIGN KEY (parent_scenario_id) REFERENCES scenarios(id)
 );
 CREATE INDEX IF NOT EXISTS idx_parent ON scenarios(parent_scenario_id);
@@ -44,6 +48,7 @@ class ScenarioStore(Protocol):
         include_deleted: bool = False,
         user_id: str | None = None,
         workspace_id: str | None = None,
+        lifecycle: str | None = None,
     ) -> list[Scenario]: ...
     def delete(self, scenario_id: str) -> None: ...
     def set_canonical(self, scenario_id: str, name: str | None = None) -> None: ...
@@ -72,6 +77,17 @@ class SQLiteScenarioStore:
                 conn.execute('ALTER TABLE scenarios ADD COLUMN workspace_id TEXT')
             except Exception:
                 pass
+            # Migration: add lifecycle columns if upgrading an existing DB
+            for ddl in (
+                "ALTER TABLE scenarios ADD COLUMN lifecycle TEXT NOT NULL DEFAULT 'opportunity'",
+                "ALTER TABLE scenarios ADD COLUMN commissioning_date TEXT",
+                "ALTER TABLE scenarios ADD COLUMN base_locked INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE scenarios ADD COLUMN tracking_frequency TEXT",
+            ):
+                try:
+                    conn.execute(ddl)
+                except Exception:
+                    pass
 
     @staticmethod
     def _to_row(s: Scenario) -> dict[str, object]:
@@ -91,6 +107,10 @@ class SQLiteScenarioStore:
             "is_deleted": int(s.is_deleted),
             "user_id": s.user_id,
             "workspace_id": s.workspace_id,
+            "lifecycle": s.lifecycle,
+            "commissioning_date": s.commissioning_date.isoformat() if s.commissioning_date else None,
+            "base_locked": int(s.base_locked),
+            "tracking_frequency": s.tracking_frequency,
         }
 
     @staticmethod
@@ -112,6 +132,16 @@ class SQLiteScenarioStore:
             is_deleted=bool(row["is_deleted"]),
             user_id=row["user_id"] if "user_id" in keys else "default",
             workspace_id=row["workspace_id"] if "workspace_id" in keys else None,
+            lifecycle=row["lifecycle"] if "lifecycle" in keys else "opportunity",
+            commissioning_date=(
+                datetime.fromisoformat(row["commissioning_date"])
+                if "commissioning_date" in keys and row["commissioning_date"]
+                else None
+            ),
+            base_locked=bool(row["base_locked"]) if "base_locked" in keys else False,
+            tracking_frequency=(
+                row["tracking_frequency"] if "tracking_frequency" in keys else None
+            ),
         )
 
     def save(self, scenario: Scenario) -> None:
@@ -122,11 +152,13 @@ class SQLiteScenarioStore:
                 INSERT INTO scenarios (
                     id, name, description, base_model, parent_scenario_id,
                     overrides_json, inputs_snapshot_json, results_snapshot_json,
-                    created_at, tags_json, notes, is_canonical, is_deleted, user_id, workspace_id
+                    created_at, tags_json, notes, is_canonical, is_deleted, user_id, workspace_id,
+                    lifecycle, commissioning_date, base_locked, tracking_frequency
                 ) VALUES (
                     :id, :name, :description, :base_model, :parent_scenario_id,
                     :overrides_json, :inputs_snapshot_json, :results_snapshot_json,
-                    :created_at, :tags_json, :notes, :is_canonical, :is_deleted, :user_id, :workspace_id
+                    :created_at, :tags_json, :notes, :is_canonical, :is_deleted, :user_id, :workspace_id,
+                    :lifecycle, :commissioning_date, :base_locked, :tracking_frequency
                 )
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
@@ -139,7 +171,11 @@ class SQLiteScenarioStore:
                     is_canonical = excluded.is_canonical,
                     is_deleted = excluded.is_deleted,
                     user_id = excluded.user_id,
-                    workspace_id = excluded.workspace_id
+                    workspace_id = excluded.workspace_id,
+                    lifecycle = excluded.lifecycle,
+                    commissioning_date = excluded.commissioning_date,
+                    base_locked = excluded.base_locked,
+                    tracking_frequency = excluded.tracking_frequency
                 """,
                 row,
             )
@@ -157,6 +193,7 @@ class SQLiteScenarioStore:
         include_deleted: bool = False,
         user_id: str | None = None,
         workspace_id: str | None = None,
+        lifecycle: str | None = None,
     ) -> list[Scenario]:
         clauses = []
         params: list[object] = []
@@ -171,6 +208,9 @@ class SQLiteScenarioStore:
         if workspace_id is not None:
             clauses.append("workspace_id = ?")
             params.append(workspace_id)
+        if lifecycle is not None:
+            clauses.append("lifecycle = ?")
+            params.append(lifecycle)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         sql = f"SELECT * FROM scenarios {where} ORDER BY created_at DESC"
         with self._conn() as conn:
