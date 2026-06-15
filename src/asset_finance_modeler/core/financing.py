@@ -32,6 +32,8 @@ class DebtEngine:
                 kind=inst.amortization,
                 grace_periods=inst.grace_period_months,
                 custom_schedule=inst.custom_schedule,
+                idc_periods=inst.idc_periods,
+                deferral_periods=inst.deferral_periods,
             ).rows()
             for i, row in enumerate(sched):
                 t = t0 + i
@@ -88,6 +90,7 @@ def _compute_dscr_for_debt(
     periods_per_year: int,
     amortization: str,
     grace_periods: int,
+    deferral_periods: int = 0,
 ) -> list[float]:
     if debt_amount <= 0:
         return [float("inf")] * len(cfads)
@@ -98,6 +101,7 @@ def _compute_dscr_for_debt(
         periods_per_year=periods_per_year,
         kind=amortization,
         grace_periods=grace_periods,
+        deferral_periods=deferral_periods,
     ).rows()
     n = len(cfads)
     dscr: list[float] = []
@@ -126,9 +130,13 @@ def size_debt(
     total_capex: float,
     amortization: str,
     grace_periods: int,
+    deferral_periods: int = 0,
 ) -> DebtSizingResult:
     max_debt_by_leverage = total_capex * max_leverage
     lo, hi = 0.0, max_debt_by_leverage
+    # DSCR is scored over the OPERATING window only: amortization runs from COD
+    # (after deferral_periods of construction) for tenor_periods.
+    op_end = deferral_periods + tenor_periods
 
     for _ in range(50):
         mid = (lo + hi) / 2
@@ -136,9 +144,9 @@ def size_debt(
             break
         dscr = _compute_dscr_for_debt(
             cfads, mid, interest_rate, tenor_periods,
-            periods_per_year, amortization, grace_periods,
+            periods_per_year, amortization, grace_periods, deferral_periods,
         )
-        active_dscr = [d for d in dscr[:tenor_periods] if 0 < d < float("inf")]
+        active_dscr = [d for d in dscr[deferral_periods:op_end] if 0 < d < float("inf")]
         if not active_dscr:
             hi = mid
             continue
@@ -160,9 +168,9 @@ def size_debt(
 
     final_dscr = _compute_dscr_for_debt(
         cfads, final_debt, interest_rate, tenor_periods,
-        periods_per_year, amortization, grace_periods,
+        periods_per_year, amortization, grace_periods, deferral_periods,
     )
-    active = [d for d in final_dscr[:tenor_periods] if d < float("inf")]
+    active = [d for d in final_dscr[deferral_periods:op_end] if d < float("inf")]
     return DebtSizingResult(
         max_debt=final_debt,
         dscr_series=final_dscr,

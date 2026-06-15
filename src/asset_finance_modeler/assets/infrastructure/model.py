@@ -258,7 +258,7 @@ class InfrastructureModel:
             debt_balance,
             senior_ds,
             sub_ds,
-        ) = self._compute_debt(pnl["ebitda"], cap, n, ppy, cfg)
+        ) = self._compute_debt(pnl["ebitda"], cap, n, ppy, cfg, cod)
 
         # 8c. Rebuild P&L with actual interest
         pnl = self._build_pnl(
@@ -460,6 +460,7 @@ class InfrastructureModel:
         n: int,
         ppy: int,
         cfg: InfrastructureModelConfig,
+        cod: int = 0,
     ) -> tuple[
         list[float], list[float], list[float], list[float], list[float], list[float]
     ]:
@@ -469,6 +470,14 @@ class InfrastructureModel:
         where senior_ds / sub_ds are the per-period total debt-service series
         for the senior and subordinated tranches (zeros if absent). Interest /
         principal / drawdowns / balance aggregate both tranches.
+
+        ``cod`` is the commercial-operation offset in periods (from the
+        construction/permitting timeline). With cod>0 the standard project-
+        finance treatment applies: debt is drawn at financial close (period 0)
+        but interest during construction is CAPITALIZED (IDC) and amortization
+        begins at COD. DSCR is therefore measured over operating periods only
+        (construction periods carry no debt service). cod==0 => legacy
+        behaviour, debt amortizes from period 0.
         """
         debt_interest = [0.0] * n
         debt_principal = [0.0] * n
@@ -495,6 +504,7 @@ class InfrastructureModel:
                     total_capex=total_capex,
                     amortization=sr.amortization,
                     grace_periods=sr.grace_period_months,
+                    deferral_periods=cod,
                 )
                 debt_amount = sizing.max_debt if sizing.feasible else 0.0
             else:
@@ -510,6 +520,7 @@ class InfrastructureModel:
                         term_months=sr.tenor_years * ppy,
                         grace_period_months=sr.grace_period_months,
                         amortization=sr.amortization,
+                        deferral_periods=cod,
                     )
                 )
                 senior_ds = self._debt_service_series(
@@ -521,10 +532,14 @@ class InfrastructureModel:
                     drawdown_period=0,
                     n=n,
                     ppy=ppy,
+                    deferral_periods=cod,
                 )
 
         sub = cfg.financing.subordinated
         if sub is not None and sub.principal > 0:
+            # Sub deferral runs from its own drawdown to COD, so amortization
+            # still starts at COD (relative to the sub's drawdown period).
+            sub_defer = max(0, cod - sub.drawdown_period)
             instruments.append(
                 DebtInstrument(
                     name="Subordinated",
@@ -534,6 +549,7 @@ class InfrastructureModel:
                     term_months=sub.tenor_years * ppy,
                     grace_period_months=sub.grace_period_months,
                     amortization=sub.amortization,
+                    deferral_periods=sub_defer,
                 )
             )
             sub_ds = self._debt_service_series(
@@ -545,6 +561,7 @@ class InfrastructureModel:
                 drawdown_period=sub.drawdown_period,
                 n=n,
                 ppy=ppy,
+                deferral_periods=sub_defer,
             )
 
         if not instruments:
@@ -578,8 +595,13 @@ class InfrastructureModel:
         drawdown_period: int,
         n: int,
         ppy: int,
+        deferral_periods: int = 0,
     ) -> list[float]:
-        """Per-period total debt service (interest + principal), padded to n."""
+        """Per-period total debt service (interest + principal), padded to n.
+
+        ``deferral_periods`` defers amortization to COD (no service during
+        construction; face-value principal — construction interest funded by
+        equity/IDC reserve)."""
         series = [0.0] * n
         rows = AmortizationSchedule(
             principal=principal,
@@ -588,6 +610,7 @@ class InfrastructureModel:
             periods_per_year=ppy,
             kind=amortization,
             grace_periods=grace_periods,
+            deferral_periods=deferral_periods,
         ).rows()
         for i, row in enumerate(rows):
             t = drawdown_period + i

@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
 
-from asset_finance_modeler.assets.infrastructure.model import InfrastructureModel
+from asset_finance_modeler.assets.infrastructure.model import (
+    InfrastructureModel,
+    _timeline_periods,
+)
 from asset_finance_modeler.assets.infrastructure.schema import (
     InfrastructureModelConfig,
 )
@@ -65,6 +68,27 @@ class HybridProject:
         self.senior = senior
         self.subordinated = subordinated
 
+    def _consolidated_cod_periods(self) -> int:
+        """Project COD offset in ANNUAL periods = the latest asset COD.
+
+        Each asset's COD (development + permitting + construction + grid
+        connection) is resolved to its own frequency then converted to whole
+        annual periods; the consolidated project is operational only once the
+        last asset reaches COD. Assets with no declared timeline contribute 0.
+        The consolidated tranche debt service is annual (periods_per_year=1),
+        so this offset is the IDC window for the capital stack.
+        """
+        cod_years = 0
+        for cfg in self.configs:
+            ppy = _PPY[cfg.meta.horizon.frequency]
+            _, _, cod = _timeline_periods(cfg.timeline, ppy)
+            # cod is in this asset's periods; convert to the annual bucket the
+            # COD lands in (floor): the asset is operating for part/all of that
+            # year, so the consolidated annual EBITDA already reflects it and
+            # debt amortization starts from that operating year.
+            cod_years = max(cod_years, cod // ppy if cod > 0 else 0)
+        return cod_years
+
     def run(self) -> HybridResult:
         fcfs: list[list[float]] = []
         revs: list[list[float]] = []
@@ -99,32 +123,38 @@ class HybridProject:
             return result
 
         horizon = len(cons_ebitda)
+        # Project COD: during construction the tranches are drawn but interest
+        # is capitalized (IDC) and amortization starts at COD. DSCR is therefore
+        # measured over OPERATING periods only (cod..horizon), so a no-revenue
+        # construction year never produces a meaningless sub-1.0 DSCR.
+        cod = self._consolidated_cod_periods()
         tranches: list[list[float]] = []
         senior_ds: list[float] = []
         if self.senior is not None:
-            senior_ds = self._tranche_debt_service(self.senior, horizon)
+            senior_ds = self._tranche_debt_service(self.senior, horizon, cod)
             tranches.append(senior_ds)
         sub_ds: list[float] = []
         if self.subordinated is not None:
-            sub_ds = self._tranche_debt_service(self.subordinated, horizon)
+            sub_ds = self._tranche_debt_service(self.subordinated, horizon, cod)
             tranches.append(sub_ds)
 
         dscrs = compute_waterfall_dscr(cons_ebitda, tranches)
 
         idx = 0
         if self.senior is not None:
-            result.dscr_senior_min, result.dscr_senior_avg = _reduce(dscrs[idx])
+            result.dscr_senior_min, result.dscr_senior_avg = _reduce(dscrs[idx][cod:])
             idx += 1
         if self.subordinated is not None:
             result.dscr_subordinated_min, result.dscr_subordinated_avg = _reduce(
-                dscrs[idx]
+                dscrs[idx][cod:]
             )
             result.moic_subordinated = compute_moic(
                 sub_ds, self.subordinated.principal
             )
             result.recovery_going_concern = compute_recovery_multiple(
                 cons_ebitda,
-                from_period=self.subordinated.tenor_years,
+                # Sub fully amortizes by COD + tenor (IDC-deferred start).
+                from_period=cod + self.subordinated.tenor_years,
                 discount_rate_annual=self.discount_rate_annual,
                 periods_per_year=1,
                 outstanding_principal=self.subordinated.principal,
@@ -133,10 +163,19 @@ class HybridProject:
         return result
 
     @staticmethod
-    def _tranche_debt_service(spec: TrancheSpec, horizon: int) -> list[float]:
+    def _tranche_debt_service(
+        spec: TrancheSpec, horizon: int, deferral_periods: int = 0
+    ) -> list[float]:
         """Build the ANNUAL debt-service series for a tranche, padded with 0.0
         to the consolidated horizon length. periods_per_year=1 +
-        term_periods=tenor_years -> one row per year."""
+        term_periods=tenor_years -> one row per year.
+
+        ``deferral_periods`` (the project COD in annual periods) defers
+        amortization to COD: no debt service during construction, then the FACE
+        principal amortizes over the tenor (construction interest funded by
+        equity / an IDC reserve, NOT capitalized — this reconciles with the
+        validated SVJ Excel). Default 0 = legacy (amortize from year 0), so a
+        deal with no timeline is unchanged."""
         if spec.principal <= 0:
             return [0.0] * horizon
         rows = AmortizationSchedule(
@@ -146,6 +185,7 @@ class HybridProject:
             periods_per_year=1,
             kind=cast(AmortKind, spec.amortization),
             grace_periods=0,
+            deferral_periods=deferral_periods,
         ).rows()
         ds = [float(row["total_payment"]) for row in rows]
         if len(ds) < horizon:

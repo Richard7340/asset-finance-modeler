@@ -25,6 +25,25 @@ P1 UPDATE (timeline + capex-event depreciation):
   dscr_sub_min= 0.48       (P1-4: BESS COD 11mo defers cashflow vs the 7yr sub
                             tenor that still starts at close — sub DSCR drops)
   moic_sub    = 1.368      (unchanged — sub debt service is timeline-independent)
+
+DEBT-COD ALIGNMENT (this fix): the construction-period DSCR was an artifact —
+debt amortized from financial close while P1 deferred revenue to COD. Standard
+project finance defers debt service to COD (construction interest funded by
+equity / an IDC reserve — face-value deferral, NOT IDC capitalization, which
+reconciles with the validated Excel) and measures DSCR over OPERATING periods
+only. Project COD = max(FV 29mo, BESS 11mo) -> 2 annual periods.
+  dscr_sub_min   = 0.87  (was 0.48 — the two no-/partial-revenue construction
+                          years no longer score a DSCR; min is now a genuine
+                          operating-period figure; the first FULL operating
+                          years are ~1.20 / 1.11, in the Excel's ~1.14-1.31 band)
+  dscr_senior_min= 2.07  (was 1.65 — construction years no longer drag it down;
+                          back near the pre-P1 2.06)
+  recovery       = 3.76  (was 4.0 — the going-concern recovery window starts at
+                          COD + sub tenor, deferred 2 years)
+  irr            = 0.0587(hybrid IRR is on consolidated unlevered FCF; the tiny
+                          move is rounding, not a debt-timing effect)
+  npv_*/capex/moic/revenue_y1 unchanged (NPV is unlevered; MOIC is debt-service-
+                          shape independent; capex/revenue untouched).
 """
 
 from asset_finance_modeler.core.financing import compute_waterfall_dscr
@@ -40,7 +59,10 @@ def test_svj_headline_golden() -> None:
     assert abs(k["npv_bess"] - 1_842_952) <= 1
     assert abs(k["npv_hybrid"] - 918_282) <= 1
     assert abs(k["revenue_y1"] - 554_418) <= 1
-    assert abs(k["dscr_sub_min"] - 0.48) <= 0.01
+    # Debt-COD alignment: DSCR over operating periods only (debt deferred to
+    # COD). sub-DSCR min back to a sensible operating range; senior recovers.
+    assert abs(k["dscr_sub_min"] - 0.87) <= 0.01
+    assert abs(k["dscr_senior_min"] - 2.07) <= 0.01
     assert abs(k["moic_sub"] - 1.368) <= 0.001
     assert abs(k["total_capex"] - 7_269_533) <= 1
 

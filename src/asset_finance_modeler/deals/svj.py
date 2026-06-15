@@ -234,8 +234,11 @@ def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
     )
     hr = hybrid.run()
 
-    # --- Per-year subordinated DSCR profile over the sub tenor ---
-    dscr_profile = _dscr_profile(hr.consolidated_ebitda or [], senior, subordinated)
+    # --- Per-year subordinated DSCR profile over the sub tenor (operating
+    #     periods only — debt aligned to the project COD via IDC) ---
+    dscr_profile = _dscr_profile(
+        hr.consolidated_ebitda or [], senior, subordinated, hybrid._consolidated_cod_periods()
+    )
 
     years = list(range(1, _HORIZON_YEARS + 1))
     spread_curve = Curve.from_library("spread_da_es").to_list(_HORIZON_YEARS)
@@ -270,17 +273,24 @@ def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
 
 
 def _dscr_profile(
-    cons_ebitda: list[float], senior: TrancheSpec, subordinated: TrancheSpec
+    cons_ebitda: list[float],
+    senior: TrancheSpec,
+    subordinated: TrancheSpec,
+    cod: int = 0,
 ) -> list[float]:
-    """Per-year subordinated DSCR over the sub tenor (net of senior service)."""
+    """Per-year subordinated DSCR over the sub tenor (net of senior service).
+
+    With ``cod`` > 0 the tranches amortize from the project COD (IDC during
+    construction), so the profile covers the operating tenor cod..cod+tenor."""
     if not cons_ebitda:
         return []
     horizon = len(cons_ebitda)
-    senior_ds = HybridProject._tranche_debt_service(senior, horizon)
-    sub_ds = HybridProject._tranche_debt_service(subordinated, horizon)
+    senior_ds = HybridProject._tranche_debt_service(senior, horizon, cod)
+    sub_ds = HybridProject._tranche_debt_service(subordinated, horizon, cod)
     dscrs = compute_waterfall_dscr(cons_ebitda, [senior_ds, sub_ds])
     sub_row = dscrs[1]
-    finite = [round(d, 3) for d in sub_row[: subordinated.tenor_years] if 0 < d < float("inf")]
+    op_end = cod + subordinated.tenor_years
+    finite = [round(d, 3) for d in sub_row[cod:op_end] if 0 < d < float("inf")]
     return finite
 
 
