@@ -57,13 +57,20 @@ def _project_npv_plain(name: str) -> float:
 def test_fv_revenue_calibrated_to_excel() -> None:
     """PR double-application removed -> 4.76*1582*1.0 = 7,530 MWh/yr -> revenue.
 
-    Production isn't exposed on FinancialOutput, so we assert via revenue Y1,
-    which is the deliverable target and directly reflects the 7,530 MWh volume.
-    Now curve-driven (solar_capture_es ~36 EUR/MWh Y1, phased curve corrected by
-    FIX 2): GOLDEN actual 298,103; Excel target ~293k (+2%, see report)."""
+    P1-4: the FV preset declares a construction timeline (dev 6 + permit 12 +
+    construction 8 + grid 3 = 29-month COD), so calendar-year-1 revenue is now 0
+    (the plant is under construction). The deliverable target is the FIRST
+    OPERATING year, measured over the 12 months following COD. That window sees
+    ~302,849 (vs the pre-timeline calendar-year-0 GOLDEN of 298,103): prices stay
+    anchored to CALENDAR time (PPA escalation + merchant curve advance ~2.4 yr by
+    COD), so the same 7,530 MWh volume realises at a slightly escalated price.
+    Still ~+3% over the Excel ~293k target — within the documented band."""
     out = InfrastructureModel(load_preset("svj_fv_cordoba")).run()
-    rev_y1 = out.summary["revenue_y1"]
-    assert abs(rev_y1 - 298_103) < 5  # GOLDEN (tightened, FIX 5)
+    rev = out.pnl["revenue"]
+    assert out.summary["revenue_y1"] == 0.0  # calendar year 1 = construction
+    cod = 29  # months: 6 + 12 + 8 + 3
+    first_op_year = sum(rev[cod : cod + 12])
+    assert abs(first_op_year - 302_849) < 5  # GOLDEN (P1-4 timeline-deferred)
 
 
 def test_fv_capex_trimmed_to_excel() -> None:

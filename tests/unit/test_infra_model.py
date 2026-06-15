@@ -122,6 +122,65 @@ def _bess_config(periods: int = 60) -> InfrastructureModelConfig:
 
 
 # ---------------------------------------------------------------------------
+# P1-4: construction / permitting timeline defers production & revenue
+# ---------------------------------------------------------------------------
+
+
+def _zero_timeline_solar(periods: int = 120) -> InfrastructureModelConfig:
+    cfg = _solar_config(periods)
+    cfg.timeline = PermitsTimeline(
+        development_months=0,
+        permitting_months=0,
+        construction_months=0,
+        grid_connection_months=0,
+    )
+    return cfg
+
+
+def test_timeline_defers_production_and_revenue():
+    # 6 months total COD offset (only construction set; others zeroed).
+    cfg = _solar_config(60)
+    cfg.timeline = PermitsTimeline(
+        development_months=0,
+        permitting_months=0,
+        construction_months=6,
+        grid_connection_months=0,
+    )
+    result = InfrastructureModel(cfg).run()
+    rev = result.pnl["revenue"]
+    rb = result.revenue_breakdown["total"]
+    # Revenue is zero during the 6 construction months, positive once COD hits.
+    assert all(rev[t] == 0 for t in range(6))
+    assert all(rb[t] == 0 for t in range(6))
+    assert rev[6] > 0
+
+
+def test_zero_timeline_no_deferral():
+    # A fully-zero timeline = no offset: production/revenue start at period 0.
+    result = InfrastructureModel(_zero_timeline_solar(60)).run()
+    assert result.pnl["revenue"][0] > 0
+
+
+def test_timeline_spreads_capex_over_construction():
+    # CAPEX is spread across the construction window instead of all at t=0.
+    cfg = _solar_config(60)
+    cfg.timeline = PermitsTimeline(
+        development_months=0,
+        permitting_months=0,
+        construction_months=4,
+        grid_connection_months=0,
+    )
+    result = InfrastructureModel(cfg).run()
+    # CFI = -capex_spend (no other investing flows here).
+    capex_spend = [-v for v in result.cashflow["cfi"]]
+    # Spread over the 4 construction months (not a single period-0 lump).
+    assert capex_spend[0] > 0
+    assert capex_spend[3] > 0
+    total = result.summary["total_capex"]
+    assert sum(capex_spend) == pytest.approx(total, rel=1e-9)
+
+
+# ---------------------------------------------------------------------------
 # Protocol conformance
 # ---------------------------------------------------------------------------
 
@@ -144,7 +203,12 @@ def test_run_returns_financial_output():
 
 
 def test_revenue_positive():
-    result = InfrastructureModel(_solar_config(60)).run()
+    # P1-4: _solar_config declares a timeline (construction_months=12 plus the
+    # schema defaults dev=12/permit=18/grid=6 => 48-month COD offset), so period
+    # 0 is now during construction (revenue=0). Revenue is positive once the
+    # plant reaches commercial operation. Use a zero-timeline config to assert
+    # the operating revenue itself is positive.
+    result = InfrastructureModel(_zero_timeline_solar(60)).run()
     assert result.pnl["revenue"][0] > 0
 
 

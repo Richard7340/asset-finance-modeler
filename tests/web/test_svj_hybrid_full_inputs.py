@@ -25,9 +25,10 @@ def test_svj_hybrid_default_unchanged_and_deep_override(monkeypatch):
     from asset_finance_modeler.deals.svj import run_svj  # noqa: PLC0415
 
     base = run_svj({})
-    # Post-fix golden (FIX 1 BESS DoD/RTE 0.80/0.85 + FIX 2 phased-curve
-    # off-by-one): hybrid NPV moved from the old 1,317,143 to 956,749.
-    assert abs(base["kpis"]["npv_hybrid"] - 956_749) <= 1
+    # GOLDEN history: 1,317,143 -> 956,749 (FIX 1/2) -> 849,643 (P1-4 timeline:
+    # both SVJ presets declare a construction timeline, deferring revenue to COD
+    # — FV 29mo, BESS 11mo — at calendar-anchored prices; net hybrid NPV falls).
+    assert abs(base["kpis"]["npv_hybrid"] - 849_643) <= 1
     assert abs(base["kpis"]["moic_sub"] - 1.37) < 0.05
     # legacy key still works
     leg = run_svj({"fv_ppa_price": 60})

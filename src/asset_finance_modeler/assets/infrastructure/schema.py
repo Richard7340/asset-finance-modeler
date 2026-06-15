@@ -305,10 +305,16 @@ class InfraOPEXConfig(BaseModel):
 
 
 class PermitsTimeline(BaseModel):
-    development_months: int = 12
-    permitting_months: int = 18
-    construction_months: int = 12
-    grid_connection_months: int = 6
+    # Defaults are ZERO so the construction/permitting deferral is strictly
+    # opt-in: only the phases a preset/config explicitly declares defer the
+    # commercial-operation date (COD) and spread capex. This avoids silently
+    # inventing a multi-year deferral for any config that omits a phase (e.g. a
+    # preset that only sets construction_months would otherwise inherit a large
+    # development+permitting offset it never asked for).
+    development_months: int = 0
+    permitting_months: int = 0
+    construction_months: int = 0
+    grid_connection_months: int = 0
     construction_drawdown_schedule: list[float] | None = None
 
 
