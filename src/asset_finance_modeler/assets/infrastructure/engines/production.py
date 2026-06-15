@@ -317,6 +317,16 @@ def _datacenter(
     rack_count = it_capacity_mw × 1000 / rack_density_kw
     capacity_mw = total_mw
     capacity_mw_it = it_capacity_mw
+
+    P3-4 — OPEX vs revenue basis (deliberate, documented choice):
+      * ``capacity_mw`` (= facility MW = it × PUE) is the OPEX basis: fixed O&M
+        and cooling/insurance scale with the TOTAL facility/cooling load, which
+        is the standard data-centre operating-cost driver.
+      * ``capacity_mw_it`` (= IT MW) is the SLA REVENUE basis: colocation/SLA is
+        billed per sellable IT MW.
+    The two bases differ by PUE and that asymmetry is intentional (a higher PUE
+    means more cooling overhead → higher O&M for the same sellable IT-MW), not a
+    bug. See docs/superpowers/modeling_assumptions.md.
     """
     total_mw = cfg.it_capacity_mw * cfg.pue
     rack_count = cfg.it_capacity_mw * 1_000 / cfg.rack_density_kw

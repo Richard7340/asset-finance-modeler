@@ -240,6 +240,37 @@ def test_non_h2_has_no_electricity_cost():
     assert all(v == 0.0 for v in out["electricity"])
 
 
+def test_datacenter_fixed_om_keys_off_facility_mw():
+    """P3-4: data-centre fixed O&M / cooling scales with FACILITY MW (it × PUE),
+    not sellable IT MW. SLA revenue (separately) keys off IT MW. The asymmetry
+    is deliberate and documented — this test pins the basis so it can't drift.
+    """
+    from asset_finance_modeler.assets.infrastructure.engines.production import (
+        compute_production,
+    )
+    from asset_finance_modeler.assets.infrastructure.schema import DataCenterProduction
+
+    it_mw, pue = 10.0, 1.3
+    prod = compute_production(
+        DataCenterProduction(it_capacity_mw=it_mw, pue=pue), [1.0] * 12, 12, 12
+    )
+    # Production surfaces facility MW as capacity_mw and IT MW separately.
+    assert prod["capacity_mw"] == pytest.approx(it_mw * pue)
+    assert prod["capacity_mw_it"] == pytest.approx(it_mw)
+
+    cfg = InfraOPEXConfig(om_fixed_eur_per_mw_yr=250_000, opex_escalation_pct_yr=0)
+    out = compute_opex(
+        cfg,
+        capacity_mw=prod["capacity_mw"],  # model passes facility MW here
+        total_capex=0,
+        production_mwh=prod["production_mwh"],
+        periods=12,
+        periods_per_year=12,
+    )
+    # Fixed O&M annual = 250k × facility MW (13), NOT 250k × IT MW (10).
+    assert out["fixed_om"][0] * 12 == pytest.approx(250_000 * it_mw * pue)
+
+
 def test_output_keys_present():
     cfg = InfraOPEXConfig()
     out = compute_opex(
