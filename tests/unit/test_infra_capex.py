@@ -1,9 +1,12 @@
 import pytest
 
 from asset_finance_modeler.assets.infrastructure.engines.capex import compute_capex
+from asset_finance_modeler.assets.infrastructure.loader import load_preset
 from asset_finance_modeler.assets.infrastructure.schema import (
     BESSProduction,
+    BiomethaneProduction,
     CAPEXBreakdown,
+    DataCenterProduction,
     InfraCapexItem,
     SolarProduction,
     WindProduction,
@@ -119,6 +122,32 @@ def test_mw_unit_uses_capacity_mwp():
     prod = WindProduction(capacity_mw=30)
     out = compute_capex(capex, prod, periods=120, periods_per_year=12)
     assert out["total_capex"] == pytest.approx(30_000_000)
+
+
+def test_mw_unit_resolves_datacenter_it_capacity():
+    """P0-1: unit=MW on a data center must resolve to it_capacity_mw, not qty=1.
+
+    Facility 8M EUR/MW × 10 MW IT × 1.12 contingency + 2M grid = 91.6M EUR.
+    Before the fix the resolver fell to qty=1 → ~11M EUR.
+    """
+    config = load_preset("datacenter_10mw_tier3")
+    out = compute_capex(config.capex, config.production, periods=240, periods_per_year=12)
+    assert out["total_capex"] == pytest.approx(91_600_000)
+
+
+def test_mw_unit_resolves_biomethane_capacity():
+    """P0-1: unit=MW on biomethane resolves to its MW-equivalent, not qty=1.
+
+    capacity_mw = capacity_nm3_h × 0.01 (10 kWh/Nm3). 500 Nm3/h → 5 MW.
+    """
+    capex = CAPEXBreakdown(
+        items=[InfraCapexItem(name="Plant", amount_per_unit=2_000_000, unit="MW")],
+        contingency_pct=0,
+    )
+    prod = BiomethaneProduction(capacity_nm3_h=500)
+    out = compute_capex(capex, prod, periods=240, periods_per_year=12)
+    # 500 Nm3/h × 0.01 = 5 MW → 5 × 2M = 10M
+    assert out["total_capex"] == pytest.approx(10_000_000)
 
 
 def test_tax_depreciation_length_matches_periods():
