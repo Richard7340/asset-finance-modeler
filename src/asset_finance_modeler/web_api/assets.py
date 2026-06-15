@@ -22,10 +22,13 @@ from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
 from asset_finance_modeler.web_api.auth import require_token
 from asset_finance_modeler.web_api.models import (
     _BUSINESS_IDS,
+    _SAAS_IDS,
     _apply_overrides,
     _preset_ids,
     _run_business_config,
     _run_config,
+    _run_saas_config,
+    load_saas_preset,
 )
 
 from asset_finance_modeler.assets.infrastructure.loader import load_preset  # isort: skip
@@ -61,6 +64,10 @@ def _run_model(model_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
         cfg = load_business_preset(model_id).model_dump()
         cfg = _apply_overrides(cfg, overrides)
         return _run_business_config(cfg)
+    if model_id in _SAAS_IDS:
+        cfg = load_saas_preset(model_id[len("saas_") :]).model_dump()
+        cfg = _apply_overrides(cfg, overrides)
+        return _run_saas_config(cfg)
     if model_id not in _preset_ids():
         raise HTTPException(status_code=404, detail=f"unknown model: {model_id}")
     cfg = load_preset(model_id).model_dump()
