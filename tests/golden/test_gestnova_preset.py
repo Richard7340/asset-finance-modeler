@@ -18,6 +18,14 @@ def test_gestnova_preset_runs_no_errors():
 
 
 def test_gestnova_preset_summary_shape(snapshot):
+    # P2-5 golden move (legitimate): previously-dead SaaS params now take effect.
+    # The gestnova preset sets price_escalation_annual=0.03 (revenue_end_period
+    # rises 206,783 → 212,362), gross_revenue_retention=0.95, payroll_taxes_pct=
+    # 0.30 (team cost +30%) and inflation_annual=0.025 (fixed opex escalates).
+    # Net: ebitda_margin_end 0.80 → 0.77, cash_end and EV down (4.72M → 4.55M).
+    # exit_multiple_arr=6 stays inert here because the preset explicitly chose
+    # terminal_method=gordon. Snapshot refreshed to the post-wiring economics;
+    # not a regression.
     cfg = load_preset("gestnova")
     results = SaasModel(cfg).run()
     rounded_summary = {
