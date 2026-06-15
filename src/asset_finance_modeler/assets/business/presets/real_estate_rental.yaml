@@ -34,3 +34,10 @@ taxes:
   corporate_income_tax_rate: 0.25
 valuation:
   discount_rate_annual: 0.06
+  # P0-7: a property is a finite-horizon hold, not a perpetuity. No Gordon
+  # terminal; instead an explicit residual sale value at horizon end.
+  # Conservative floor: sale at the original 3M acquisition cost (no nominal
+  # appreciation, no gain). Land does not depreciate, so depreciated book value
+  # would understate a real sale; a flat resale recovers the invested capital.
+  terminal_method: none
+  residual_value: 3000000

@@ -188,3 +188,32 @@ def test_business_inventory_days_consume_cash():
     base = BusinessModel(_cfg_wc(inventory_days=0)).run()
     with_inv = BusinessModel(_cfg_wc(inventory_days=45)).run()
     assert sum(with_inv.cashflow["cfo"]) < sum(base.cashflow["cfo"])
+
+
+def test_residual_value_raises_ev():
+    """P0-7: a residual_value (asset sale) adds a discounted terminal inflow."""
+    base = BusinessModel(_cfg_annual(financed=False)).run()
+    cfg = _cfg_annual(financed=False)
+    cfg.valuation.residual_value = 1_000_000
+    with_res = BusinessModel(cfg).run()
+    wacc = cfg.valuation.discount_rate_annual
+    expected_delta = 1_000_000 / (1.0 + wacc) ** 3  # 3-year horizon
+    assert with_res.valuation["enterprise_value"] - base.valuation["enterprise_value"] == pytest.approx(
+        expected_delta, rel=1e-9
+    )
+
+
+def test_real_estate_preset_not_artificially_negative():
+    """P0-7: the real-estate preset's VAN is no longer structurally negative.
+
+    A €3M property held 10 years recovers capital via a residual sale value at
+    horizon end. Without it, terminal=none gives a deeply negative EV.
+    """
+    from asset_finance_modeler.assets.business.loader import load_business_preset
+
+    cfg = load_business_preset("real_estate_rental")
+    out = BusinessModel(cfg).run()
+    assert out.valuation["enterprise_value"] > 0
+    # The residual must be part of the explicit FCF, not a Gordon perpetuity.
+    assert cfg.valuation.terminal_method == "none"
+    assert cfg.valuation.residual_value is not None and cfg.valuation.residual_value > 0
