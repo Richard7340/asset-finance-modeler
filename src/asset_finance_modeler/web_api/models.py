@@ -146,17 +146,7 @@ def list_models() -> dict[str, Any]:
 @router.get("/{model_id}/schema")
 def model_schema(model_id: str) -> dict[str, Any]:
     if model_id == "svj_hybrid":
-        inputs = [
-            {
-                "path": leaf["key"],
-                "value": leaf["default"],
-                "type": "number",
-                "section": "deal",
-                "label": leaf.get("label", leaf["key"]),
-            }
-            for leaf in svj_input_spec()
-        ]
-        return {"inputs": inputs}
+        return {"inputs": svj_input_spec()}
 
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()

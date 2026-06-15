@@ -25,31 +25,66 @@ from asset_finance_modeler.core.financing import compute_waterfall_dscr
 from asset_finance_modeler.core.portfolio import consolidate_npv
 from asset_finance_modeler.core.protocols import FinancialOutput
 from asset_finance_modeler.store.exports import to_xlsx
+from asset_finance_modeler.web_api.introspect import schema_tree, set_by_path
 
 # Validated deal conventions.
 _WACC = 0.0537
 _PPY = 12  # monthly presets
 _HORIZON_YEARS = 30
-_SENIOR = (2_220_000.0, 0.032, 10)  # principal, rate, tenor (fixed)
-_SUB_PRINCIPAL = 1_841_000.0
+
+# Default capital stack (principal, interest_rate, tenor_years).
+_SENIOR_DEFAULTS = {"principal": 2_220_000.0, "interest_rate": 0.032, "tenor_years": 10}
+_SUB_DEFAULTS = {"principal": 1_841_000.0, "interest_rate": 0.085, "tenor_years": 7}
+
+# Backward-compat: the 6 original drivers and where they really live.
+_LEGACY_KEYS = frozenset(
+    {
+        "fv_ppa_price",
+        "spread_capture",
+        "ancillary_base",
+        "bess_capex_eur_kwh",
+        "sub_rate",
+        "sub_tenor_years",
+    }
+)
 
 
 def svj_input_spec() -> list[dict[str, Any]]:
-    """Key drivers exposed to the frontend simulator."""
-    return [
-        {
-            "key": "spread_capture", "label": "Captura de spread BESS",
-            "unit": "x", "default": 0.80, "min": 0.5, "max": 1.0,
-        },
-        {
-            "key": "ancillary_base", "label": "Ancillary aFRR año 1",
-            "unit": "€/MW", "default": 74000, "min": 30000, "max": 100000,
-        },
-        {"key": "bess_capex_eur_kwh", "label": "CAPEX BESS", "unit": "€/kWh", "default": 130.6, "min": 90, "max": 200},
-        {"key": "sub_tenor_years", "label": "Plazo deuda inversor", "unit": "años", "default": 7, "min": 5, "max": 12},
-        {"key": "sub_rate", "label": "Tipo deuda inversor", "unit": "%", "default": 0.085, "min": 0.05, "max": 0.12},
-        {"key": "fv_ppa_price", "label": "PPA FV", "unit": "€/MWh", "default": 43, "min": 30, "max": 60},
+    """Full editable input tree: FV + BESS preset trees + debt/valuation.
+
+    Each FV/BESS leaf is prefixed (``fv.`` / ``bess.``) so overrides can be
+    routed to the right asset; debt/valuation leaves expose the consolidated
+    capital stack and the hybrid WACC.
+    """
+    fv_leaves = [
+        {**leaf, "path": "fv." + leaf["path"], "section": "FV · " + leaf["section"]}
+        for leaf in schema_tree(load_preset("svj_fv_cordoba").model_dump())
     ]
+    bess_leaves = [
+        {**leaf, "path": "bess." + leaf["path"], "section": "BESS · " + leaf["section"]}
+        for leaf in schema_tree(load_preset("svj_bess_cordoba").model_dump())
+    ]
+    sec = "Deuda / Valoración"
+
+    def _debt_leaf(path: str, value: float) -> dict[str, Any]:
+        return {
+            "path": path,
+            "value": value,
+            "type": "number",
+            "section": sec,
+            "label": path.rsplit(".", 1)[-1].replace("_", " "),
+        }
+
+    debt_leaves = [
+        _debt_leaf("senior.principal", _SENIOR_DEFAULTS["principal"]),
+        _debt_leaf("senior.interest_rate", _SENIOR_DEFAULTS["interest_rate"]),
+        _debt_leaf("senior.tenor_years", float(_SENIOR_DEFAULTS["tenor_years"])),
+        _debt_leaf("subordinated.principal", _SUB_DEFAULTS["principal"]),
+        _debt_leaf("subordinated.interest_rate", _SUB_DEFAULTS["interest_rate"]),
+        _debt_leaf("subordinated.tenor_years", float(_SUB_DEFAULTS["tenor_years"])),
+        _debt_leaf("wacc", _WACC),
+    ]
+    return fv_leaves + bess_leaves + debt_leaves
 
 
 def _annual(series: list[float]) -> list[float]:
@@ -57,11 +92,14 @@ def _annual(series: list[float]) -> list[float]:
     return [sum(series[y * _PPY : (y + 1) * _PPY]) for y in range(len(series) // _PPY)]
 
 
-def _build_configs(overrides: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Load presets as mutable dicts and apply the user overrides."""
-    fv = load_preset("svj_fv_cordoba").model_dump()
-    bess = load_preset("svj_bess_cordoba").model_dump()
-
+def _apply_legacy(
+    overrides: dict[str, Any],
+    fv: dict[str, Any],
+    bess: dict[str, Any],
+    senior: dict[str, Any],
+    subordinated: dict[str, Any],
+) -> None:
+    """Map the 6 original drivers onto their real targets (mutates in place)."""
     if "fv_ppa_price" in overrides:
         for stream in fv["revenue"]:
             if stream.get("type") == "ppa":
@@ -82,7 +120,45 @@ def _build_configs(overrides: dict[str, Any]) -> tuple[dict[str, Any], dict[str,
             if item.get("unit") == "kWh":
                 item["amount_per_unit"] = float(overrides["bess_capex_eur_kwh"])
 
-    return fv, bess
+    if "sub_rate" in overrides:
+        subordinated["interest_rate"] = float(overrides["sub_rate"])
+    if "sub_tenor_years" in overrides:
+        subordinated["tenor_years"] = int(overrides["sub_tenor_years"])
+
+
+def _build_deal(
+    overrides: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], float]:
+    """Load both presets + default capital stack, apply legacy drivers AND any
+    path-addressed override (``fv.*`` / ``bess.*`` / ``senior.*`` /
+    ``subordinated.*`` / ``wacc``). Returns (fv, bess, senior, sub, wacc)."""
+    fv = load_preset("svj_fv_cordoba").model_dump()
+    bess = load_preset("svj_bess_cordoba").model_dump()
+    senior = dict(_SENIOR_DEFAULTS)
+    subordinated = dict(_SUB_DEFAULTS)
+    wacc = _WACC
+
+    # 1) Backward-compat: the 6 legacy drivers (so old saved overrides run).
+    _apply_legacy(overrides, fv, bess, senior, subordinated)
+
+    # 2) Generic path-addressed overrides on the full tree.
+    for key, value in overrides.items():
+        if key in _LEGACY_KEYS:
+            continue  # already handled above
+        if key.startswith("fv."):
+            fv = set_by_path(fv, key[len("fv.") :], value)
+        elif key.startswith("bess."):
+            bess = set_by_path(bess, key[len("bess.") :], value)
+        elif key.startswith("senior."):
+            field = key[len("senior.") :]
+            senior[field] = int(value) if field == "tenor_years" else float(value)
+        elif key.startswith("subordinated."):
+            field = key[len("subordinated.") :]
+            subordinated[field] = int(value) if field == "tenor_years" else float(value)
+        elif key == "wacc":
+            wacc = float(value)
+
+    return fv, bess, senior, subordinated, wacc
 
 
 def _run_infra(config_dict: dict[str, Any]) -> FinancialOutput:
@@ -90,7 +166,7 @@ def _run_infra(config_dict: dict[str, Any]) -> FinancialOutput:
     return InfrastructureModel(cfg).run()
 
 
-def _unlevered_npv(config_dict: dict[str, Any]) -> float:
+def _unlevered_npv(config_dict: dict[str, Any], wacc: float = _WACC) -> float:
     """Project NPV with NO leverage: discount annual (CFO + CFI) at the WACC."""
     levered_free = dict(config_dict)
     levered_free["financing"] = {"max_leverage": 0.0}
@@ -98,7 +174,7 @@ def _unlevered_npv(config_dict: dict[str, Any]) -> float:
     cfo = _annual(out.cashflow["cfo"])
     cfi = _annual(out.cashflow["cfi"])
     fcf = [cfo[i] + cfi[i] for i in range(len(cfo))]
-    return consolidate_npv(fcf, _WACC)
+    return consolidate_npv(fcf, wacc)
 
 
 def _ancillary_effective(bess: dict[str, Any], ancillary_base: float) -> list[float]:
@@ -125,11 +201,11 @@ def _ancillary_effective(bess: dict[str, Any], ancillary_base: float) -> list[fl
 
 def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
     """Run the SVJ deal with the given driver overrides and shape the output."""
-    fv, bess = _build_configs(overrides)
+    fv, bess, senior_cfg, sub_cfg, wacc = _build_deal(overrides)
 
-    # --- Project NPVs (unlevered) ---
-    npv_fv = _unlevered_npv(fv)
-    npv_bess = _unlevered_npv(bess)
+    # --- Project NPVs (unlevered, using the OVERRIDDEN dicts + deal WACC) ---
+    npv_fv = _unlevered_npv(fv, wacc)
+    npv_bess = _unlevered_npv(bess, wacc)
     npv_hybrid = npv_fv + npv_bess
 
     # --- Annual EBITDA series for each asset (as configured, with debt) ---
@@ -145,16 +221,14 @@ def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
     revenue_y1 = (fv_rev_y1[0] if fv_rev_y1 else 0.0) + (bess_rev_y1[0] if bess_rev_y1 else 0.0)
 
     # --- Investor metrics from the consolidated hybrid with the capital stack ---
-    sub_rate = float(overrides.get("sub_rate", 0.085))
-    sub_tenor = int(overrides.get("sub_tenor_years", 7))
-    senior = TrancheSpec(*_SENIOR)
-    subordinated = TrancheSpec(_SUB_PRINCIPAL, sub_rate, sub_tenor)
+    senior = TrancheSpec(**senior_cfg)
+    subordinated = TrancheSpec(**sub_cfg)
     hybrid = HybridProject(
         [
             InfrastructureModelConfig.model_validate(fv),
             InfrastructureModelConfig.model_validate(bess),
         ],
-        discount_rate_annual=_WACC,
+        discount_rate_annual=wacc,
         senior=senior,
         subordinated=subordinated,
     )
@@ -212,7 +286,7 @@ def _dscr_profile(
 
 def build_svj_xlsx(overrides: dict[str, Any]) -> bytes:
     """Run the SVJ BESS model and return a multi-sheet Excel workbook as bytes."""
-    _, bess = _build_configs(overrides)
+    _, bess, _, _, _ = _build_deal(overrides)
     out = _run_infra(bess)
     # The shared xlsx exporter renders a "UnitEcon" sheet from the unit_econ
     # dict; infrastructure models don't produce one, so supply zero-filled
