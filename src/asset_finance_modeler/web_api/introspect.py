@@ -5,6 +5,22 @@ import re
 from typing import Any
 
 
+# Curve fields are optional and frequently None in a preset, but the platform
+# still needs to SEE the slot to attach a library curve / explicit points via
+# the API. So these leaf names surface even when their value is None (unlike
+# every other None leaf, which is skipped). Matched on the leaf name only, so
+# it works for any revenue stream index (revenue[N].price_curve_name, …).
+_KNOWN_OPTIONAL_CURVE_FIELDS = frozenset(
+    {
+        "price_curve_name",
+        "price_points",
+        "spread_curve_name",
+        "spread_points",
+        "curve_points",
+    }
+)
+
+
 def _leaf(path: str, value: Any) -> dict[str, Any]:
     if isinstance(value, bool):
         t = "bool"
@@ -39,6 +55,11 @@ def schema_tree(config: dict[str, Any], _path: str = "") -> list[dict[str, Any]]
                     leaves.append(_leaf(ip, item))
         elif val is not None:
             leaves.append(_leaf(path, val))
+        elif key in _KNOWN_OPTIONAL_CURVE_FIELDS:
+            # Surface a known-optional curve slot even when None so the platform
+            # can attach a curve. Carry value=None; type "text" (curve name or
+            # JSON points list both edit as text).
+            leaves.append(_leaf(path, None))
     return leaves
 
 
