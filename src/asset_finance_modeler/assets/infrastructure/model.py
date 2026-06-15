@@ -58,6 +58,77 @@ _PPY = {"M": 12, "Q": 4, "Y": 1}
 _PERIOD_DAYS = {"M": 30, "Q": 91, "Y": 365}
 
 
+def _months_to_periods(months: int, ppy: int) -> int:
+    """Convert a month count to model periods for the given frequency.
+
+    Monthly (ppy=12) → 1:1. Quarterly (ppy=4) → months/3. Annual (ppy=1) →
+    months/12. Rounded to the nearest whole period."""
+    if months <= 0:
+        return 0
+    return int(round(months * ppy / 12.0))
+
+
+def _timeline_periods(timeline, ppy: int) -> tuple[int, int, int]:
+    """Resolve the development/construction timeline into model periods.
+
+    Returns (pre_construction, construction, cod) where:
+      * pre_construction = development + permitting periods (capex idle before
+        the construction drawdown starts — kept simple: drawdown begins at COD-
+        grid window; here we start the construction spend right after permitting)
+      * construction      = construction periods (over which capex is drawn)
+      * cod               = total offset to commercial operation =
+                            development + permitting + construction + grid_connection
+    Production/revenue begin at period ``cod``; capex is spread over the
+    ``construction`` window beginning at ``pre_construction``."""
+    dev = _months_to_periods(timeline.development_months, ppy)
+    permit = _months_to_periods(timeline.permitting_months, ppy)
+    constr = _months_to_periods(timeline.construction_months, ppy)
+    grid = _months_to_periods(timeline.grid_connection_months, ppy)
+    pre = dev + permit
+    cod = dev + permit + constr + grid
+    return pre, constr, cod
+
+
+def _spread_capex(
+    total_capex: float,
+    pre_construction: int,
+    construction: int,
+    schedule: list[float] | None,
+    n: int,
+) -> list[float]:
+    """Spread total capex over the construction window.
+
+    Capex lands across ``construction`` periods starting at ``pre_construction``.
+    With a ``construction_drawdown_schedule`` (weights, normalised), capex is
+    drawn per its shape; otherwise it is spread evenly. If construction == 0
+    (no timeline), it all lands at period 0 — unchanged legacy behaviour. Any
+    weight whose period falls beyond the horizon is clamped into the last period
+    so the total still reconciles to total_capex."""
+    spend = [0.0] * n
+    if total_capex == 0 or n == 0:
+        return spend
+    if construction <= 0:
+        spend[0] = total_capex
+        return spend
+
+    if schedule:
+        weights = [float(w) for w in schedule]
+    else:
+        weights = [1.0] * construction
+    wsum = sum(weights)
+    if wsum <= 0:
+        spend[0] = total_capex
+        return spend
+    weights = [w / wsum for w in weights]
+
+    for i, w in enumerate(weights):
+        t = pre_construction + i
+        if t >= n:
+            t = n - 1
+        spend[t] += total_capex * w
+    return spend
+
+
 @dataclass
 class InfrastructureModel:
     config: InfrastructureModelConfig
@@ -73,24 +144,55 @@ class InfrastructureModel:
         ppy = _PPY[cfg.meta.horizon.frequency]
         period_days = _PERIOD_DAYS[cfg.meta.horizon.frequency]
 
-        # 1. Degradation multipliers
+        # 1. Degradation multipliers (operating-time shape, from first op period)
         deg = self._compute_degradation(n, ppy)
+
+        # 1c. Construction / permitting timeline → commercial-operation offset.
+        #     Production (and therefore revenue) begin at COD; capex is spread
+        #     over the construction window. A fully-zero timeline → no offset.
+        pre_construction, construction, cod = _timeline_periods(cfg.timeline, ppy)
+
+        # 1d. Defer the degradation profile to COD: the operating degradation
+        #     shape starts at COD, not at model period 0. Resets below are then
+        #     applied on this deferred curve at their CALENDAR (absolute) period
+        #     so a "year 15" repowering lands at calendar period 15*ppy.
+        if cod > 0:
+            shifted = [deg[0]] * n
+            for t in range(cod, n):
+                shifted[t] = deg[t - cod]
+            deg = shifted
+
         # 1b. Repowering / augmentation resets: events flagged
-        #     resets_degradation restore the curve to nameplate at their period.
+        #     resets_degradation restore the curve to nameplate at their period
+        #     (calendar/absolute), then the degradation shape restarts.
         reset_periods = [
             e.year * ppy for e in cfg.capex_events if e.resets_degradation
         ]
         if reset_periods:
             deg = apply_degradation_resets(deg, reset_periods)
 
-        # 2. Production
+        # 2. Production (degradation already deferred to COD)
         prod = compute_production(cfg.production, deg, n, ppy)
+        # 2b. Zero production before COD (development/permitting/construction/
+        #     grid-connection): no output, hence no revenue, during that window.
+        if cod > 0:
+            prod = self._zero_production_before(prod, cod, n)
 
-        # 3. Revenue
+        # 3. Revenue (zero during construction because production is zero there)
         rev = compute_revenue(cfg.revenue, prod, n, ppy)
 
         # 4. CAPEX + depreciation
         cap = compute_capex(cfg.capex, cfg.production, n, ppy)
+        # 4a-bis. Spread capex over the construction window (instead of a single
+        #         period-0 lump) per the drawdown schedule, if a timeline exists.
+        if construction > 0:
+            cap["capex_spend"] = _spread_capex(
+                cap["total_capex"],
+                pre_construction,
+                construction,
+                cfg.timeline.construction_drawdown_schedule,
+                n,
+            )
 
         # 4b. CAPEX events (repowering / augmentation injections): add each
         #     event amount to the spend at its period (lands in investing cash
@@ -275,6 +377,22 @@ class InfrastructureModel:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _zero_production_before(prod: dict, cod: int, n: int) -> dict:
+        """Zero every per-period production series for the first ``cod`` periods.
+
+        The degradation curve was already deferred to COD upstream, so periods
+        ``cod..n`` already carry the operating profile; this just blanks the
+        construction window. Scalar keys (capacity_mw, …) are left untouched."""
+        out = dict(prod)
+        for key, series in prod.items():
+            if isinstance(series, list) and len(series) == n:
+                blanked = list(series)
+                for t in range(min(cod, n)):
+                    blanked[t] = 0.0
+                out[key] = blanked
+        return out
 
     def _build_pnl(
         self,
