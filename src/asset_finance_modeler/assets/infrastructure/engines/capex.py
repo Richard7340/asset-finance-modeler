@@ -177,23 +177,38 @@ def _resolve_quantity(item: InfraCapexItem, production_config: Any) -> float:
         return power_mw * duration_hours * 1_000.0
 
     if unit == "MW":
-        # Any technology — use capacity_mw or capacity_mwp
-        cap = getattr(production_config, "capacity_mw", None)
-        if cap is None:
-            cap = getattr(production_config, "capacity_mwp", None)
-        if cap is None:
-            cap = getattr(production_config, "power_mw", None)
-        if cap is None:
-            cap = getattr(production_config, "electrolyzer_mw", None)
-        return float(cap) if cap is not None else 1.0
+        cap = _capacity_mw(production_config)
+        return cap if cap is not None else 1.0
 
-    # Fallback — use whatever capacity field is available
-    for attr in ("capacity_mw", "capacity_mwp", "power_mw", "electrolyzer_mw"):
+    # Fallback — use whatever MW-equivalent capacity is available
+    cap = _capacity_mw(production_config)
+    return cap if cap is not None else 1.0
+
+
+def _capacity_mw(production_config: Any) -> float | None:
+    """Resolve a canonical MW capacity from any production config.
+
+    Each technology names its capacity differently; this maps them all to a
+    common MW figure so a ``unit="MW"`` capex item resolves to the real plant
+    size rather than silently falling back to ``1.0``:
+
+      * solar           → ``capacity_mwp``
+      * wind / generic  → ``capacity_mw``
+      * BESS            → ``power_mw``
+      * hydrogen        → ``electrolyzer_mw``
+      * data center     → ``it_capacity_mw`` (IT load — the capex sizing basis)
+      * biomethane      → ``capacity_nm3_h × 0.01`` (10 kWh/Nm3 = 0.01 MWh/Nm3)
+    """
+    for attr in ("capacity_mw", "capacity_mwp", "power_mw", "electrolyzer_mw", "it_capacity_mw"):
         val = getattr(production_config, attr, None)
         if val is not None:
             return float(val)
 
-    return 1.0
+    nm3_h = getattr(production_config, "capacity_nm3_h", None)
+    if nm3_h is not None:
+        return float(nm3_h) * 0.01
+
+    return None
 
 
 def _pad(series: list[float], length: int) -> list[float]:
