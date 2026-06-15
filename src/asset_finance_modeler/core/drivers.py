@@ -25,9 +25,12 @@ class CurvePhase:
 def build_phased_curve(base: float, phases: list["CurvePhase"], periods: int) -> list[float]:
     """Build a value series from a base and phased compounding growth.
 
-    Year 1 (index 0) = base. For each later period t, the value steps from the
-    previous period by the growth rate of the active phase. Phases are consumed
-    in order by their `years` span; if they run out before `periods`, the last
+    Year 1 (index 0) = base. Growth steps INTO each year of a phase: a phase
+    declared "N years at +g%" produces N compounding steps, so the value at the
+    end of that phase (index N, when it is the first phase) is
+    ``base * (1+g)**N``. The growth declared for the k-th year of a phase is
+    applied when stepping from index k-1 to index k. Phases are consumed in
+    order by their `years` span; if they run out before `periods`, the last
     phase's growth continues (ramp-then-hold semantics).
     """
     growth_by_period: list[float] = []
@@ -39,7 +42,10 @@ def build_phased_curve(base: float, phases: list["CurvePhase"], periods: int) ->
     current = base
     for t in range(periods):
         if t > 0:
-            g = growth_by_period[t] if t < len(growth_by_period) else growth_by_period[-1]
+            # Step from t-1 to t uses the growth of the (t-1)-th declared year,
+            # so the first phase-year's growth is not skipped (FIX 2).
+            idx = t - 1
+            g = growth_by_period[idx] if idx < len(growth_by_period) else growth_by_period[-1]
             current = current * (1.0 + g)
         values.append(current)
     return values
