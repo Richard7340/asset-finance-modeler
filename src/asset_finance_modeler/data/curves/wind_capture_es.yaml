@@ -1,0 +1,11 @@
+name: wind_capture_es
+asset_type: wind_onshore
+parameter: capture_price_eur_mwh
+source: "Ilustrativa (Aurora/Agere-style): captura eolica Espana ~48 EUR/MWh 2025, menor apuntamiento que solar pero canibalizacion creciente decae a ~38 EUR/MWh"
+bankable: false
+build: phases
+base: 48.0
+periods: 30
+phases:
+  - {years: 10, growth_pct: -0.012}
+  - {years: 20, growth_pct: -0.006}

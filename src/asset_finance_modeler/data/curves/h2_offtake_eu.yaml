@@ -1,0 +1,11 @@
+name: h2_offtake_eu
+asset_type: hydrogen
+parameter: offtake_price_eur_kg
+source: "Ilustrativa (BNEF/IEA-style): precio offtake H2 verde EU ~6.0 EUR/kg 2026, baja con escala de electrolisis y curva de coste hacia ~3.5 EUR/kg 2040s"
+bankable: false
+build: phases
+base: 6.0
+periods: 30
+phases:
+  - {years: 10, growth_pct: -0.025}
+  - {years: 20, growth_pct: -0.01}

@@ -1,0 +1,11 @@
+name: biomethane_offtake_eu
+asset_type: biomethane
+parameter: offtake_price_eur_mwh
+source: "Ilustrativa (estilo indices EEX/THE + premium GoO): biometano EU ~85 EUR/MWh 2026, escala suave con indexacion gas + valor de descarbonizacion hacia ~100 EUR/MWh"
+bankable: false
+build: phases
+base: 85.0
+periods: 30
+phases:
+  - {years: 10, growth_pct: 0.012}
+  - {years: 20, growth_pct: 0.006}

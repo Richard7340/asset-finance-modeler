@@ -1,0 +1,11 @@
+name: ppa_solar_es
+asset_type: solar_pv
+parameter: ppa_price_eur_mwh
+source: "Ilustrativa (estilo Pexapark PPA index Espana): PPA solar pay-as-produced ~42 EUR/MWh 2026, baja con curva merchant a largo y revierte suave en renovaciones hacia ~38 EUR/MWh"
+bankable: false
+build: phases
+base: 42.0
+periods: 30
+phases:
+  - {years: 10, growth_pct: -0.008}
+  - {years: 20, growth_pct: -0.003}

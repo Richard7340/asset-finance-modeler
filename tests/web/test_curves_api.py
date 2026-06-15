@@ -18,6 +18,18 @@ def test_list_curves_with_source_and_values(monkeypatch):
     assert spread["values"][0] > 0
 
 
+def test_p1_consultant_curves_listed_with_metadata(monkeypatch):
+    c = _client(monkeypatch)
+    data = c.get("/api/curves?t=tk").json()["curves"]
+    by_name = {cv["name"]: cv for cv in data}
+    for n in ("wind_capture_es", "h2_offtake_eu", "biomethane_offtake_eu", "ppa_solar_es"):
+        assert n in by_name, f"{n} not listed by /api/curves"
+        cv = by_name[n]
+        assert cv["source"]
+        assert cv["bankable"] is not None
+        assert len(cv["values"]) == 30
+
+
 def test_get_single_curve_and_404(monkeypatch):
     c = _client(monkeypatch)
     assert c.get("/api/curves/solar_capture_es?t=tk").status_code == 200
