@@ -28,7 +28,7 @@ from asset_finance_modeler.assets.saas.loader import load_preset as load_saas_pr
 from asset_finance_modeler.assets.saas.model import ModelResults, SaasModel
 from asset_finance_modeler.assets.saas.schema import SaasModelConfig
 from asset_finance_modeler.core.protocols import FinancialOutput
-from asset_finance_modeler.deals.svj import run_svj, svj_input_spec
+from asset_finance_modeler.deals.svj import SvjInputError, run_svj, svj_input_spec
 from asset_finance_modeler.web_api.auth import require_token
 from asset_finance_modeler.web_api.introspect import (
     InvalidPathError,
@@ -275,7 +275,10 @@ def model_schema(model_id: str) -> dict[str, Any]:
 def model_run(model_id: str, body: RunBody) -> dict[str, Any]:
     overrides = body.overrides or {}
     if model_id == "svj_hybrid":
-        return run_svj(overrides)
+        try:
+            return run_svj(overrides)
+        except SvjInputError as exc:  # A1: bad override -> 400, not 500
+            raise HTTPException(status_code=400, detail=exc.message) from exc
 
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()

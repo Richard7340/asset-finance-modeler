@@ -84,3 +84,29 @@ def test_set_by_path_nested_and_indexed():
     assert cfg["revenue"][0]["price_eur_per_unit"] == 43.0   # input not mutated
     out2 = set_by_path(cfg, "production.capacity_mwp", 5.0)
     assert out2["production"]["capacity_mwp"] == 5.0
+
+
+def test_set_by_path_rejects_nonexistent_leaf():
+    """A2: a typo'd LEAF key (valid parent, no such leaf) must raise, not be
+    silently accepted (which would 200 with no effect)."""
+    import pytest  # noqa: PLC0415
+
+    from asset_finance_modeler.web_api.introspect import InvalidPathError  # noqa: PLC0415
+
+    cfg = {"financing": {"senior": {"interest_rate": 0.032}}, "meta": {"name": "x"}}
+    with pytest.raises(InvalidPathError):
+        set_by_path(cfg, "financing.senior.bogus", 0.05)
+    with pytest.raises(InvalidPathError):
+        set_by_path(cfg, "meta.tax_rate", 0.25)
+    # an existing leaf still works
+    out = set_by_path(cfg, "financing.senior.interest_rate", 0.05)
+    assert out["financing"]["senior"]["interest_rate"] == 0.05
+
+
+def test_set_by_path_allows_optional_curve_leaf_currently_none():
+    """A2 must NOT break attaching a curve to a stream whose curve field is
+    currently None — the key exists in model_dump() so it is settable."""
+    cfg = load_preset("solar_pv_50mw_spain").model_dump()
+    out = set_by_path(cfg, "revenue[1].price_curve_name", "merchant_es_baseload")
+    # find the merchant stream and confirm the curve name landed
+    assert out["revenue"][1]["price_curve_name"] == "merchant_es_baseload"

@@ -13,6 +13,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from asset_finance_modeler.assets.hybrid.model import HybridProject, TrancheSpec
 from asset_finance_modeler.assets.infrastructure.loader import load_preset
 from asset_finance_modeler.assets.infrastructure.model import InfrastructureModel
@@ -25,7 +27,36 @@ from asset_finance_modeler.core.financing import compute_waterfall_dscr
 from asset_finance_modeler.core.portfolio import consolidate_npv
 from asset_finance_modeler.core.protocols import FinancialOutput
 from asset_finance_modeler.store.exports import to_xlsx
-from asset_finance_modeler.web_api.introspect import schema_tree, set_by_path
+from asset_finance_modeler.web_api.introspect import (
+    InvalidPathError,
+    schema_tree,
+    set_by_path,
+)
+
+
+class SvjInputError(ValueError):
+    """A bad SVJ override (wrong type, out-of-range, or pathological value).
+
+    Carries a human-readable ``message`` so the web layer can return an HTTP
+    400 (not a 500) like the generic model-run path does (A1)."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
+def _to_float(value: Any, field: str) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise SvjInputError(f"invalid override value: {field}: not a number") from exc
+
+
+def _to_int(value: Any, field: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise SvjInputError(f"invalid override value: {field}: not an integer") from exc
 
 # Validated deal conventions.
 _WACC = 0.0537
@@ -137,29 +168,35 @@ def _apply_legacy(
 ) -> None:
     """Map the 6 original drivers onto their real targets (mutates in place)."""
     if "fv_ppa_price" in overrides:
+        v = _to_float(overrides["fv_ppa_price"], "fv_ppa_price")
         for stream in fv["revenue"]:
             if stream.get("type") == "ppa":
-                stream["price_eur_per_unit"] = float(overrides["fv_ppa_price"])
+                stream["price_eur_per_unit"] = v
 
     if "spread_capture" in overrides:
+        v = _to_float(overrides["spread_capture"], "spread_capture")
         for stream in bess["revenue"]:
             if stream.get("type") == "arbitrage":
-                stream["spread_capture_ratio"] = float(overrides["spread_capture"])
+                stream["spread_capture_ratio"] = v
 
     if "ancillary_base" in overrides:
+        v = _to_float(overrides["ancillary_base"], "ancillary_base")
         for stream in bess["revenue"]:
             if stream.get("type") == "ancillary":
-                stream["afrr_eur_mw_yr"] = float(overrides["ancillary_base"])
+                stream["afrr_eur_mw_yr"] = v
 
     if "bess_capex_eur_kwh" in overrides:
+        v = _to_float(overrides["bess_capex_eur_kwh"], "bess_capex_eur_kwh")
         for item in bess["capex"]["items"]:
             if item.get("unit") == "kWh":
-                item["amount_per_unit"] = float(overrides["bess_capex_eur_kwh"])
+                item["amount_per_unit"] = v
 
     if "sub_rate" in overrides:
-        subordinated["interest_rate"] = float(overrides["sub_rate"])
+        subordinated["interest_rate"] = _to_float(overrides["sub_rate"], "sub_rate")
     if "sub_tenor_years" in overrides:
-        subordinated["tenor_years"] = int(overrides["sub_tenor_years"])
+        subordinated["tenor_years"] = _to_int(
+            overrides["sub_tenor_years"], "sub_tenor_years"
+        )
 
 
 def _build_deal(
@@ -177,28 +214,56 @@ def _build_deal(
     # 1) Backward-compat: the 6 legacy drivers (so old saved overrides run).
     _apply_legacy(overrides, fv, bess, senior, subordinated)
 
-    # 2) Generic path-addressed overrides on the full tree.
+    # 2) Generic path-addressed overrides on the full tree. Route them through
+    #    the same validation the generic /api/models path uses: an invalid path
+    #    or bad-type/pathological value becomes a SvjInputError → HTTP 400, never
+    #    an unhandled 500 (A1).
     for key, value in overrides.items():
         if key in _LEGACY_KEYS:
             continue  # already handled above
-        if key.startswith("fv."):
-            fv = set_by_path(fv, key[len("fv.") :], value)
-        elif key.startswith("bess."):
-            bess = set_by_path(bess, key[len("bess.") :], value)
-        elif key.startswith("senior."):
-            field = key[len("senior.") :]
-            senior[field] = int(value) if field == "tenor_years" else float(value)
-        elif key.startswith("subordinated."):
-            field = key[len("subordinated.") :]
-            subordinated[field] = int(value) if field == "tenor_years" else float(value)
-        elif key == "wacc":
-            wacc = float(value)
+        try:
+            if key.startswith("fv."):
+                fv = set_by_path(fv, key[len("fv.") :], value)
+            elif key.startswith("bess."):
+                bess = set_by_path(bess, key[len("bess.") :], value)
+            elif key.startswith("senior."):
+                field = key[len("senior.") :]
+                senior[field] = (
+                    _to_int(value, key) if field == "tenor_years" else _to_float(value, key)
+                )
+            elif key.startswith("subordinated."):
+                field = key[len("subordinated.") :]
+                subordinated[field] = (
+                    _to_int(value, key) if field == "tenor_years" else _to_float(value, key)
+                )
+            elif key == "wacc":
+                wacc = _to_float(value, "wacc")
+        except InvalidPathError as exc:
+            raise SvjInputError(f"invalid override path: {exc.path}") from exc
+
+    # Validate the discount rate: a non-positive WACC makes the discount factor
+    # (1+r)^t collapse to 0 and ZeroDivisions the NPV — reject it as a 400.
+    if not (wacc > 0.0):
+        raise SvjInputError("invalid override value: wacc: must be > 0")
 
     return fv, bess, senior, subordinated, wacc
 
 
 def _run_infra(config_dict: dict[str, Any]) -> FinancialOutput:
-    cfg = InfrastructureModelConfig.model_validate(config_dict)
+    try:
+        cfg = InfrastructureModelConfig.model_validate(config_dict)
+    except ValidationError as exc:
+        errs = exc.errors()
+        if errs:
+            e = errs[0]
+            loc = ".".join(str(p) for p in e.get("loc", ()))
+            msg = e.get("msg", "invalid value")
+            detail = (
+                f"invalid override value: {loc}: {msg}" if loc else f"invalid override value: {msg}"
+            )
+        else:  # pragma: no cover — defensive
+            detail = "invalid override value"
+        raise SvjInputError(detail) from exc
     return InfrastructureModel(cfg).run()
 
 
