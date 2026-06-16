@@ -138,13 +138,40 @@ def _overlay_one(
             return
         old = rows[key][year]
         if key == "revenue":
-            # Rescale the whole P&L of that year by the revenue ratio (keeps the
-            # base year's cost & tax ratios), then propagate to CFO.
-            ratio = (real / old) if old else 1.0
-            for k in _PNL_ORDER:
+            # Re-derive the year's P&L preserving the base year's RATIOS, not by
+            # naively scaling each line (which would blow up a negative
+            # net_income). EBITDA margin is held constant; D&A and interest are
+            # absolute (unchanged), so EBIT and EBT move by the EBITDA delta;
+            # tax keeps the base year's effective rate.
+            base_rev = old
+            base_ebitda = rows["ebitda"][year] if "ebitda" in rows else 0.0
+            margin = (base_ebitda / base_rev) if base_rev else 0.0
+            new_ebitda = real * margin
+            ebitda_delta = new_ebitda - base_ebitda
+            rows["revenue"][year] = real
+            if "ebitda" in rows:
+                rows["ebitda"][year] = new_ebitda
+            # EBIT and EBT shift by the same absolute EBITDA delta (D&A,
+            # interest unchanged).
+            for k in ("ebit", "ebt"):
                 if k in rows and year < len(rows[k]):
-                    rows[k][year] = rows[k][year] * ratio
-            rows["revenue"][year] = real  # exact (avoid float drift)
+                    rows[k][year] = rows[k][year] + ebitda_delta
+            # Tax at the base year's effective rate on the new EBT; net_income
+            # = EBT - tax.
+            if "ebt" in rows and year < len(rows["ebt"]):
+                new_ebt = rows["ebt"][year]
+                base_ebt = new_ebt - ebitda_delta
+                base_tax = rows["tax"][year] if "tax" in rows else 0.0
+                # Effective tax rate from the base year (only meaningful on a
+                # profitable base year). If the base year had a loss (base_ebt
+                # <= 0) we conservatively apply no tax — a carryforward would
+                # shield the swing to profit anyway.
+                eff_rate = (base_tax / base_ebt) if base_ebt > 0 else 0.0
+                new_tax = max(0.0, new_ebt) * eff_rate
+                if "tax" in rows:
+                    rows["tax"][year] = new_tax
+                if "net_income" in rows:
+                    rows["net_income"][year] = new_ebt - new_tax
             # CFO is shifted by the net_income delta in compute_live (the caller
             # captures NI before/after this overlay). Add-backs (D&A) unchanged.
             return
