@@ -8,10 +8,12 @@ import {
   isEmbed,
 } from "./api";
 import type {
+  Lifecycle,
   ModelSummary,
   OverrideValue,
   Overrides,
   SavedAssetSummary,
+  TrackingFrequency,
 } from "./api";
 import { useRun } from "./hooks/useRun";
 import { fmtDateTime } from "./format";
@@ -25,6 +27,8 @@ import CashFlowTable from "./components/CashFlowTable";
 import Charts from "./components/Charts";
 import Toolbar from "./components/Toolbar";
 import ViewTransition from "./components/ViewTransition";
+import ActualsGrid from "./components/ActualsGrid";
+import VariancePanel from "./components/VariancePanel";
 
 type Selection = {
   modelId: string;
@@ -32,6 +36,11 @@ type Selection = {
   // When set, the editor reflects a saved asset being reviewed.
   assetId: string | null;
   savedAt: string | null;
+  // Lifecycle metadata carried from the dashboard/asset summary. The asset
+  // detail endpoint does not return these, so we keep them from the selection
+  // (every caller passes a SavedAssetSummary which carries them).
+  lifecycle: Lifecycle | null;
+  trackingFrequency: TrackingFrequency | null;
 };
 
 type View = "portfolio" | "detail";
@@ -56,7 +65,14 @@ export default function App() {
   // --- selection handlers ---
 
   const selectModel = (m: ModelSummary) => {
-    setSelection({ modelId: m.id, modelName: m.name, assetId: null, savedAt: null });
+    setSelection({
+      modelId: m.id,
+      modelName: m.name,
+      assetId: null,
+      savedAt: null,
+      lifecycle: null,
+      trackingFrequency: null,
+    });
     setOverrides({}); // defaults come from schema; empty overrides => backend defaults
     setView("detail");
   };
@@ -68,6 +84,9 @@ export default function App() {
       modelName: full.name,
       assetId: full.id,
       savedAt: full.created_at,
+      // The detail endpoint omits lifecycle; carry it from the summary.
+      lifecycle: a.lifecycle ?? null,
+      trackingFrequency: a.tracking_frequency ?? null,
     });
     setOverrides(full.overrides ?? {});
     setView("detail");
@@ -266,6 +285,17 @@ export default function App() {
                   {!hybrid && result.cash_flow && (
                     <CashFlowTable data={result.cash_flow} />
                   )}
+                </>
+              )}
+
+              {/* Seguimiento: solo para activos en operación (F2). */}
+              {selection?.assetId && selection.lifecycle === "operational" && (
+                <>
+                  <ActualsGrid
+                    assetId={selection.assetId}
+                    trackingFrequency={selection.trackingFrequency}
+                  />
+                  <VariancePanel assetId={selection.assetId} />
                 </>
               )}
             </main>
