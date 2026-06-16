@@ -222,3 +222,76 @@ def test_bess_price_profile_reshapes_arbitrage_revenue():
     assert shaped_rev[0] < base_rev[0]
     assert shaped_rev[1] > base_rev[1]
     assert sum(shaped_rev) == pytest.approx(sum(base_rev), rel=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# FIX 3: tenor_years on contracted streams (PPA / Offtake)
+# ---------------------------------------------------------------------------
+
+
+def test_ppa_tenor_reverts_to_zero_when_no_merchant():
+    """A PPA with tenor_years=3 over a 5-year horizon: years 1-3 contracted,
+    years 4-5 revert to 0 (no merchant fallback stream present)."""
+    streams = [
+        PPAStream(price_eur_per_unit=50.0, volume_fraction=1.0,
+                  escalation_pct_yr=0, tenor_years=3)
+    ]
+    prod = {"production_mwh": [1000.0] * 60, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=60, periods_per_year=12)
+    rev = out["total_revenue"]
+    # Year 1 (period 0) contracted: 1000 * 1.0 * 50
+    assert rev[0] == pytest.approx(50_000)
+    # Last month of year 3 (period 35) still contracted
+    assert rev[35] == pytest.approx(50_000)
+    # Year 4 (period 36) reverts to 0 (no merchant)
+    assert rev[36] == pytest.approx(0.0)
+    assert rev[59] == pytest.approx(0.0)
+
+
+def test_ppa_tenor_geq_horizon_unchanged():
+    """tenor_years >= horizon → identical to the no-tenor behaviour (regression
+    guard: default tenor 15 over a 1-year horizon must not change anything)."""
+    streams_long = [
+        PPAStream(price_eur_per_unit=50.0, volume_fraction=1.0,
+                  escalation_pct_yr=0.02, tenor_years=100)
+    ]
+    prod = {"production_mwh": [1000.0] * 24, "capacity_mw": 10}
+    out = compute_revenue(streams_long, prod, periods=24, periods_per_year=12)
+    rev = out["total_revenue"]
+    # 2-year horizon, tenor 100 -> escalation applies normally, never truncated
+    assert rev[0] == pytest.approx(50_000)
+    assert rev[12] == pytest.approx(50_000 * 1.02)
+
+
+def test_ppa_tenor_reverts_to_merchant_price():
+    """After the PPA tenor expires, the contracted volume is sold at the
+    merchant per-year price (a merchant stream exists in the model)."""
+    streams = [
+        PPAStream(price_eur_per_unit=50.0, volume_fraction=0.7,
+                  escalation_pct_yr=0, tenor_years=2),
+        MerchantStream(base_price_eur_per_unit=30.0, volume_fraction=0.3,
+                       capture_ratio=1.0, escalation_pct_yr=0),
+    ]
+    prod = {"production_mwh": [1000.0] * 48, "capacity_mw": 10}
+    out = compute_revenue(streams, prod, periods=48, periods_per_year=12)
+    ppa = out["streams"]["PPA"]
+    # Years 1-2 contracted: 1000 * 0.7 * 50 = 35000
+    assert ppa[0] == pytest.approx(35_000)
+    assert ppa[23] == pytest.approx(35_000)
+    # Year 3 onward: PPA volume reverts to merchant price 30 -> 1000 * 0.7 * 30
+    assert ppa[24] == pytest.approx(21_000)
+    assert ppa[47] == pytest.approx(21_000)
+
+
+def test_offtake_tenor_reverts_to_zero():
+    """H2/biomethane offtake reverts to 0 after tenor (no merchant fallback)."""
+    streams = [
+        OfftakeStream(price_eur_per_unit=5.0, volume_fraction=1.0,
+                      escalation_pct_yr=0, tenor_years=1)
+    ]
+    prod = {"production_mwh": [2000.0] * 36, "capacity_mw": 20}
+    out = compute_revenue(streams, prod, periods=36, periods_per_year=12)
+    rev = out["total_revenue"]
+    assert rev[0] == pytest.approx(10_000)
+    assert rev[11] == pytest.approx(10_000)
+    assert rev[12] == pytest.approx(0.0)

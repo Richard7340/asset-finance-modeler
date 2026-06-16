@@ -47,6 +47,56 @@ def _curve_by_year(
     return None
 
 
+def _merchant_price_by_year(streams: list[Any], n_years: int) -> list[float] | None:
+    """Per-year realized merchant price (€/unit) used as the post-tenor fallback
+    for contracted streams (FIX 3). Returns the first MerchantStream's capture
+    price path (curve > points > base × capture × escalation), or None if the
+    model has no merchant stream (then contracted revenue reverts to 0 after
+    tenor). The contracted stream re-applies its own volume_fraction, so this is
+    a price per unit of production, not a revenue series."""
+    for stream in streams:
+        if isinstance(stream, MerchantStream):
+            if stream.price_curve_name is not None:
+                return Curve.from_library(stream.price_curve_name).to_list(n_years)
+            if stream.price_points is not None:
+                return Curve.from_points(stream.price_points).to_list(n_years)
+            if stream.price_curve is not None:
+                return Curve.from_points(stream.price_curve).to_list(n_years)
+            esc = stream.escalation_pct_yr
+            price = stream.base_price_eur_per_unit
+            cr = stream.capture_ratio
+            return [price * cr * (1.0 + esc) ** y for y in range(n_years)]
+    return None
+
+
+def _apply_tenor(
+    contracted: list[float],
+    tenor_years: int,
+    volume: list[float],
+    volume_fraction: float,
+    periods: int,
+    ppy: int,
+    merchant_price_by_year: list[float] | None,
+) -> list[float]:
+    """Truncate a contracted-stream revenue series at ``tenor_years`` from COD.
+    For periods within the tenor, keep the contracted revenue. After the tenor,
+    the same contracted volume (``volume × volume_fraction``) reverts to the
+    merchant per-year price if one exists, else to 0 (FIX 3). When the tenor
+    covers the whole horizon, the series is returned unchanged (no regression)."""
+    tenor_periods = tenor_years * ppy
+    if tenor_periods >= periods:
+        return contracted
+    result = list(contracted)
+    for t in range(tenor_periods, periods):
+        if merchant_price_by_year is not None:
+            year = t // ppy
+            price = merchant_price_by_year[year] if year < len(merchant_price_by_year) else 0.0
+            result[t] = volume[t] * volume_fraction * price
+        else:
+            result[t] = 0.0
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Public dispatcher
 # ---------------------------------------------------------------------------
@@ -81,13 +131,21 @@ def compute_revenue(
     ppy = periods_per_year
     production_mwh: list[float] = production_output.get("production_mwh", [0.0] * periods)
     capacity_mw: float = float(production_output.get("capacity_mw", 0.0))
+    n_years = (periods + ppy - 1) // ppy
+
+    # FIX 3: after a contracted stream's tenor expires, its volume reverts to
+    # the merchant/market price if a merchant stream exists in the model,
+    # otherwise to 0. Pre-compute the merchant per-year realized price (€/MWh)
+    # once so contracted streams can fall back onto it (price, not revenue —
+    # the contracted stream applies its own volume_fraction).
+    merchant_price_by_year = _merchant_price_by_year(streams, n_years)
 
     stream_results: dict[str, list[float]] = {}
     totals: list[float] = [0.0] * periods
 
     for stream in streams:
         if isinstance(stream, PPAStream):
-            series = _ppa(stream, production_mwh, periods, ppy)
+            series = _ppa(stream, production_mwh, periods, ppy, merchant_price_by_year)
             key = stream.name
         elif isinstance(stream, MerchantStream):
             series = _merchant(stream, production_mwh, periods, ppy)
@@ -102,7 +160,9 @@ def compute_revenue(
             series = _capacity(stream, capacity_mw, periods, ppy)
             key = stream.name
         elif isinstance(stream, OfftakeStream):
-            series = _offtake(stream, production_output, production_mwh, periods, ppy)
+            series = _offtake(
+                stream, production_output, production_mwh, periods, ppy, merchant_price_by_year
+            )
             key = stream.name
         elif isinstance(stream, CertificateStream):
             series = _certificate(stream, production_mwh, periods, ppy)
@@ -141,22 +201,29 @@ def _ppa(
     production_mwh: list[float],
     periods: int,
     ppy: int,
+    merchant_price_by_year: list[float] | None = None,
 ) -> list[float]:
     """Curve-driven (preferred): production × volume_fraction × price_curve[year]
     (curve embeds escalation, NOT re-applied). Fallback: production ×
-    volume_fraction × price × (1 + escalation)^(t/ppy)."""
+    volume_fraction × price × (1 + escalation)^(t/ppy).
+
+    FIX 3: the contracted PPA price applies only for ``tenor_years`` years from
+    COD. After the contract ends, the contracted volume reverts to the merchant
+    per-year price (if the model has a merchant stream) or to 0 otherwise."""
     vf = cfg.volume_fraction
     n_years = (periods + ppy - 1) // ppy
     price_by_year = _curve_by_year(cfg.price_curve_name, cfg.price_points, n_years)
     if price_by_year is not None:
-        return [production_mwh[t] * vf * price_by_year[t // ppy] for t in range(periods)]
-
-    esc = cfg.escalation_pct_yr
-    price = cfg.price_eur_per_unit
-    return [
-        production_mwh[t] * vf * price * (1.0 + esc) ** (t / ppy)
-        for t in range(periods)
-    ]
+        contracted = [production_mwh[t] * vf * price_by_year[t // ppy] for t in range(periods)]
+    else:
+        esc = cfg.escalation_pct_yr
+        price = cfg.price_eur_per_unit
+        contracted = [
+            production_mwh[t] * vf * price * (1.0 + esc) ** (t / ppy)
+            for t in range(periods)
+        ]
+    return _apply_tenor(contracted, cfg.tenor_years, production_mwh, vf, periods, ppy,
+                        merchant_price_by_year)
 
 
 # ---------------------------------------------------------------------------
@@ -326,25 +393,32 @@ def _offtake(
     production_mwh: list[float],
     periods: int,
     ppy: int,
+    merchant_price_by_year: list[float] | None = None,
 ) -> list[float]:
     """Curve-driven (preferred): volume × volume_fraction × price_curve[year]
     (curve embeds escalation, NOT re-applied). Fallback: volume ×
     volume_fraction × price × (1+esc)^(t/ppy). Volume = production_kg when
-    available (H2), else production_mwh (biomethane/generic commodity)."""
+    available (H2), else production_mwh (biomethane/generic commodity).
+
+    FIX 3: the offtake contract price applies only for ``tenor_years`` from COD;
+    after that the volume reverts to a merchant price if the model has one, else
+    to 0 (the usual case for H2/biomethane — no merchant commodity stream)."""
     vf = cfg.volume_fraction
     volume: list[float] = production_output.get("production_kg", production_mwh)
 
     n_years = (periods + ppy - 1) // ppy
     price_by_year = _curve_by_year(cfg.price_curve_name, cfg.price_points, n_years)
     if price_by_year is not None:
-        return [volume[t] * vf * price_by_year[t // ppy] for t in range(periods)]
-
-    esc = cfg.escalation_pct_yr
-    price = cfg.price_eur_per_unit
-    return [
-        volume[t] * vf * price * (1.0 + esc) ** (t / ppy)
-        for t in range(periods)
-    ]
+        contracted = [volume[t] * vf * price_by_year[t // ppy] for t in range(periods)]
+    else:
+        esc = cfg.escalation_pct_yr
+        price = cfg.price_eur_per_unit
+        contracted = [
+            volume[t] * vf * price * (1.0 + esc) ** (t / ppy)
+            for t in range(periods)
+        ]
+    return _apply_tenor(contracted, cfg.tenor_years, volume, vf, periods, ppy,
+                        merchant_price_by_year)
 
 
 # ---------------------------------------------------------------------------
