@@ -45,6 +45,8 @@ const TONE: Record<Lifecycle, string> = {
 type Props = {
   /** Drill into an asset when its marker is clicked. */
   onOpenAsset?: (a: SavedAssetSummary) => void;
+  /** Restrict the plotted assets to one lifecycle bucket. */
+  lifecycle?: Lifecycle;
 };
 
 /**
@@ -52,12 +54,15 @@ type Props = {
  * world map centered on the Iberian region (where the renewables portfolio
  * lives). Assets without coordinates are not plotted; the count is surfaced.
  * No API key — the geography is a static topojson served from /public.
+ *
+ * When `lifecycle` is set the map is scoped to that bucket (e.g. only the
+ * operational assets on the Cartera page).
  */
-export default function AssetsMap({ onOpenAsset }: Props) {
+export default function AssetsMap({ onOpenAsset, lifecycle }: Props) {
   const ct = useChartTheme();
   const { data, isLoading } = useQuery({
-    queryKey: ["assets", "map"],
-    queryFn: () => listAssets(),
+    queryKey: ["assets", lifecycle ? `map-${lifecycle}` : "map"],
+    queryFn: () => listAssets(lifecycle),
   });
   const assets = data ?? [];
 
@@ -92,23 +97,32 @@ export default function AssetsMap({ onOpenAsset }: Props) {
     );
   }
 
+  const scopeTitle =
+    lifecycle === "operational"
+      ? "Mapa de activos · en operación"
+      : lifecycle === "opportunity"
+        ? "Mapa de activos · oportunidades"
+        : "Mapa de activos · toda la cartera";
+  const scopeCopy =
+    lifecycle === "operational"
+      ? "Activos en operación con coordenadas. Los activos sin ubicación no se muestran en el mapa."
+      : lifecycle === "opportunity"
+        ? "Oportunidades con coordenadas. Las que no tienen ubicación no se muestran en el mapa."
+        : "Todos los activos guardados con coordenadas, en operación y oportunidades (ver leyenda). Los activos sin ubicación no se muestran en el mapa.";
+
   return (
     <section className="surface p-4">
       <div className="mb-1 flex items-baseline justify-between gap-3">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
           <MapPin size={15} strokeWidth={2} className="text-accent-600" />
-          Mapa de activos · toda la cartera
+          {scopeTitle}
         </h3>
         <span className="text-[11px] text-slate-400">
           {plotted.length} con ubicación
           {unplotted > 0 ? ` · ${unplotted} sin coordenadas` : ""}
         </span>
       </div>
-      <p className="mb-3 text-xs text-slate-500">
-        Todos los activos guardados con coordenadas, en operación y
-        oportunidades (ver leyenda). Los activos sin ubicación no se muestran en
-        el mapa.
-      </p>
+      <p className="mb-3 text-xs text-slate-500">{scopeCopy}</p>
 
       {plotted.length === 0 ? (
         <div className="grid h-64 place-items-center px-6 text-center text-xs text-slate-400">
@@ -170,22 +184,26 @@ export default function AssetsMap({ onOpenAsset }: Props) {
             ))}
           </ComposableMap>
 
-          {/* Legend */}
+          {/* Legend — only the relevant tone(s) for the current scope. */}
           <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: TONE.operational }}
-              />
-              En operación
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: TONE.opportunity }}
-              />
-              Oportunidad
-            </span>
+            {lifecycle !== "opportunity" && (
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: TONE.operational }}
+                />
+                En operación
+              </span>
+            )}
+            {lifecycle !== "operational" && (
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: TONE.opportunity }}
+                />
+                Oportunidad
+              </span>
+            )}
           </div>
 
           {hover && (
