@@ -2,6 +2,7 @@ import type { RunResult } from "../api";
 import { isHybridResult } from "../api";
 import { eur, mult, pct } from "../format";
 import AnimatedNumber from "./AnimatedNumber";
+import Sparkline from "./Sparkline";
 import { useStaggerReveal } from "./Reveal";
 
 type Tone = "good" | "thin" | "bad" | "neutral";
@@ -20,19 +21,31 @@ const TONE_RAIL: Record<Tone, string> = {
   neutral: "bg-accent-500/60",
 };
 
+// Sparkline stroke per tone (kept sober; neutral uses the indigo accent).
+const TONE_SPARK: Record<Tone, string> = {
+  good: "#10b981",
+  thin: "#f59e0b",
+  bad: "#f43f5e",
+  neutral: "#6366f1",
+};
+
 function Card({
   label,
   value,
   format,
   tone = "neutral",
   hint,
+  series,
 }: {
   label: string;
   value: number;
   format: (n: number) => string;
   tone?: Tone;
   hint?: string;
+  /** Optional mini-trend rendered to the right of the figure. */
+  series?: number[];
 }) {
+  const hasSpark = Array.isArray(series) && series.filter(Number.isFinite).length >= 2;
   return (
     <div className="surface surface-hover relative overflow-hidden p-4">
       <span
@@ -43,11 +56,20 @@ function Card({
         <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
           {label}
         </div>
-        <AnimatedNumber
-          value={value}
-          format={format}
-          className={`mt-1.5 block text-2xl font-semibold tabular-nums ${TONE_CLASS[tone]}`}
-        />
+        <div className="mt-1.5 flex items-end justify-between gap-2">
+          <AnimatedNumber
+            value={value}
+            format={format}
+            className={`block text-2xl font-semibold tabular-nums ${TONE_CLASS[tone]}`}
+          />
+          {hasSpark && (
+            <Sparkline
+              values={series as number[]}
+              color={TONE_SPARK[tone]}
+              className="shrink-0 opacity-90"
+            />
+          )}
+        </div>
         {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
       </div>
     </div>
@@ -94,13 +116,27 @@ function HybridCards({ k }: { k: Record<string, number> }) {
   );
 }
 
+/** Cumulative FCF series from a cash flow (CFO + CFI), for the VAN tile trend. */
+function cumulativeFcf(data: RunResult): number[] | undefined {
+  const cf = data.cash_flow;
+  if (!cf || !cf.years?.length) return undefined;
+  let cum = 0;
+  return cf.years.map((_, i) => {
+    cum += (cf.cfo[i] ?? 0) + (cf.cfi[i] ?? 0);
+    return cum;
+  });
+}
+
 /** Generic infra/business KPI set. */
-function GenericCards({ k }: { k: Record<string, number> }) {
+function GenericCards({ data }: { data: RunResult }) {
+  const k = data.kpis ?? {};
   const hasDscr = Number.isFinite(k.dscr_min) && k.dscr_min > 0;
+  const ebitda = data.income_statement?.rows?.ebitda;
   return (
     <>
-      <Card label="VAN" value={k.npv} format={eur} tone={npvTone(k.npv)} />
-      <Card label="TIR proyecto" value={k.irr_project} format={pct} tone={irrTone(k.irr_project)} />
+      {/* VAN carries the cumulative-FCF trend; EBITDA carries its own series. */}
+      <Card label="VAN" value={k.npv} format={eur} tone={npvTone(k.npv)} series={cumulativeFcf(data)} />
+      <Card label="TIR proyecto" value={k.irr_project} format={pct} tone={irrTone(k.irr_project)} series={ebitda} />
       <Card label="TIR equity" value={k.irr_equity} format={pct} tone={irrTone(k.irr_equity)} />
       {hasDscr && (
         <Card label="DSCR mín" value={k.dscr_min} format={mult} tone={dscrTone(k.dscr_min)} />
@@ -120,7 +156,7 @@ export default function KpiCards({ data }: { data: RunResult }) {
       ref={ref}
       className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
     >
-      {hybrid ? <HybridCards k={k} /> : <GenericCards k={k} />}
+      {hybrid ? <HybridCards k={k} /> : <GenericCards data={data} />}
     </div>
   );
 }
