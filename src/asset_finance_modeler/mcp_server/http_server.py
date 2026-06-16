@@ -33,6 +33,7 @@ from asset_finance_modeler.web_api.actuals import router as actuals_router
 from asset_finance_modeler.web_api.assets import portfolio_router
 from asset_finance_modeler.web_api.assets import router as assets_router
 from asset_finance_modeler.web_api.curves import router as curves_router
+from asset_finance_modeler.web_api.live import router as live_router
 from asset_finance_modeler.web_api.models import router as models_router
 from asset_finance_modeler.web_api.routes import router as svj_router
 
@@ -95,6 +96,9 @@ app.include_router(portfolio_router)
 # Shares the /api/assets prefix; included after assets_router so its dedicated
 # sub-routes register. Before the static mount so /api wins over the catch-all.
 app.include_router(actuals_router)
+# LIVE reprojection router /api/assets/{id}/live (F3). Shares the /api/assets
+# prefix; before the static mount so /api wins over the catch-all.
+app.include_router(live_router)
 # Curves catalog router /api/curves (consultant price curves + sources, read-only
 # transparency for TDD). Before the static mount so /api wins over the catch-all.
 app.include_router(curves_router)
