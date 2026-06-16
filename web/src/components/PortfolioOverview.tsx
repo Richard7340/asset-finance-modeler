@@ -28,6 +28,33 @@ type Props = {
   lifecycle?: import("../api").Lifecycle;
   /** Optional action column rendered per row (e.g. "Marcar en operación"). */
   rowAction?: (a: SavedAssetSummary) => React.ReactNode;
+  /**
+   * Premium page header. Receives the live aggregate so the headline numbers
+   * (NAV / nº activos) sit at the very top of the page.
+   */
+  header?: (agg: HeaderAggregate) => React.ReactNode;
+  /**
+   * Slot rendered between the KPI band and the analytics panels (e.g. the
+   * operational alerts strip on Cartera). Kept slim by the caller.
+   */
+  alertsSlot?: React.ReactNode;
+  /**
+   * Slot rendered at the very bottom of the page, after the table (e.g. the
+   * operational assets map on Cartera).
+   */
+  mapSlot?: React.ReactNode;
+};
+
+/** Live aggregate surfaced to the page header render-prop. */
+export type HeaderAggregate = {
+  /** Total VAN / NAV across included assets. */
+  navTotal: number;
+  /** Number of included assets. */
+  count: number;
+  /** CAPEX-weighted IRR, decimal, when available. */
+  irrWeighted?: number;
+  /** Whether the aggregate is still loading. */
+  loading: boolean;
 };
 
 const NPV_BAR = "#4f46e5"; // indigo-600
@@ -71,6 +98,7 @@ function Kpi({
   text,
   hint,
   series,
+  emphasis,
 }: {
   label: string;
   value?: number;
@@ -80,28 +108,38 @@ function Kpi({
   hint?: string;
   /** Optional mini-trend (e.g. per-asset distribution) rendered to the right. */
   series?: number[];
+  /** Headline tile — larger figure + stronger accent rule. */
+  emphasis?: boolean;
 }) {
   const hasSpark = Array.isArray(series) && series.filter(Number.isFinite).length >= 2;
   return (
     <div className="surface surface-hover relative overflow-hidden p-4">
       <span
-        className="absolute inset-y-3 left-0 w-0.5 rounded-full bg-accent-500/60"
+        className={`absolute inset-y-3 left-0 rounded-full ${
+          emphasis ? "w-[3px] bg-accent-500" : "w-0.5 bg-accent-500/60"
+        }`}
         aria-hidden
       />
-      <div className="pl-2">
+      <div className="pl-2.5">
         <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
           {label}
         </div>
         <div className="mt-1.5 flex items-end justify-between gap-2">
           {text !== undefined ? (
-            <div className="text-2xl font-semibold tabular-nums text-slate-900">
+            <div
+              className={`font-semibold tabular-nums text-slate-900 ${
+                emphasis ? "text-3xl" : "text-2xl"
+              }`}
+            >
               {text}
             </div>
           ) : (
             <AnimatedNumber
               value={value ?? 0}
               format={format ?? ((n) => String(n))}
-              className="block text-2xl font-semibold tabular-nums text-slate-900"
+              className={`block font-semibold tabular-nums text-slate-900 ${
+                emphasis ? "text-3xl" : "text-2xl"
+              }`}
             />
           )}
           {hasSpark && (
@@ -114,7 +152,35 @@ function Kpi({
   );
 }
 
-export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }: Props) {
+/** Small section label used above each analytics panel / band. */
+function PanelTitle({
+  title,
+  subtitle,
+  right,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex items-start justify-between gap-3">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+        {subtitle && <p className="mt-0.5 text-[11px] text-slate-400">{subtitle}</p>}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+export default function PortfolioOverview({
+  onOpenAsset,
+  lifecycle,
+  rowAction,
+  header,
+  alertsSlot,
+  mapSlot,
+}: Props) {
   const ct = useChartTheme();
   const tooltipStyle = ct.tooltip;
   const cursorFill = ct.dark ? "rgb(99 102 241 / 0.14)" : "rgb(99 102 241 / 0.06)";
@@ -208,19 +274,33 @@ export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }:
     { selector: "tr", gap: 28, y: 6 },
   );
 
+  const headerNode =
+    header?.({
+      navTotal: totals?.npv ?? 0,
+      count: totals?.count ?? rows.length,
+      irrWeighted: totals?.irr_weighted,
+      loading: assetsQuery.isLoading || portfolioQuery.isLoading,
+    }) ?? null;
+
   // --- empty / loading states ---
   if (assetsQuery.isLoading || portfolioQuery.isLoading) {
     return (
-      <div className="grid h-64 place-items-center text-sm text-slate-400">
-        Cargando cartera…
+      <div className="mx-auto max-w-[1400px] space-y-6">
+        {headerNode}
+        <div className="grid h-64 place-items-center text-sm text-slate-400">
+          Cargando cartera…
+        </div>
       </div>
     );
   }
 
   if (allAssets.length === 0 && (portfolio?.assets.length ?? 0) === 0) {
     return (
-      <div className="grid h-64 place-items-center px-6 text-center text-sm text-slate-400">
-        Aún no hay activos guardados. Crea y guarda un activo desde un modelo.
+      <div className="mx-auto max-w-[1400px] space-y-6">
+        {headerNode}
+        <div className="grid h-64 place-items-center px-6 text-center text-sm text-slate-400">
+          Aún no hay activos guardados. Crea y guarda un activo desde un modelo.
+        </div>
       </div>
     );
   }
@@ -234,109 +314,198 @@ export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }:
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
-      <div className="flex justify-end">{recalcBadge}</div>
+      {/* 0 — premium page header (headline NAV / nº activos). */}
+      {headerNode}
 
-      {/* Aggregate KPIs */}
-      <div
-        ref={kpiRef}
-        className={`grid grid-cols-2 gap-3 ${
-          totals?.irr_weighted !== undefined ? "sm:grid-cols-5" : "sm:grid-cols-4"
-        }`}
-      >
-        <Kpi
-          label="VAN total"
-          value={totals?.npv ?? 0}
-          format={eur}
-          series={chartData.map((d) => d.npv)}
-        />
-        <Kpi label="CAPEX total" value={totals?.capex ?? 0} format={eur} />
-        <Kpi label="Ingresos año 1" value={totals?.revenue_y1 ?? 0} format={eur} />
-        {totals?.irr_weighted !== undefined && (
-          <Kpi
-            label="TIR media"
-            value={totals.irr_weighted}
-            format={pct}
-            hint="ponderada por CAPEX"
-          />
-        )}
-        <Kpi
-          label="Nº activos"
-          text={String(totals?.count ?? 0)}
-          hint={
-            excluded.size > 0
-              ? `${excluded.size} excluido${excluded.size === 1 ? "" : "s"}`
-              : undefined
-          }
-        />
-      </div>
-
-      {/* Composition donut + VAN bars side by side */}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <Reveal className="surface surface-hover p-4">
-          <h3 className="mb-1 text-sm font-semibold text-slate-800">
-            Composición de cartera
+      {/* 1 — KPI band: the headline numbers, grouped as a strong top band. */}
+      <Reveal>
+        <div className="flex items-center justify-between gap-3 pb-1">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            Indicadores agregados
           </h3>
-          <p className="mb-2 text-[11px] text-slate-400">
-            Peso de cada activo sobre el VAN positivo total
-          </p>
-          {compositionData.length > 0 ? (
-            <div className="relative h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={compositionData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="58%"
-                    outerRadius="86%"
-                    paddingAngle={1.5}
-                    stroke={ct.sliceStroke}
-                    strokeWidth={2}
-                    animationDuration={800}
-                  >
-                    {compositionData.map((d, i) => (
-                      <Cell key={d.name} fill={DONUT[i % DONUT.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(v: number, n: string) => [
-                      `${eur(Number(v))} · ${pct(
-                        compositionTotal ? Number(v) / compositionTotal : 0,
-                      )}`,
-                      n,
-                    ]}
-                    contentStyle={tooltipStyle}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Center label */}
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-[11px] uppercase tracking-wide text-slate-400">
-                  VAN total
-                </div>
-                <div className="text-lg font-semibold tabular-nums text-slate-900">
-                  {eur(totalNpv)}
+          {recalcBadge}
+        </div>
+        <div
+          ref={kpiRef}
+          className={`grid grid-cols-2 gap-3 ${
+            totals?.irr_weighted !== undefined ? "sm:grid-cols-5" : "sm:grid-cols-4"
+          }`}
+        >
+          <Kpi
+            label="VAN total"
+            value={totals?.npv ?? 0}
+            format={eur}
+            series={chartData.map((d) => d.npv)}
+            emphasis
+          />
+          <Kpi label="CAPEX total" value={totals?.capex ?? 0} format={eur} />
+          <Kpi
+            label="Ingresos año 1"
+            value={totals?.revenue_y1 ?? 0}
+            format={eur}
+            series={revChartData.map((d) => d.revenue_y1)}
+          />
+          {totals?.irr_weighted !== undefined && (
+            <Kpi
+              label="TIR media"
+              value={totals.irr_weighted}
+              format={pct}
+              hint="ponderada por CAPEX"
+            />
+          )}
+          <Kpi
+            label="Nº activos"
+            text={String(totals?.count ?? 0)}
+            hint={
+              excluded.size > 0
+                ? `${excluded.size} excluido${excluded.size === 1 ? "" : "s"}`
+                : undefined
+            }
+          />
+        </div>
+      </Reveal>
+
+      {/* 2 — alerts strip (Cartera only; kept slim by the caller). */}
+      {alertsSlot}
+
+      {/* 3 — analytics panels: composition donut + VAN bars + revenue bars. */}
+      <div className="space-y-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+          Análisis de cartera
+        </h3>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <Reveal className="surface surface-hover p-4">
+            <PanelTitle
+              title="Composición de cartera"
+              subtitle="Peso de cada activo sobre el VAN positivo total"
+            />
+            {compositionData.length > 0 ? (
+              <div className="relative h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={compositionData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="58%"
+                      outerRadius="86%"
+                      paddingAngle={1.5}
+                      stroke={ct.sliceStroke}
+                      strokeWidth={2}
+                      animationDuration={800}
+                    >
+                      {compositionData.map((d, i) => (
+                        <Cell key={d.name} fill={DONUT[i % DONUT.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(v: number, n: string) => [
+                        `${eur(Number(v))} · ${pct(
+                          compositionTotal ? Number(v) / compositionTotal : 0,
+                        )}`,
+                        n,
+                      ]}
+                      contentStyle={tooltipStyle}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Center label */}
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                    VAN total
+                  </div>
+                  <div className="text-lg font-semibold tabular-nums text-slate-900">
+                    {eur(totalNpv)}
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="grid h-72 place-items-center text-xs text-slate-400">
-              Sin activos con VAN positivo.
-            </div>
-          )}
-        </Reveal>
+            ) : (
+              <div className="grid h-72 place-items-center text-xs text-slate-400">
+                Sin activos con VAN positivo.
+              </div>
+            )}
+            {/* Legend — sober, theme-shared chips. */}
+            {compositionData.length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-slate-500">
+                {compositionData.slice(0, 6).map((d, i) => (
+                  <li key={d.name} className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-sm"
+                      style={{ backgroundColor: DONUT[i % DONUT.length] }}
+                      aria-hidden
+                    />
+                    <span className="max-w-[10rem] truncate">{d.name}</span>
+                    <span className="tabular-nums text-slate-400">
+                      {pct(compositionTotal ? d.value / compositionTotal : 0)}
+                    </span>
+                  </li>
+                ))}
+                {compositionData.length > 6 && (
+                  <li className="text-slate-400">
+                    +{compositionData.length - 6} más
+                  </li>
+                )}
+              </ul>
+            )}
+          </Reveal>
 
-        <Reveal className="surface surface-hover p-4" delay={60}>
-          <h3 className="mb-3 text-sm font-semibold text-slate-800">
-            VAN por activo
-          </h3>
-          <div className="h-72 w-full">
-            {chartData.length > 0 ? (
+          <Reveal className="surface surface-hover p-4" delay={60}>
+            <PanelTitle
+              title="VAN por activo"
+              subtitle="Contribución de cada activo al valor de la cartera"
+            />
+            <div className="h-72 w-full">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartData}
+                    layout="vertical"
+                    margin={{ left: 8, right: 16 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} horizontal={false} />
+                    <XAxis
+                      type="number"
+                      tickFormatter={(v: number) => eur(Number(v))}
+                      fontSize={11}
+                      stroke={ct.axisStroke}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      fontSize={11}
+                      stroke={ct.axisStroke}
+                      width={140}
+                    />
+                    <Tooltip
+                      formatter={(v: number) => eur(Number(v))}
+                      contentStyle={tooltipStyle}
+                      cursor={{ fill: cursorFill }}
+                    />
+                    <Bar dataKey="npv" name="VAN" radius={[0, 4, 4, 0]} animationDuration={800}>
+                      {chartData.map((d) => (
+                        <Cell key={d.name} fill={d.npv >= 0 ? NPV_BAR : NPV_BAR_NEG} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : null}
+            </div>
+          </Reveal>
+        </div>
+
+        {/* Año-1 revenue per asset — kept with the analytics, before the table. */}
+        {revChartData.length > 0 && (
+          <Reveal className="surface surface-hover p-4" delay={90}>
+            <PanelTitle
+              title="Ingresos año 1 por activo"
+              subtitle="Primer año de explotación, por activo"
+            />
+            <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={chartData}
+                  data={revChartData}
                   layout="vertical"
                   margin={{ left: 8, right: 16 }}
                 >
@@ -359,159 +528,124 @@ export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }:
                     contentStyle={tooltipStyle}
                     cursor={{ fill: cursorFill }}
                   />
-                  <Bar dataKey="npv" name="VAN" radius={[0, 4, 4, 0]} animationDuration={800}>
-                    {chartData.map((d) => (
-                      <Cell key={d.name} fill={d.npv >= 0 ? NPV_BAR : NPV_BAR_NEG} />
-                    ))}
-                  </Bar>
+                  <Bar dataKey="revenue_y1" name="Ingresos año 1" fill={REV_BAR} radius={[0, 4, 4, 0]} animationDuration={800} />
                 </BarChart>
               </ResponsiveContainer>
-            ) : null}
-          </div>
+            </div>
+          </Reveal>
+        )}
+      </div>
+
+      {/* 4 — per-asset table (clickable rows + row actions). */}
+      <div className="space-y-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+          Detalle por activo
+        </h3>
+        <Reveal className="surface overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                <th className="px-3 py-2.5 font-medium">Incl.</th>
+                <th className="px-3 py-2.5 font-medium">Activo</th>
+                <th className="px-3 py-2.5 font-medium">Tipo / Modelo</th>
+                <th className="px-3 py-2.5 text-right font-medium">VAN</th>
+                <th className="px-3 py-2.5 text-right font-medium">TIR</th>
+                <th className="px-3 py-2.5 text-right font-medium">Rentabilidad</th>
+                <th className="px-3 py-2.5 text-right font-medium">Ingresos año 1</th>
+                <th className="px-3 py-2.5 text-right font-medium">CAPEX</th>
+                <th className="px-3 py-2.5 text-right font-medium">% VAN</th>
+                {rowAction && (
+                  <th className="px-3 py-2.5 text-right font-medium">Acción</th>
+                )}
+              </tr>
+            </thead>
+            <tbody ref={rowsRef}>
+              {rows.map((r, ri) => {
+                const m = metricsById.get(r.id);
+                const isIncluded = !excluded.has(r.id);
+                const contrib = m && totalNpv !== 0 ? m.npv / totalNpv : 0;
+                return (
+                  <tr
+                    key={r.id}
+                    className={`group cursor-pointer border-b border-slate-100 transition last:border-0 hover:bg-accent-50/40 ${
+                      ri % 2 === 1 ? "bg-slate-50/40" : ""
+                    } ${isIncluded ? "" : "bg-slate-50/60 text-slate-400"}`}
+                    onClick={() => openById(r.id)}
+                  >
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isIncluded}
+                        onChange={() => toggle(r.id)}
+                        aria-label={`Incluir ${r.name} en el agregado`}
+                        className="h-4 w-4 cursor-pointer accent-accent-600"
+                      />
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className="font-medium text-slate-800 transition group-hover:text-accent-700">
+                        {r.name}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-500">{r.model_id}</td>
+                    <td
+                      className={`px-3 py-2.5 text-right tabular-nums ${
+                        isIncluded ? rateTone(m?.npv) : ""
+                      }`}
+                    >
+                      {m ? eurExact(m.npv) : "—"}
+                    </td>
+                    <td
+                      className={`px-3 py-2.5 text-right tabular-nums ${
+                        isIncluded ? rateTone(m?.irr) : ""
+                      }`}
+                    >
+                      {m && Number.isFinite(m.irr) ? pct(m.irr) : "—"}
+                    </td>
+                    <td
+                      className={`px-3 py-2.5 text-right tabular-nums ${
+                        isIncluded ? rateTone(m?.yield_pct) : ""
+                      }`}
+                    >
+                      {m && Number.isFinite(m.yield_pct) ? pct(m.yield_pct) : "—"}
+                    </td>
+                    <td
+                      className={`px-3 py-2.5 text-right tabular-nums ${
+                        isIncluded ? moneyTone(m?.revenue_y1) : ""
+                      }`}
+                    >
+                      {m ? eurExact(m.revenue_y1) : "—"}
+                    </td>
+                    <td
+                      className={`px-3 py-2.5 text-right tabular-nums ${
+                        isIncluded ? moneyTone(m?.capex) : ""
+                      }`}
+                    >
+                      {m ? eurExact(m.capex) : "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
+                      {m && isIncluded ? pct(contrib) : "—"}
+                    </td>
+                    {rowAction && (
+                      <td
+                        className="px-3 py-2.5 text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {(() => {
+                          const a = allAssets.find((x) => x.id === r.id);
+                          return a ? rowAction(a) : null;
+                        })()}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </Reveal>
       </div>
 
-      {/* Per-asset table */}
-      <Reveal className="surface overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
-              <th className="px-3 py-2.5 font-medium">Incl.</th>
-              <th className="px-3 py-2.5 font-medium">Activo</th>
-              <th className="px-3 py-2.5 font-medium">Tipo / Modelo</th>
-              <th className="px-3 py-2.5 text-right font-medium">VAN</th>
-              <th className="px-3 py-2.5 text-right font-medium">TIR</th>
-              <th className="px-3 py-2.5 text-right font-medium">Rentabilidad</th>
-              <th className="px-3 py-2.5 text-right font-medium">Ingresos año 1</th>
-              <th className="px-3 py-2.5 text-right font-medium">CAPEX</th>
-              <th className="px-3 py-2.5 text-right font-medium">% VAN</th>
-              {rowAction && (
-                <th className="px-3 py-2.5 text-right font-medium">Acción</th>
-              )}
-            </tr>
-          </thead>
-          <tbody ref={rowsRef}>
-            {rows.map((r) => {
-              const m = metricsById.get(r.id);
-              const isIncluded = !excluded.has(r.id);
-              const contrib = m && totalNpv !== 0 ? m.npv / totalNpv : 0;
-              return (
-                <tr
-                  key={r.id}
-                  className={`border-b border-slate-100 transition last:border-0 hover:bg-accent-50/40 ${
-                    isIncluded ? "" : "bg-slate-50/60 text-slate-400"
-                  }`}
-                >
-                  <td className="px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      checked={isIncluded}
-                      onChange={() => toggle(r.id)}
-                      aria-label={`Incluir ${r.name} en el agregado`}
-                      className="h-4 w-4 cursor-pointer accent-accent-600"
-                    />
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <button
-                      type="button"
-                      onClick={() => openById(r.id)}
-                      className="text-left font-medium text-slate-800 transition hover:text-accent-700 hover:underline"
-                    >
-                      {r.name}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-500">{r.model_id}</td>
-                  <td
-                    className={`px-3 py-2.5 text-right tabular-nums ${
-                      isIncluded ? rateTone(m?.npv) : ""
-                    }`}
-                  >
-                    {m ? eurExact(m.npv) : "—"}
-                  </td>
-                  <td
-                    className={`px-3 py-2.5 text-right tabular-nums ${
-                      isIncluded ? rateTone(m?.irr) : ""
-                    }`}
-                  >
-                    {m && Number.isFinite(m.irr) ? pct(m.irr) : "—"}
-                  </td>
-                  <td
-                    className={`px-3 py-2.5 text-right tabular-nums ${
-                      isIncluded ? rateTone(m?.yield_pct) : ""
-                    }`}
-                  >
-                    {m && Number.isFinite(m.yield_pct) ? pct(m.yield_pct) : "—"}
-                  </td>
-                  <td
-                    className={`px-3 py-2.5 text-right tabular-nums ${
-                      isIncluded ? moneyTone(m?.revenue_y1) : ""
-                    }`}
-                  >
-                    {m ? eurExact(m.revenue_y1) : "—"}
-                  </td>
-                  <td
-                    className={`px-3 py-2.5 text-right tabular-nums ${
-                      isIncluded ? moneyTone(m?.capex) : ""
-                    }`}
-                  >
-                    {m ? eurExact(m.capex) : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
-                    {m && isIncluded ? pct(contrib) : "—"}
-                  </td>
-                  {rowAction && (
-                    <td className="px-3 py-2.5 text-right">
-                      {(() => {
-                        const a = allAssets.find((x) => x.id === r.id);
-                        return a ? rowAction(a) : null;
-                      })()}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Reveal>
-
-      {/* Año-1 revenue per asset */}
-      {revChartData.length > 0 && (
-        <Reveal className="surface surface-hover p-4">
-          <h3 className="mb-3 text-sm font-semibold text-slate-800">
-            Ingresos año 1 por activo
-          </h3>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={revChartData}
-                layout="vertical"
-                margin={{ left: 8, right: 16 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} horizontal={false} />
-                <XAxis
-                  type="number"
-                  tickFormatter={(v: number) => eur(Number(v))}
-                  fontSize={11}
-                  stroke={ct.axisStroke}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  fontSize={11}
-                  stroke={ct.axisStroke}
-                  width={140}
-                />
-                <Tooltip
-                  formatter={(v: number) => eur(Number(v))}
-                  contentStyle={tooltipStyle}
-                  cursor={{ fill: cursorFill }}
-                />
-                <Bar dataKey="revenue_y1" name="Ingresos año 1" fill={REV_BAR} radius={[0, 4, 4, 0]} animationDuration={800} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Reveal>
-      )}
+      {/* 5 — map last (Cartera passes the operational map here). */}
+      {mapSlot}
     </div>
   );
 }

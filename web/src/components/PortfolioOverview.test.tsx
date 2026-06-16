@@ -35,11 +35,13 @@ test("renders aggregate VAN total and per-asset rows", async () => {
   // composition-donut centre label, so we assert at least one occurrence.
   const vanTotals = await screen.findAllByText(/4,00 M€/);
   expect(vanTotals.length).toBeGreaterThan(0);
-  // Per-asset rows.
-  expect(screen.getByText("Planta Solar Sur")).toBeTruthy();
-  expect(screen.getByText("BESS Norte")).toBeTruthy();
-  // Contribution column: a1 = 75%.
-  expect(screen.getByText(/75%/)).toBeTruthy();
+  // Per-asset name appears in the table, the VAN-by-asset chart axis and the
+  // composition legend, so assert at least one occurrence of each.
+  expect(screen.getAllByText("Planta Solar Sur").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("BESS Norte").length).toBeGreaterThan(0);
+  // Contribution: a1 = 75% — appears in the table contribution column and the
+  // composition legend, so assert at least one occurrence.
+  expect(screen.getAllByText(/75%/).length).toBeGreaterThan(0);
   // TIR column renders a % for an asset (a1 IRR = 8.2%).
   expect(screen.getByText(/8,2%/)).toBeTruthy();
   // Aggregate TIR media card (7.2%).
