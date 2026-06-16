@@ -271,6 +271,32 @@ def test_residual_above_base_actual_still_raises_live():
     assert out["live"]["kpis"]["npv"] > out["base"]["kpis"]["npv"]
 
 
+def test_residual_with_gordon_adds_only_its_pv_not_a_perpetuity():
+    """L4: with terminal_method='gordon' AND a residual, the residual must add
+    ONLY its discounted PV — it must NOT be folded into fcf[-1] and then grown by
+    the Gordon perpetuity (which would massively overcount). The NPV difference
+    between residual and no-residual is ~= residual / (1+r)^n."""
+    base = _base_output()
+    r = 0.08
+    n = 3
+    out_no_res = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=0, discount_rate=r,
+        terminal_method="gordon", terminal_growth=0.0,
+    )
+    out_res = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=0, discount_rate=r,
+        terminal_method="gordon", terminal_growth=0.0, residual_value=1000.0,
+    )
+    npv_no_res = out_no_res["deviation_summary"]["npv_base"]
+    npv_res = out_res["deviation_summary"]["npv_base"]
+    expected_pv = 1000.0 / ((1 + r) ** n)
+    # The residual adds only its discounted PV, not a perpetuity-grown amount.
+    assert abs((npv_res - npv_no_res) - expected_pv) < 1.0
+    # Sanity: a perpetuity-grown residual would be ~1000/(r) discounted =
+    # ~12500/(1.08^3) ~ 9920, vastly larger than ~794 — guard against it.
+    assert (npv_res - npv_no_res) < expected_pv + 100.0
+
+
 def test_no_residual_default_unchanged():
     """residual_value defaults to 0 -> existing no-terminal behaviour is exact
     (regression guard for infra/SVJ whose base must stay as-is)."""
