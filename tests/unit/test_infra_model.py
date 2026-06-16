@@ -590,3 +590,78 @@ def test_cash_sweep_disabled_unchanged():
     base = InfrastructureModel(_solar_with_sweep(sweep_enabled=False)).run()
     again = InfrastructureModel(_solar_with_sweep(sweep_enabled=False)).run()
     assert base.balance["debt"] == again.balance["debt"]
+
+
+# E1: once the swept balance reaches 0, scheduled principal must STOP being
+# added. Otherwise cumulative principal repaid exceeds the drawn loan and
+# corrupts the cash flow / equity metrics.
+
+
+def test_cash_sweep_does_not_over_repay_principal_unit():
+    """_apply_cash_sweep must never repay more principal than was drawn."""
+    from types import SimpleNamespace
+
+    # Loan of 1000 drawn at t=0, linear over 4 periods (250/period), 5%/period
+    # interest on the declining balance. Scheduled ending balances: 750,500,250,0.
+    rate = 0.05
+    ppy = 1
+    principal = [250.0, 250.0, 250.0, 250.0]
+    balance = [750.0, 500.0, 250.0, 0.0]
+    interest = [50.0, 37.5, 25.0, 12.5]
+    ds = [p + i for p, i in zip(principal, interest)]
+    cfads = [2000.0] * 4  # plenty of excess → sweep maxes out
+    sweep = SimpleNamespace(trigger_dscr=1.0, sweep_pct=1.0)
+
+    new_int, new_principal, new_balance = InfrastructureModel._apply_cash_sweep(
+        cfads, ds, interest, principal, balance, [1000.0, 0.0, 0.0, 0.0],
+        sweep, ppy, rate,
+    )
+
+    assert sum(new_principal) <= 1000.0 + 1e-6
+    assert all(b >= -1e-6 for b in new_balance)
+    # Interest must also stop once the balance is gone.
+    assert all(i >= -1e-6 for i in new_int)
+    # After the period that retires the loan, no further principal is scheduled.
+    assert new_balance[-1] == 0.0
+
+
+def _solar_with_aggressive_sweep(periods: int = 120):
+    """Solar config whose strong cash flow lets the sweep fully retire debt
+    well before maturity (so the over-repay bug would bite)."""
+    from asset_finance_modeler.assets.infrastructure.schema import CashSweepConfig
+
+    cfg = _solar_config(periods)
+    cfg.timeline = PermitsTimeline()
+    cfg.financing = ProjectFinanceConfig(
+        senior=SeniorDebtConfig(
+            tenor_years=10, interest_rate=0.045, dscr_target=1.30, auto_size=True
+        ),
+        cash_sweep=CashSweepConfig(enabled=True, trigger_dscr=1.05, sweep_pct=1.0),
+        max_leverage=0.80,
+    )
+    return cfg
+
+
+def test_cash_sweep_cumulative_principal_capped_integration():
+    """With an aggressive sweep, the debt balance never goes negative, the loan
+    is fully retired, cumulative principal repaid ≤ drawn principal, and the
+    equity metrics stay sane."""
+    out = InfrastructureModel(_solar_with_aggressive_sweep()).run()
+
+    bal = out.balance["debt"]
+    drawn = max(bal) if bal else 0.0  # peak outstanding = total principal drawn
+    # Balance never negative.
+    assert all(b >= -1.0 for b in bal), min(bal)
+    # Aggressive sweep fully retires the loan within the horizon.
+    assert bal[-1] <= 1.0
+    # Reconstruct cumulative principal repaid from the cash flow:
+    #   cff = debt_drawdowns - principal_repaid - dsra_net (DSRA nets ~0 over the
+    #   full life as it is built then released). Drawdowns ≈ drawn at t=0, so
+    #   Σprincipal_repaid ≈ drawn - Σcff. With the over-repay bug this exceeds the
+    #   drawn loan (scheduled principal booked after balance hit 0).
+    cff = out.cashflow["cff"]
+    principal_repaid = drawn - sum(cff)
+    assert principal_repaid <= drawn + 1.0, (principal_repaid, drawn)
+    # Equity metrics stay finite/sane (not corrupted by phantom principal).
+    k = out.project_kpis
+    assert k.irr_equity is None or -1.0 < k.irr_equity < 5.0

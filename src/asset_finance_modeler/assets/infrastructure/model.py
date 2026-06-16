@@ -463,29 +463,46 @@ class InfrastructureModel:
         new_principal = list(principal)
         new_balance = list(balance)
 
-        extra_paid_cum = 0.0  # cumulative extra principal already swept
+        # Total principal drawn — the hard cap on cumulative repayment. The
+        # outstanding balance can never be reduced below zero, so the sum of all
+        # principal repayments (scheduled + swept) must equal exactly this.
+        total_drawn = sum(drawdowns)
+
+        outstanding = 0.0  # running balance carried period to period
+        repaid_cum = 0.0  # cumulative principal repaid (scheduled + swept)
         for t in range(n):
-            # Outstanding at start of t, net of prior sweeps.
-            begin_bal = (balance[t - 1] if t > 0 else 0.0) - extra_paid_cum
-            begin_bal = max(begin_bal, 0.0)
-            # Recompute interest on the reduced balance (scheduled interest was
-            # on the original, higher balance).
+            begin_bal = max(outstanding + drawdowns[t], 0.0)
+            # Recompute interest on the (reduced) outstanding balance; scheduled
+            # interest was computed on the original, higher balance.
             new_interest[t] = begin_bal * period_rate
+
+            # Scheduled principal, but never more than what is still outstanding
+            # (once the swept balance has retired the loan, later scheduled
+            # principal must be zeroed — otherwise cumulative repaid exceeds the
+            # drawn loan and corrupts CFF/cash/equity metrics).
+            sched_principal = min(max(principal[t], 0.0), begin_bal)
 
             scheduled_ds = total_debt_service[t]
             dscr = cfads[t] / scheduled_ds if scheduled_ds > 0 else float("inf")
-            # Balance after the scheduled principal repayment this period.
-            sched_balance = max(balance[t] - extra_paid_cum, 0.0)
+
+            # Balance remaining after the (capped) scheduled principal.
+            after_sched = begin_bal - sched_principal
 
             sweep_amt = 0.0
-            if dscr >= sweep.trigger_dscr and sched_balance > 0:
+            if dscr >= sweep.trigger_dscr and after_sched > 0:
                 excess = cfads[t] - scheduled_ds
                 if excess > 0:
-                    sweep_amt = min(sweep.sweep_pct * excess, sched_balance)
+                    sweep_amt = min(sweep.sweep_pct * excess, after_sched)
 
-            extra_paid_cum += sweep_amt
-            new_principal[t] = principal[t] + sweep_amt
-            new_balance[t] = max(balance[t] - extra_paid_cum, 0.0)
+            period_repaid = sched_principal + sweep_amt
+            # Hard cap: never repay more than the drawn principal in aggregate.
+            period_repaid = min(period_repaid, total_drawn - repaid_cum)
+            period_repaid = max(period_repaid, 0.0)
+
+            repaid_cum += period_repaid
+            new_principal[t] = period_repaid
+            outstanding = max(begin_bal - period_repaid, 0.0)
+            new_balance[t] = outstanding
 
         return new_interest, new_principal, new_balance
 
