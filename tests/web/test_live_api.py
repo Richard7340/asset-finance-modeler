@@ -74,28 +74,80 @@ def test_live_no_actuals_equals_base(monkeypatch, tmp_path):
     assert body["comparison"]["delta"] == 0.0
 
 
-def test_live_real_estate_base_npv_matches_stored_not_spurious_negative(
-    monkeypatch, tmp_path
-):
-    """Real estate's base valuation includes a residual sale at horizon end, so
-    the LIVE recomputed ``npv_base`` must carry that residual too: it should be
-    close to the asset's STORED base NPV (positive), not a spurious large
-    negative from ignoring the exit inflow."""
+def _stored_npv(c, aid: str) -> float:
+    kpis = c.get(f"/api/assets/{aid}?t=tk").json()["results_snapshot"]["kpis"]
+    return kpis.get("npv", kpis.get("npv_hybrid"))
+
+
+def test_live_real_estate_base_npv_equals_stored(monkeypatch, tmp_path):
+    """The base-vs-live panel must show the TRUE base. Real estate's engine NPV
+    is on unlevered NOPAT FCF; the live recompute is CFO+CFI. The panel anchors
+    ``npv_base`` to the STORED engine NPV exactly (no footing gap)."""
     c = _client(monkeypatch, tmp_path)
     aid = _operational_asset(c, model_id="real_estate_rental")
-    stored = c.get(f"/api/assets/{aid}?t=tk").json()["results_snapshot"]["kpis"]["npv"]
-    assert stored > 0  # the stored base NPV is positive (residual recovers capital)
+    stored = _stored_npv(c, aid)
+    assert stored > 0  # stored base NPV is positive (residual recovers capital)
     r = c.get(f"/api/assets/{aid}/live?t=tk")
     assert r.status_code == 200
     npv_base = r.json()["comparison"]["npv_base"]
-    # Before the fix this came out ~-1.7M (residual ignored). After threading the
-    # residual it tracks the stored base within the irreducible levered-CFO vs
-    # unlevered-FCF footing gap (the business EV is on unlevered FCF; live
-    # recomputes on CFO+CFI). Tolerance: within 15% of the residual value.
-    residual = 3_000_000.0
-    assert abs(npv_base - stored) < 0.15 * residual
-    # And unambiguously NOT the old spurious deep-negative.
-    assert npv_base > -0.25 * residual
+    assert abs(npv_base - stored) <= 1  # exact (within €1 rounding)
+
+
+def test_live_business_industrial_base_npv_equals_stored(monkeypatch, tmp_path):
+    """business_industrial's engine NPV is unlevered NOPAT FCF; the panel anchors
+    ``npv_base`` to the stored engine NPV, not the CFO+CFI recompute (~6.39M)."""
+    c = _client(monkeypatch, tmp_path)
+    aid = _operational_asset(c, model_id="business_industrial")
+    stored = _stored_npv(c, aid)
+    r = c.get(f"/api/assets/{aid}/live?t=tk")
+    assert r.status_code == 200
+    npv_base = r.json()["comparison"]["npv_base"]
+    assert abs(npv_base - stored) <= 1
+
+
+def test_live_bess_base_npv_equals_stored(monkeypatch, tmp_path):
+    """Infra (BESS) base must equal stored (already on the same footing) — no
+    regression after anchoring."""
+    c = _client(monkeypatch, tmp_path)
+    aid = _operational_asset(c, model_id="bess_20mw_4h")
+    stored = _stored_npv(c, aid)
+    r = c.get(f"/api/assets/{aid}/live?t=tk")
+    assert r.status_code == 200
+    assert abs(r.json()["comparison"]["npv_base"] - stored) <= 1
+
+
+def test_live_svj_base_npv_equals_stored(monkeypatch, tmp_path):
+    """SVJ hybrid base must equal the stored consolidated unlevered NPV
+    (``npv_hybrid``) after anchoring."""
+    c = _client(monkeypatch, tmp_path)
+    aid = _operational_asset(c, model_id="svj_hybrid")
+    stored = _stored_npv(c, aid)
+    r = c.get(f"/api/assets/{aid}/live?t=tk")
+    assert r.status_code == 200
+    assert abs(r.json()["comparison"]["npv_base"] - stored) <= 1
+
+
+def test_live_real_estate_actual_shifts_live_off_stored_base(monkeypatch, tmp_path):
+    """With actuals, npv_base stays anchored to stored and npv_live = stored +
+    the actuals-driven delta (correct sign: an above-base revenue raises live)."""
+    c = _client(monkeypatch, tmp_path)
+    aid = _operational_asset(c, model_id="real_estate_rental")
+    stored = _stored_npv(c, aid)
+    base = c.get(f"/api/assets/{aid}?t=tk").json()["results_snapshot"]
+    base_rev_y0 = base["income_statement"]["rows"]["revenue"][0]
+    yr = datetime.now(timezone.utc).year - 2
+    c.post(
+        f"/api/assets/{aid}/actuals?t=tk",
+        json={"actuals": [
+            {"period_start": f"{yr}-01-01",
+             "line_path": "income_statement.rows.revenue",
+             "value": base_rev_y0 * 2 + 500_000.0},
+        ]},
+    )
+    comp = c.get(f"/api/assets/{aid}/live?t=tk").json()["comparison"]
+    assert abs(comp["npv_base"] - stored) <= 1  # base still anchored to stored
+    assert comp["npv_live"] > comp["npv_base"]  # above-base actual lifts live
+    assert comp["delta"] > 0
 
 
 def test_live_revenue_actual_moves_npv(monkeypatch, tmp_path):
