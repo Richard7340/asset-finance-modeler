@@ -97,7 +97,7 @@ export default function AssetsMap({ onOpenAsset }: Props) {
       <div className="mb-1 flex items-baseline justify-between gap-3">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
           <MapPin size={15} strokeWidth={2} className="text-accent-600" />
-          Mapa de activos
+          Mapa de activos · toda la cartera
         </h3>
         <span className="text-[11px] text-slate-400">
           {plotted.length} con ubicación
@@ -105,8 +105,9 @@ export default function AssetsMap({ onOpenAsset }: Props) {
         </span>
       </div>
       <p className="mb-3 text-xs text-slate-500">
-        Activos de la cartera con coordenadas. Los activos sin ubicación no se
-        muestran en el mapa.
+        Todos los activos guardados con coordenadas, en operación y
+        oportunidades (ver leyenda). Los activos sin ubicación no se muestran en
+        el mapa.
       </p>
 
       {plotted.length === 0 ? (
