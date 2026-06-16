@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteAsset,
@@ -16,9 +17,20 @@ import type {
   SavedAssetSummary,
   TrackingFrequency,
 } from "./api";
-import { ArrowLeft, Building2, Moon, Search, Sun } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  SlidersHorizontal,
+  Sun,
+} from "lucide-react";
 import { useRun } from "./hooks/useRun";
 import { useTheme } from "./hooks/useTheme";
+import { useLayout } from "./hooks/useLayout";
+import ResizeDivider from "./components/ResizeDivider";
 import { fmtDateTime } from "./format";
 import AssetPanel from "./components/AssetPanel";
 import Dashboard from "./components/Dashboard";
@@ -54,6 +66,15 @@ type View = "portfolio" | "detail";
 export default function App() {
   const queryClient = useQueryClient();
   const { theme, toggle: toggleTheme } = useTheme();
+  const {
+    layout,
+    setNavWidth,
+    setInputsWidth,
+    toggleNav,
+    toggleInputs,
+    isSectionCollapsed,
+    toggleSection,
+  } = useLayout();
   const [view, setView] = useState<View>("portfolio");
   // Which primary page is active. Cartera (operational) is the landing page.
   const [page, setPage] = useState<DashboardPage>("cartera");
@@ -191,9 +212,19 @@ export default function App() {
         overrides={overrides}
         onChangeNumber={setOne}
         onChangeOverride={setOverride}
+        isSectionCollapsed={isSectionCollapsed}
+        toggleSection={toggleSection}
       />
     );
-  }, [modelId, schemaQuery.isLoading, schemaQuery.error, schemaQuery.data, overrides]);
+  }, [
+    modelId,
+    schemaQuery.isLoading,
+    schemaQuery.error,
+    schemaQuery.data,
+    overrides,
+    isSectionCollapsed,
+    toggleSection,
+  ]);
 
   return (
     <div className="flex h-full min-h-screen flex-col bg-slate-50 text-slate-900">
@@ -292,28 +323,109 @@ export default function App() {
             <Dashboard page={page} onOpenAsset={selectAsset} />
           </main>
         ) : (
-          <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[264px_336px_1fr]">
-            {/* Left: asset navigator */}
-            <aside className="border-r border-slate-200 bg-white p-4">
-              <AssetPanel
-                selectedModelId={selection?.modelId ?? null}
-                selectedAssetId={selection?.assetId ?? null}
-                onSelectModel={selectModel}
-                onSelectAsset={selectAsset}
-                onDeleteAsset={handleDeleteAsset}
-              />
-            </aside>
+          <div className="flex flex-1 flex-col lg:flex-row lg:items-stretch lg:overflow-hidden">
+            {/* Left: asset navigator — collapsible to a rail, resizable. */}
+            {layout.navCollapsed ? (
+              <aside className="flex shrink-0 items-start justify-center border-b border-slate-200 bg-white p-2 lg:w-10 lg:border-b-0 lg:border-r lg:py-3">
+                <button
+                  type="button"
+                  onClick={toggleNav}
+                  aria-label="Expandir navegador"
+                  title="Expandir navegador"
+                  className="grid h-8 w-8 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                >
+                  <PanelLeftOpen size={16} strokeWidth={2} />
+                </button>
+              </aside>
+            ) : (
+              <aside
+                className="panel-resizable shrink-0 overflow-y-auto border-b border-slate-200 bg-white p-4 lg:border-b-0 lg:border-r"
+                style={{ "--panel-w": `${layout.navWidth}px` } as CSSProperties}
+              >
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                    Activos
+                  </span>
+                  <button
+                    type="button"
+                    onClick={toggleNav}
+                    aria-label="Colapsar navegador"
+                    title="Colapsar navegador"
+                    className="grid h-7 w-7 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <PanelLeftClose size={15} strokeWidth={2} />
+                  </button>
+                </div>
+                <AssetPanel
+                  selectedModelId={selection?.modelId ?? null}
+                  selectedAssetId={selection?.assetId ?? null}
+                  onSelectModel={selectModel}
+                  onSelectAsset={selectAsset}
+                  onDeleteAsset={handleDeleteAsset}
+                />
+              </aside>
+            )}
 
-            {/* Center: input editor */}
-            <section className="border-r border-slate-200 bg-slate-50/80 p-4">
-              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-                Parámetros · {selection?.modelName ?? ""}
-              </h2>
-              {center}
-            </section>
+            {/* Divider: navigator | inputs (only when both visible, lg+). */}
+            {!layout.navCollapsed && !layout.inputsCollapsed && (
+              <div className="hidden lg:flex">
+                <ResizeDivider
+                  width={layout.navWidth}
+                  onResize={setNavWidth}
+                  label="Redimensionar navegador"
+                />
+              </div>
+            )}
 
-            {/* Right: financial output (terminal) */}
-            <main className="space-y-5 overflow-y-auto p-5">
+            {/* Center: input editor — collapsible to a rail, resizable. */}
+            {layout.inputsCollapsed ? (
+              <section className="flex shrink-0 items-start justify-center border-b border-slate-200 bg-slate-50/80 p-2 lg:w-10 lg:border-b-0 lg:border-r lg:py-3">
+                <button
+                  type="button"
+                  onClick={toggleInputs}
+                  aria-label="Expandir parámetros"
+                  title="Expandir parámetros"
+                  className="grid h-8 w-8 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                >
+                  <SlidersHorizontal size={16} strokeWidth={2} />
+                </button>
+              </section>
+            ) : (
+              <section
+                className="panel-resizable shrink-0 overflow-y-auto border-b border-slate-200 bg-slate-50/80 p-4 lg:border-b-0 lg:border-r"
+                style={{ "--panel-w": `${layout.inputsWidth}px` } as CSSProperties}
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                    Parámetros · {selection?.modelName ?? ""}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={toggleInputs}
+                    aria-label="Colapsar parámetros"
+                    title="Colapsar parámetros"
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <PanelLeftClose size={15} strokeWidth={2} />
+                  </button>
+                </div>
+                {center}
+              </section>
+            )}
+
+            {/* Divider: inputs | outputs (when inputs visible, lg+). */}
+            {!layout.inputsCollapsed && (
+              <div className="hidden lg:flex">
+                <ResizeDivider
+                  width={layout.inputsWidth}
+                  onResize={setInputsWidth}
+                  label="Redimensionar parámetros"
+                />
+              </div>
+            )}
+
+            {/* Right: financial output (terminal) — flexes to fill. */}
+            <main className="min-w-0 flex-1 space-y-5 overflow-y-auto p-5">
               {isEmbed && (
                 <div className="flex items-center justify-end gap-3">
                   {recalcBadge}

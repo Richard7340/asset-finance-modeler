@@ -171,5 +171,45 @@ test("FIX C: an unrelated scalar (volume_fraction) is not flagged", async () => 
   expect(screen.getAllByText("definido por la curva")).toHaveLength(1);
 });
 
+test("LAYOUT: a section header collapses/expands its body", () => {
+  // capex is default-open (first section); clicking the header should hide
+  // its input, clicking again should reveal it.
+  const { onChangeNumber } = renderInputs(numberSchema);
+  expect(onChangeNumber).not.toHaveBeenCalled();
+  expect(screen.queryByDisplayValue("1000")).toBeTruthy();
+  const header = screen.getByRole("button", { name: /Inversión|capex/i });
+  fireEvent.click(header);
+  expect(screen.queryByDisplayValue("1000")).toBeNull();
+  fireEvent.click(header);
+  expect(screen.queryByDisplayValue("1000")).toBeTruthy();
+});
+
+test("LAYOUT: section collapse delegates to the layout store when wired", () => {
+  const onChangeNumber = vi.fn();
+  const onChangeOverride = vi.fn();
+  const collapsed: Record<string, boolean> = {};
+  const isSectionCollapsed = vi.fn(
+    (key: string, fallback: boolean) =>
+      collapsed[key] === undefined ? fallback : collapsed[key],
+  );
+  const toggleSection = vi.fn((key: string, fallback: boolean) => {
+    const cur = collapsed[key] === undefined ? fallback : collapsed[key];
+    collapsed[key] = !cur;
+  });
+  renderWithClient(
+    <DynamicInputs
+      schema={numberSchema}
+      overrides={{}}
+      onChangeNumber={onChangeNumber}
+      onChangeOverride={onChangeOverride}
+      isSectionCollapsed={isSectionCollapsed}
+      toggleSection={toggleSection}
+    />,
+  );
+  const header = screen.getByRole("button", { name: /Inversión|capex/i });
+  fireEvent.click(header);
+  expect(toggleSection).toHaveBeenCalledWith("capex", expect.any(Boolean));
+});
+
 const _typeCheck: OverrideValue = true; // boolean is a valid OverrideValue
 void _typeCheck;

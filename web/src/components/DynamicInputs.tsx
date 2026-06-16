@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { getCurves } from "../api";
 import type { Curve, ModelSchema, OverrideValue, Overrides, SchemaInput } from "../api";
 import { isCurveNameInput, pointsPathFor } from "./CurvesPanel";
@@ -11,6 +12,14 @@ type Props = {
   onChangeNumber: (path: string, value: number) => void;
   /** Sets any override value (curve selection / custom points / clears). */
   onChangeOverride: (path: string, value: OverrideValue | undefined) => void;
+  /**
+   * Persisted per-section collapse, wired from the layout store. `fallback` is
+   * the default-expanded heuristic (first sections open, meta/timeline closed).
+   * Optional: when omitted (e.g. in unit tests) the component manages its own
+   * collapse state internally.
+   */
+  isSectionCollapsed?: (key: string, fallback: boolean) => boolean;
+  toggleSection?: (key: string, fallback: boolean) => void;
 };
 
 const CUSTOM_CURVE_OPTION = "__custom__";
@@ -239,6 +248,8 @@ export default function DynamicInputs({
   overrides,
   onChangeNumber,
   onChangeOverride,
+  isSectionCollapsed,
+  toggleSection,
 }: Props) {
   const hasCurveInputs = useMemo(
     () => schema.inputs.some(isCurveNameInput),
@@ -272,19 +283,37 @@ export default function DynamicInputs({
     return keys.map((k) => ({ key: k, inputs: map.get(k)! }));
   }, [schema]);
 
-  // First section open by default; meta/timeline collapsed.
-  const [open, setOpen] = useState<Record<string, boolean>>(() => {
-    const init: Record<string, boolean> = {};
+  // Default-expanded heuristic: first sections open, meta/timeline closed.
+  const defaultOpen = useMemo(() => {
+    const m: Record<string, boolean> = {};
     sections.forEach((s, i) => {
-      init[s.key] = i < 4 && s.key !== "meta" && s.key !== "timeline";
+      m[s.key] = i < 4 && s.key !== "meta" && s.key !== "timeline";
     });
-    return init;
-  });
+    return m;
+  }, [sections]);
+
+  // Fallback to internal state when the layout store isn't wired (tests).
+  const [internalOpen, setInternalOpen] = useState<Record<string, boolean>>({});
+  const sectionOpen = (key: string): boolean => {
+    if (isSectionCollapsed) return !isSectionCollapsed(key, !defaultOpen[key]);
+    const v = internalOpen[key];
+    return v === undefined ? !!defaultOpen[key] : v;
+  };
+  const onToggleSection = (key: string) => {
+    if (toggleSection) {
+      toggleSection(key, !defaultOpen[key]);
+      return;
+    }
+    setInternalOpen((p) => ({
+      ...p,
+      [key]: !(p[key] === undefined ? !!defaultOpen[key] : p[key]),
+    }));
+  };
 
   return (
     <div className="space-y-2">
       {sections.map((s) => {
-        const isOpen = open[s.key] ?? false;
+        const isOpen = sectionOpen(s.key);
         // Curve selectors get their own control; number inputs are editable
         // live; remaining text/bool are shown read-only.
         const curveInputs = s.inputs.filter(isCurveNameInput);
@@ -299,15 +328,19 @@ export default function DynamicInputs({
           >
             <button
               type="button"
-              onClick={() => setOpen((p) => ({ ...p, [s.key]: !p[s.key] }))}
+              onClick={() => onToggleSection(s.key)}
+              aria-expanded={isOpen}
               className="flex w-full items-center justify-between px-3 py-2 text-left transition hover:bg-slate-50"
             >
-              <span className="text-sm font-semibold text-slate-700">
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                {isOpen ? (
+                  <ChevronDown size={14} strokeWidth={2} className="text-slate-400" />
+                ) : (
+                  <ChevronRight size={14} strokeWidth={2} className="text-slate-400" />
+                )}
                 {sectionTitle(s.key)}
               </span>
-              <span className="text-xs text-slate-400">
-                {s.inputs.length} · {isOpen ? "−" : "+"}
-              </span>
+              <span className="text-xs text-slate-400">{s.inputs.length}</span>
             </button>
             {isOpen && (
               <div className="space-y-2 border-t border-slate-100 px-3 py-3">
