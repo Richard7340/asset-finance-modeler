@@ -6,6 +6,7 @@ import type { SavedAssetSummary } from "../api";
 import AssetGroup from "./AssetGroup";
 import PortfolioOverview from "./PortfolioOverview";
 import AssetsMap from "./AssetsMap";
+import { PortfolioAlerts } from "./Alerts";
 
 type Props = {
   onOpenAsset: (a: SavedAssetSummary) => void;
@@ -38,6 +39,7 @@ export default function Dashboard({ onOpenAsset }: Props) {
         icon={<Building2 size={18} strokeWidth={2} />}
         count={counts.op}
       >
+        <PortfolioAlerts />
         <PortfolioOverview onOpenAsset={onOpenAsset} lifecycle="operational" />
         <AssetsMap onOpenAsset={onOpenAsset} />
       </AssetGroup>

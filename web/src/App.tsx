@@ -32,6 +32,7 @@ import ViewTransition from "./components/ViewTransition";
 import ActualsGrid from "./components/ActualsGrid";
 import VariancePanel from "./components/VariancePanel";
 import LivePanel from "./components/LivePanel";
+import { AssetAlerts } from "./components/Alerts";
 
 type Selection = {
   modelId: string;
@@ -304,6 +305,7 @@ export default function App() {
               {/* Seguimiento: solo para activos en operación (F2). */}
               {selection?.assetId && selection.lifecycle === "operational" && (
                 <>
+                  <AssetAlerts assetId={selection.assetId} />
                   <ActualsGrid
                     assetId={selection.assetId}
                     trackingFrequency={selection.trackingFrequency}
