@@ -201,3 +201,68 @@ def test_no_residual_default_unchanged():
     )
     assert out_default["deviation_summary"]["npv_base"] == \
         out_zero["deviation_summary"]["npv_base"]
+
+
+# ---------------------------------------------------------------------------
+# fix(live): anchor the base-vs-live panel to the asset's REAL stored base NPV
+# (the engine NPV, on whatever footing the engine values — unlevered NOPAT FCF
+# for business/real-estate, consolidated unlevered for SVJ), and report the live
+# as stored + the actuals-driven delta (which is computed consistently on the
+# SAME CFO+CFI footing for both recomputed base and live, so the delta is valid).
+# ---------------------------------------------------------------------------
+
+
+def test_stored_base_npv_anchors_base_exactly():
+    """When a stored base NPV is supplied, ``npv_base`` reported == stored
+    EXACTLY, regardless of the CFO+CFI recompute footing."""
+    base = _base_output()
+    out = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=1, discount_rate=0.08,
+        stored_base_npv=999_000.0,
+    )
+    assert out["base"]["kpis"]["npv"] == 999_000
+    assert out["deviation_summary"]["npv_base"] == 999_000
+
+
+def test_stored_base_npv_no_actuals_live_equals_stored():
+    """No actuals -> live == base == stored exactly (delta 0)."""
+    base = _base_output()
+    out = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=1, discount_rate=0.08,
+        stored_base_npv=999_000.0,
+    )
+    assert out["live"]["kpis"]["npv"] == 999_000
+    assert out["deviation_summary"]["npv_delta"] == 0.0
+
+
+def test_stored_base_npv_live_is_stored_plus_delta():
+    """live = stored + (recomputed_live - recomputed_base). The actuals-driven
+    delta is added to the TRUE stored base."""
+    base = _base_output()
+    actuals = {"income_statement.rows.revenue": {0: 1500.0}}  # above base y0
+    # Recompute the raw (unanchored) delta to compare.
+    raw = compute_live(base, actuals_by_line_by_year=actuals, elapsed_years=1,
+                       discount_rate=0.08)
+    raw_delta = raw["live"]["kpis"]["npv"] - raw["base"]["kpis"]["npv"]
+    out = compute_live(
+        base, actuals_by_line_by_year=actuals, elapsed_years=1,
+        discount_rate=0.08, stored_base_npv=999_000.0,
+    )
+    assert out["base"]["kpis"]["npv"] == 999_000
+    assert out["live"]["kpis"]["npv"] == 999_000 + raw_delta
+    # Above-base actual -> live still > base.
+    assert out["live"]["kpis"]["npv"] > out["base"]["kpis"]["npv"]
+    assert out["deviation_summary"]["npv_delta"] == raw_delta
+
+
+def test_stored_base_npv_none_falls_back_to_recompute():
+    """No stored base provided -> recomputed base (current behaviour) is kept."""
+    base = _base_output()
+    out_none = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=1, discount_rate=0.08,
+        stored_base_npv=None,
+    )
+    out_legacy = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=1, discount_rate=0.08,
+    )
+    assert out_none["base"]["kpis"]["npv"] == out_legacy["base"]["kpis"]["npv"]

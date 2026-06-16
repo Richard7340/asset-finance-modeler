@@ -228,6 +228,7 @@ def compute_live(
     terminal_method: str = "none",
     npv_convention: Literal["dcf", "sum"] = "dcf",
     residual_value: float = 0.0,
+    stored_base_npv: float | None = None,
 ) -> dict[str, Any]:
     """Return ``{base: {series, kpis}, live: {series, kpis}, deviation_summary}``.
 
@@ -240,6 +241,18 @@ def compute_live(
     NPV recomputation so the recomputed base tracks the stored/engine base
     (instead of a spurious negative) while the delta stays attributable to the
     actuals. See the module docstring for the documented simplifications.
+
+    ``stored_base_npv`` is the asset's REAL engine NPV (from its
+    ``results_snapshot`` kpis — ``npv`` / ``npv_hybrid``). When supplied we
+    ANCHOR the reported base NPV to it and report the live NPV as
+    ``stored_base_npv + (recomputed_live_npv - recomputed_base_npv)`` — i.e. the
+    actuals-driven delta (computed consistently on the SAME CFO+CFI footing for
+    both recomputed base and live, so the delta is valid) added to the TRUE
+    stored base. This makes ``npv_base`` == the real engine NPV for EVERY asset
+    type (business/real-estate value on unlevered NOPAT FCF, SVJ on consolidated
+    unlevered NPV, neither of which equals the CFO+CFI recompute) — footing
+    agnostic and exact. When ``None`` (shouldn't happen for a saved asset, but
+    guarded) we fall back to the recomputed base.
     """
     base_series = {
         "income_statement": copy.deepcopy(base_output.get("income_statement") or {"rows": {}}),
@@ -272,6 +285,17 @@ def compute_live(
         live_series, discount_rate, terminal_growth, terminal_method,
         npv_convention, residual_value,
     )
+
+    # Anchor to the stored engine NPV: report the TRUE base and the live as
+    # base + the actuals-driven delta. The delta is computed on the SAME footing
+    # for both recomputed base and live, so it stays valid even though the
+    # absolute recompute (CFO+CFI) differs from the engine's valuation footing.
+    if stored_base_npv is not None:
+        recomputed_base = base_kpis["npv"]
+        recomputed_live = live_kpis["npv"]
+        npv_delta = recomputed_live - recomputed_base
+        base_kpis["npv"] = round(stored_base_npv)
+        live_kpis["npv"] = round(stored_base_npv + npv_delta)
 
     deviation_summary = {
         "npv_base": base_kpis["npv"],

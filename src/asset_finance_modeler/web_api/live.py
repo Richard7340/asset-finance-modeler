@@ -8,9 +8,12 @@ statements + a headline comparison for the frontend.
 
 LIVE only applies to OPERATIONAL assets (an opportunity has no real operating
 data to overlay) -> 422 otherwise. The base NPV in the ``comparison`` is the
-LIVE engine's recomputation of the base on the same footing as the live figure,
-so the delta is an apples-to-apples reprojection (see ``core/live`` for the
-documented overlay-by-aggregation simplifications).
+asset's REAL stored engine NPV (``results_snapshot`` kpis ``npv``/``npv_hybrid``)
+— ``compute_live`` is anchored to it so ``npv_base`` is the TRUE base for every
+asset type regardless of footing, and ``npv_live`` is that stored base shifted
+by the actuals-driven delta (computed on a consistent CFO+CFI footing for both
+recomputed base and live). See ``core/live`` for the documented
+overlay-by-aggregation simplifications.
 """
 from __future__ import annotations
 
@@ -159,6 +162,17 @@ def get_live(asset_id: str) -> dict[str, Any]:
     actuals = _actuals_store().list(scenario_id=asset_id)
     by_line = _aggregate_actuals(asset, actuals, snapshot)
 
+    # The REAL stored engine NPV (unlevered NOPAT FCF for business/real-estate,
+    # consolidated unlevered for svj_hybrid). The base-vs-live panel anchors to
+    # this so ``npv_base`` is the TRUE base for every asset type; live is the
+    # stored base shifted by the actuals-driven delta. ``None`` (no stored NPV)
+    # falls back to the CFO+CFI recompute inside ``compute_live``.
+    stored_kpis = snapshot.get("kpis") or {}
+    stored_base_npv = stored_kpis.get("npv", stored_kpis.get("npv_hybrid"))
+    stored_base_npv = (
+        float(stored_base_npv) if stored_base_npv is not None else None
+    )
+
     result = compute_live(
         base_output=snapshot,
         actuals_by_line_by_year=by_line,
@@ -168,6 +182,7 @@ def get_live(asset_id: str) -> dict[str, Any]:
         terminal_method=terminal_method,
         npv_convention=convention,  # type: ignore[arg-type]
         residual_value=residual_value,
+        stored_base_npv=stored_base_npv,
     )
 
     base_kpis = result["base"]["kpis"]
