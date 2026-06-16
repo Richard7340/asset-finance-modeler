@@ -229,6 +229,23 @@ table {
   background-color: rgb(190 18 60 / 0.18);
 }
 
+/* ------------------------------------------------------------------ */
+/* Detail-view resizable panels.                                       */
+/* The panel reads its width from the `--panel-w` custom property set  */
+/* inline by App.tsx. Below `lg` the columns stack full-width (the var */
+/* is ignored); at `lg` and up the explicit px width applies so the    */
+/* outputs column flexes to fill the rest. Width is layout-only state, */
+/* so dragging never retriggers a model recalc.                        */
+/* ------------------------------------------------------------------ */
+.panel-resizable {
+  width: 100%;
+}
+@media (min-width: 1024px) {
+  .panel-resizable {
+    width: var(--panel-w);
+  }
+}
+
 /* Scrollbar tuned for ink. */
 .dark * {
   scrollbar-color: rgb(51 65 85) transparent;
