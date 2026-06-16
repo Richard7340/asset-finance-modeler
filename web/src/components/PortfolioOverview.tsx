@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight, LayoutGrid } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -20,6 +21,10 @@ import AnimatedNumber from "./AnimatedNumber";
 import Sparkline from "./Sparkline";
 import Reveal, { useStaggerReveal } from "./Reveal";
 import { useChartTheme } from "../hooks/useChartTheme";
+import { useAssetSeries } from "../hooks/useAssetSeries";
+import { consolidateSeries } from "../lib/assetSeries";
+import AssetCards from "./AssetCards";
+import PortfolioCurve from "./PortfolioCurve";
 
 type Props = {
   /** Open a saved asset in the detail editor (drill-in). */
@@ -214,14 +219,45 @@ export default function PortfolioOverview({
   }, [portfolio]);
 
   const rows = useMemo(() => {
-    const byId = new Map<string, { id: string; name: string; model_id: string }>();
+    const byId = new Map<
+      string,
+      { id: string; name: string; model_id: string; location?: string | null }
+    >();
     for (const a of allAssets)
-      byId.set(a.id, { id: a.id, name: a.name, model_id: a.model_id });
+      byId.set(a.id, {
+        id: a.id,
+        name: a.name,
+        model_id: a.model_id,
+        location: a.location,
+      });
     for (const a of portfolio?.assets ?? [])
       if (!byId.has(a.id))
-        byId.set(a.id, { id: a.id, name: a.name, model_id: a.model_id });
+        byId.set(a.id, {
+          id: a.id,
+          name: a.name,
+          model_id: a.model_id,
+          location: a.location,
+        });
     return [...byId.values()];
   }, [allAssets, portfolio]);
+
+  // Per-asset annual series (cheap, cached) → card sparklines + the
+  // consolidated portfolio curve. Only the included assets contribute.
+  const seriesIds = useMemo(
+    () => rows.map((r) => r.id).filter((id) => !excluded.has(id)),
+    [rows, excluded],
+  );
+  const { byId: seriesById, loading: seriesLoading } = useAssetSeries(seriesIds);
+  const portfolioCurve = useMemo(
+    () => consolidateSeries(seriesIds.map((id) => seriesById.get(id) ?? [])),
+    [seriesIds, seriesById],
+  );
+
+  // Detail table: kept available below the cards (collapsed by default so the
+  // cards lead, but always reachable for the dense figures + row actions).
+  const [tableOpen, setTableOpen] = useState(false);
+  const resolveAsset = (id: string): SavedAssetSummary | undefined =>
+    allAssets.find((x) => x.id === id);
 
   const toggle = (id: string) =>
     setExcluded((prev) => {
@@ -368,7 +404,155 @@ export default function PortfolioOverview({
       {/* 2 — alerts strip (Cartera only; kept slim by the caller). */}
       {alertsSlot}
 
-      {/* 3 — analytics panels: composition donut + VAN bars + revenue bars. */}
+      {/* 3 — ASSETS, at a glance (the hero): a grid of rich asset cards. The
+          dense detail table (include toggle + row actions) stays available
+          right below, collapsed by default. */}
+      <Reveal className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            <LayoutGrid size={13} strokeWidth={2} className="text-accent-500" />
+            Activos
+          </h3>
+          <span className="text-[11px] text-slate-400">
+            {rows.length} activo{rows.length === 1 ? "" : "s"}
+            {excluded.size > 0 ? ` · ${excluded.size} excluido${excluded.size === 1 ? "" : "s"}` : ""}
+          </span>
+        </div>
+
+        <AssetCards
+          rows={rows}
+          metricsById={metricsById}
+          seriesById={seriesById}
+          excluded={excluded}
+          totalNpv={totalNpv}
+          lifecycle={lifecycle}
+          onToggle={toggle}
+          onOpen={openById}
+          rowAction={rowAction}
+          resolveAsset={resolveAsset}
+        />
+
+        {/* Detail table toggle — dense figures + the same include/actions. */}
+        <button
+          type="button"
+          onClick={() => setTableOpen((v) => !v)}
+          className="flex items-center gap-1.5 rounded-md px-1 py-1 text-xs font-medium text-slate-500 transition hover:text-accent-700"
+          aria-expanded={tableOpen}
+        >
+          {tableOpen ? (
+            <ChevronDown size={14} strokeWidth={2} />
+          ) : (
+            <ChevronRight size={14} strokeWidth={2} />
+          )}
+          {tableOpen ? "Ocultar tabla detallada" : "Ver tabla detallada"}
+        </button>
+
+        {tableOpen && (
+          <div className="surface overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-3 py-2.5 font-medium">Incl.</th>
+                  <th className="px-3 py-2.5 font-medium">Activo</th>
+                  <th className="px-3 py-2.5 font-medium">Tipo / Modelo</th>
+                  <th className="px-3 py-2.5 text-right font-medium">VAN</th>
+                  <th className="px-3 py-2.5 text-right font-medium">TIR</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Rentabilidad</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Ingresos año 1</th>
+                  <th className="px-3 py-2.5 text-right font-medium">CAPEX</th>
+                  <th className="px-3 py-2.5 text-right font-medium">% VAN</th>
+                  {rowAction && (
+                    <th className="px-3 py-2.5 text-right font-medium">Acción</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody ref={rowsRef}>
+                {rows.map((r, ri) => {
+                  const m = metricsById.get(r.id);
+                  const isIncluded = !excluded.has(r.id);
+                  const contrib = m && totalNpv !== 0 ? m.npv / totalNpv : 0;
+                  return (
+                    <tr
+                      key={r.id}
+                      className={`group cursor-pointer border-b border-slate-100 transition last:border-0 hover:bg-accent-50/40 ${
+                        ri % 2 === 1 ? "bg-slate-50/40" : ""
+                      } ${isIncluded ? "" : "bg-slate-50/60 text-slate-400"}`}
+                      onClick={() => openById(r.id)}
+                    >
+                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isIncluded}
+                          onChange={() => toggle(r.id)}
+                          aria-label={`Incluir ${r.name} en el agregado`}
+                          className="h-4 w-4 cursor-pointer accent-accent-600"
+                        />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="font-medium text-slate-800 transition group-hover:text-accent-700">
+                          {r.name}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-500">{r.model_id}</td>
+                      <td
+                        className={`px-3 py-2.5 text-right tabular-nums ${
+                          isIncluded ? rateTone(m?.npv) : ""
+                        }`}
+                      >
+                        {m ? eurExact(m.npv) : "—"}
+                      </td>
+                      <td
+                        className={`px-3 py-2.5 text-right tabular-nums ${
+                          isIncluded ? rateTone(m?.irr) : ""
+                        }`}
+                      >
+                        {m && Number.isFinite(m.irr) ? pct(m.irr) : "—"}
+                      </td>
+                      <td
+                        className={`px-3 py-2.5 text-right tabular-nums ${
+                          isIncluded ? rateTone(m?.yield_pct) : ""
+                        }`}
+                      >
+                        {m && Number.isFinite(m.yield_pct) ? pct(m.yield_pct) : "—"}
+                      </td>
+                      <td
+                        className={`px-3 py-2.5 text-right tabular-nums ${
+                          isIncluded ? moneyTone(m?.revenue_y1) : ""
+                        }`}
+                      >
+                        {m ? eurExact(m.revenue_y1) : "—"}
+                      </td>
+                      <td
+                        className={`px-3 py-2.5 text-right tabular-nums ${
+                          isIncluded ? moneyTone(m?.capex) : ""
+                        }`}
+                      >
+                        {m ? eurExact(m.capex) : "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
+                        {m && isIncluded ? pct(contrib) : "—"}
+                      </td>
+                      {rowAction && (
+                        <td
+                          className="px-3 py-2.5 text-right"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {(() => {
+                            const a = resolveAsset(r.id);
+                            return a ? rowAction(a) : null;
+                          })()}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Reveal>
+
+      {/* 4 — analytics panels: composition donut + VAN bars + portfolio curve + revenue bars. */}
       <div className="space-y-3">
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
           Análisis de cartera
@@ -495,6 +679,23 @@ export default function PortfolioOverview({
           </Reveal>
         </div>
 
+        {/* Consolidated portfolio curve — aggregated annual generation +
+            cumulative trajectory across the included assets, over the horizon. */}
+        <Reveal className="surface surface-hover p-4" delay={60}>
+          <PanelTitle
+            title="Curva consolidada de cartera"
+            subtitle="Generación anual agregada y trayectoria acumulada, sobre el horizonte de proyección"
+            right={
+              portfolioCurve.length >= 2 ? (
+                <span className="text-[11px] tabular-nums text-slate-400">
+                  {portfolioCurve.length} años
+                </span>
+              ) : null
+            }
+          />
+          <PortfolioCurve series={portfolioCurve} loading={seriesLoading} />
+        </Reveal>
+
         {/* Año-1 revenue per asset — kept with the analytics, before the table. */}
         {revChartData.length > 0 && (
           <Reveal className="surface surface-hover p-4" delay={90}>
@@ -534,114 +735,6 @@ export default function PortfolioOverview({
             </div>
           </Reveal>
         )}
-      </div>
-
-      {/* 4 — per-asset table (clickable rows + row actions). */}
-      <div className="space-y-3">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-          Detalle por activo
-        </h3>
-        <Reveal className="surface overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                <th className="px-3 py-2.5 font-medium">Incl.</th>
-                <th className="px-3 py-2.5 font-medium">Activo</th>
-                <th className="px-3 py-2.5 font-medium">Tipo / Modelo</th>
-                <th className="px-3 py-2.5 text-right font-medium">VAN</th>
-                <th className="px-3 py-2.5 text-right font-medium">TIR</th>
-                <th className="px-3 py-2.5 text-right font-medium">Rentabilidad</th>
-                <th className="px-3 py-2.5 text-right font-medium">Ingresos año 1</th>
-                <th className="px-3 py-2.5 text-right font-medium">CAPEX</th>
-                <th className="px-3 py-2.5 text-right font-medium">% VAN</th>
-                {rowAction && (
-                  <th className="px-3 py-2.5 text-right font-medium">Acción</th>
-                )}
-              </tr>
-            </thead>
-            <tbody ref={rowsRef}>
-              {rows.map((r, ri) => {
-                const m = metricsById.get(r.id);
-                const isIncluded = !excluded.has(r.id);
-                const contrib = m && totalNpv !== 0 ? m.npv / totalNpv : 0;
-                return (
-                  <tr
-                    key={r.id}
-                    className={`group cursor-pointer border-b border-slate-100 transition last:border-0 hover:bg-accent-50/40 ${
-                      ri % 2 === 1 ? "bg-slate-50/40" : ""
-                    } ${isIncluded ? "" : "bg-slate-50/60 text-slate-400"}`}
-                    onClick={() => openById(r.id)}
-                  >
-                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={isIncluded}
-                        onChange={() => toggle(r.id)}
-                        aria-label={`Incluir ${r.name} en el agregado`}
-                        className="h-4 w-4 cursor-pointer accent-accent-600"
-                      />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="font-medium text-slate-800 transition group-hover:text-accent-700">
-                        {r.name}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-500">{r.model_id}</td>
-                    <td
-                      className={`px-3 py-2.5 text-right tabular-nums ${
-                        isIncluded ? rateTone(m?.npv) : ""
-                      }`}
-                    >
-                      {m ? eurExact(m.npv) : "—"}
-                    </td>
-                    <td
-                      className={`px-3 py-2.5 text-right tabular-nums ${
-                        isIncluded ? rateTone(m?.irr) : ""
-                      }`}
-                    >
-                      {m && Number.isFinite(m.irr) ? pct(m.irr) : "—"}
-                    </td>
-                    <td
-                      className={`px-3 py-2.5 text-right tabular-nums ${
-                        isIncluded ? rateTone(m?.yield_pct) : ""
-                      }`}
-                    >
-                      {m && Number.isFinite(m.yield_pct) ? pct(m.yield_pct) : "—"}
-                    </td>
-                    <td
-                      className={`px-3 py-2.5 text-right tabular-nums ${
-                        isIncluded ? moneyTone(m?.revenue_y1) : ""
-                      }`}
-                    >
-                      {m ? eurExact(m.revenue_y1) : "—"}
-                    </td>
-                    <td
-                      className={`px-3 py-2.5 text-right tabular-nums ${
-                        isIncluded ? moneyTone(m?.capex) : ""
-                      }`}
-                    >
-                      {m ? eurExact(m.capex) : "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
-                      {m && isIncluded ? pct(contrib) : "—"}
-                    </td>
-                    {rowAction && (
-                      <td
-                        className="px-3 py-2.5 text-right"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {(() => {
-                          const a = allAssets.find((x) => x.id === r.id);
-                          return a ? rowAction(a) : null;
-                        })()}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Reveal>
       </div>
 
       {/* 5 — map last (Cartera passes the operational map here). */}

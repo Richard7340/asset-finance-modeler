@@ -29,21 +29,22 @@ function renderWithClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-test("renders aggregate VAN total and per-asset rows", async () => {
+test("leads with the assets (cards) and keeps the detail table reachable", async () => {
   renderWithClient(<PortfolioOverview onOpenAsset={() => {}} />);
-  // Aggregate VAN total (4 M€). It appears both in the KPI strip and the
-  // composition-donut centre label, so we assert at least one occurrence.
+  // Aggregate VAN total (4 M€). Appears in the KPI strip and the donut centre.
   const vanTotals = await screen.findAllByText(/4,00 M€/);
   expect(vanTotals.length).toBeGreaterThan(0);
-  // Per-asset name appears in the table, the VAN-by-asset chart axis and the
-  // composition legend, so assert at least one occurrence of each.
+  // The assets are the hero: each asset name appears (card + chart axis/legend).
   expect(screen.getAllByText("Planta Solar Sur").length).toBeGreaterThan(0);
   expect(screen.getAllByText("BESS Norte").length).toBeGreaterThan(0);
-  // Contribution: a1 = 75% — appears in the table contribution column and the
-  // composition legend, so assert at least one occurrence.
+  // Contribution: a1 = 75% — shown on the card and in the composition legend.
   expect(screen.getAllByText(/75%/).length).toBeGreaterThan(0);
-  // TIR column renders a % for an asset (a1 IRR = 8.2%).
-  expect(screen.getByText(/8,2%/)).toBeTruthy();
+  // TIR for an asset (a1 IRR = 8.2%) renders on its card.
+  expect(screen.getAllByText(/8,2%/).length).toBeGreaterThan(0);
   // Aggregate TIR media card (7.2%).
   expect(screen.getByText(/7,2%/)).toBeTruthy();
+  // The dense detail table is collapsed by default but reachable via a toggle.
+  expect(screen.getByText(/Ver tabla detallada/)).toBeTruthy();
+  // The asset cards expose the include-in-aggregate toggle (one per asset).
+  expect(screen.getAllByLabelText(/Incluir .* en el agregado/).length).toBe(2);
 });
