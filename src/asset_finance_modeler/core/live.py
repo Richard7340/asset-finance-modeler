@@ -190,18 +190,79 @@ def _overlay_one(
             # CFO is shifted by the net_income delta in compute_live (the caller
             # captures NI before/after this overlay). Add-backs (D&A) unchanged.
             return
-        # A margin / cost line overridden directly: shift it and everything
-        # below it (ebit, ebt, tax, net_income) by the same delta. Lines above
-        # (revenue) are unchanged.
+        # Capture the base year's net_income so CFO can be shifted by the
+        # AFTER-TAX (net_income) delta — never by the raw pre-tax delta.
+        ni_before = (
+            rows["net_income"][year]
+            if ("net_income" in rows and year < len(rows["net_income"]))
+            else None
+        )
+
+        # Terminal lines (tax / net_income) are overridden directly: set the
+        # value, keep NI = EBT - tax consistent, shift CFO by the NI delta.
+        if key == "tax":
+            rows["tax"][year] = real
+            if "net_income" in rows and year < len(rows["net_income"]) \
+                    and "ebt" in rows and year < len(rows["ebt"]):
+                rows["net_income"][year] = rows["ebt"][year] - real
+            if ni_before is not None:
+                _shift_cfo(cash_flow, year, rows["net_income"][year] - ni_before)
+            return
+        if key == "net_income":
+            rows["net_income"][year] = real
+            # Keep NI = EBT - tax by back-solving the implied tax (the operator's
+            # reported net income is the truth; tax absorbs the residual).
+            if "tax" in rows and year < len(rows["tax"]) \
+                    and "ebt" in rows and year < len(rows["ebt"]):
+                rows["tax"][year] = rows["ebt"][year] - real
+            if ni_before is not None:
+                _shift_cfo(cash_flow, year, real - ni_before)
+            return
+
+        # A margin / cost line overridden directly (ebitda / ebit / ebt /
+        # interest_expense): propagate the delta down to EBT, then recompute tax
+        # at the base year's effective rate and net_income = EBT - tax. CFO moves
+        # by the AFTER-TAX delta. This mirrors the revenue path so the spliced
+        # statement stays internally consistent (NI = EBT - tax) and the
+        # valuation reflects after-tax cash.
         delta = real - old
         if key in _PNL_ORDER:
+            # ebitda / ebit / ebt: set the line and shift the lines below it down
+            # to EBT (inclusive) by the same delta. Lines above (revenue) are
+            # unchanged; tax / net_income are recomputed below, not shifted.
             idx = _PNL_ORDER.index(key)
             for k in _PNL_ORDER[idx:]:
+                if k in ("tax", "net_income"):
+                    break
                 if k in rows and year < len(rows[k]):
                     rows[k][year] = rows[k][year] + delta
+        elif key == "interest_expense":
+            # interest_expense is a cost into EBT (not an independent output):
+            # a higher actual lowers EBT. (It is not in _PNL_ORDER; handled here
+            # so the LIVE overlay is correct rather than dropping the line.)
+            rows[key][year] = real
+            if "ebt" in rows and year < len(rows["ebt"]):
+                rows["ebt"][year] = rows["ebt"][year] - delta
         else:
             rows[key][year] = real
-        _shift_cfo(cash_flow, year, delta)
+        # Recompute tax at the base year's effective rate on the new EBT, then
+        # net_income = EBT - tax; shift CFO by the after-tax (NI) delta.
+        if "ebt" in rows and year < len(rows["ebt"]):
+            new_ebt = rows["ebt"][year]
+            base_tax = rows["tax"][year] if "tax" in rows else 0.0
+            # base_ebt = EBT before this override.
+            base_ebt = (
+                new_ebt + delta if key == "interest_expense" else new_ebt - delta
+            )
+            eff_rate = (base_tax / base_ebt) if base_ebt > 0 else 0.0
+            new_tax = max(0.0, new_ebt) * eff_rate
+            if "tax" in rows and year < len(rows["tax"]):
+                rows["tax"][year] = new_tax
+            if "net_income" in rows and year < len(rows["net_income"]):
+                rows["net_income"][year] = new_ebt - new_tax
+        if ni_before is not None and "net_income" in rows \
+                and year < len(rows["net_income"]):
+            _shift_cfo(cash_flow, year, rows["net_income"][year] - ni_before)
         return
 
     if line_path.startswith("cash_flow."):
