@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from asset_finance_modeler.core.scenario import Scenario
 from asset_finance_modeler.store.actuals import Actual, SQLiteActualsStore
@@ -109,13 +109,26 @@ def _model_start_year(asset: Scenario) -> int:
     return asset.created_at.year
 
 
+# Sentinel year index for a malformed period_start: far outside any model
+# horizon so the ``0 <= idx < n`` guard at every call site silently drops it
+# (defence in depth — the Pydantic boundary already rejects bad dates on POST,
+# but a legacy / direct-written row must never 500 /variance or /live).
+_BAD_YEAR_INDEX = -(10**9)
+
+
 def _year_index(period_start: str, start_year: int) -> int:
-    """Map an actual's period_start (ISO date) to a 0-based model year index."""
+    """Map an actual's period_start (ISO date) to a 0-based model year index.
+
+    Defensive: a non-parsable period_start returns ``_BAD_YEAR_INDEX`` (dropped
+    by the ``0 <= idx < n`` guard) rather than raising."""
     try:
         dt = datetime.fromisoformat(period_start)
-    except ValueError:
-        # Bare year or unparsable -> try the leading 4 chars.
-        dt = datetime(int(period_start[:4]), 1, 1)
+    except (ValueError, TypeError):
+        # Bare year ("2026") -> try the leading 4 chars; otherwise drop.
+        try:
+            dt = datetime(int(period_start[:4]), 1, 1)
+        except (ValueError, TypeError):
+            return _BAD_YEAR_INDEX
     return dt.year - start_year
 
 
@@ -128,6 +141,19 @@ class ActualInput(BaseModel):
     value: float
     unit: str = ""
     note: str = ""
+
+    @field_validator("period_start")
+    @classmethod
+    def _period_start_is_iso(cls, v: str) -> str:
+        """Reject a non-ISO period_start at the boundary (-> 422) so it is never
+        stored and later 500s /variance and /live (L3)."""
+        try:
+            datetime.fromisoformat(v)
+        except (ValueError, TypeError):
+            raise ValueError(
+                "period_start must be an ISO date/datetime, e.g. '2026-01-01'"
+            )
+        return v
 
 
 class PostActualsBody(BaseModel):

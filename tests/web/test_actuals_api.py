@@ -111,6 +111,52 @@ def test_delete_actual(monkeypatch, tmp_path):
     assert c.get(f"/api/assets/{aid}/actuals?t=tk").json()["actuals"] == []
 
 
+def test_post_malformed_period_start_rejected(monkeypatch, tmp_path):
+    """L3: a non-ISO period_start is rejected at the boundary (4xx), not stored
+    and then 500-ing /variance and /live."""
+    c = _client(monkeypatch, tmp_path)
+    aid = _operational_asset(c)
+    r = c.post(
+        f"/api/assets/{aid}/actuals?t=tk",
+        json={
+            "actuals": [
+                {
+                    "period_start": "not-a-date",
+                    "line_path": "income_statement.rows.revenue",
+                    "value": 100.0,
+                }
+            ]
+        },
+    )
+    assert 400 <= r.status_code < 500
+    # Nothing stored.
+    assert c.get(f"/api/assets/{aid}/actuals?t=tk").json()["actuals"] == []
+
+
+def test_variance_resilient_to_bad_stored_row(monkeypatch, tmp_path):
+    """L3: even if a malformed row exists in the store (legacy / direct write),
+    /variance must not 500 — the bad row is silently dropped."""
+    c = _client(monkeypatch, tmp_path)
+    aid = _operational_asset(c)
+    # Bypass the API boundary and write a malformed row straight to the store.
+    from asset_finance_modeler.store.actuals import Actual, SQLiteActualsStore
+    from asset_finance_modeler.web_api.assets import _db_path
+    store = SQLiteActualsStore(_db_path())
+    store.initialize()
+    store.add(
+        Actual(
+            scenario_id=aid,
+            period_start="garbage",
+            line_path="income_statement.rows.revenue",
+            value=100.0,
+        )
+    )
+    r = c.get(f"/api/assets/{aid}/variance?t=tk")
+    assert r.status_code == 200
+    rl = c.get(f"/api/assets/{aid}/live?t=tk")
+    assert rl.status_code == 200
+
+
 def test_post_requires_token(monkeypatch, tmp_path):
     c = _client(monkeypatch, tmp_path)
     aid = _operational_asset(c)
