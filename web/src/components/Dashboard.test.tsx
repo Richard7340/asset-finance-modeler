@@ -7,6 +7,13 @@ vi.mock("../api", () => ({
   listAssets: vi.fn(),
   setLifecycle: vi.fn().mockResolvedValue({ id: "scn-2", lifecycle: "operational" }),
   getPortfolio: vi.fn().mockResolvedValue({ assets: [], totals: { npv: 0, capex: 0, revenue_y1: 0, count: 0 } }),
+  // PortfolioAlerts + AssetsMap consume these for operational assets.
+  getVariance: vi.fn().mockResolvedValue({ lines: [] }),
+  getLive: vi.fn().mockResolvedValue({
+    base: { kpis: {}, income_statement: { years: [], rows: {} }, cash_flow: { years: [], cfo: [], cfi: [], cff: [] } },
+    live: { kpis: {}, income_statement: { years: [], rows: {} }, cash_flow: { years: [], cfo: [], cfi: [], cff: [] } },
+    comparison: { npv_base: 0, npv_live: 0, delta: 0, irr_base: 0, irr_live: 0, dscr_min_base: 1.5, dscr_min_live: 1.5, elapsed_years: 0, n_years: 0 },
+  }),
 }));
 
 import { listAssets, setLifecycle } from "../api";
