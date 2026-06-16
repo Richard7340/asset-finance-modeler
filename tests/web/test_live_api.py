@@ -74,6 +74,30 @@ def test_live_no_actuals_equals_base(monkeypatch, tmp_path):
     assert body["comparison"]["delta"] == 0.0
 
 
+def test_live_real_estate_base_npv_matches_stored_not_spurious_negative(
+    monkeypatch, tmp_path
+):
+    """Real estate's base valuation includes a residual sale at horizon end, so
+    the LIVE recomputed ``npv_base`` must carry that residual too: it should be
+    close to the asset's STORED base NPV (positive), not a spurious large
+    negative from ignoring the exit inflow."""
+    c = _client(monkeypatch, tmp_path)
+    aid = _operational_asset(c, model_id="real_estate_rental")
+    stored = c.get(f"/api/assets/{aid}?t=tk").json()["results_snapshot"]["kpis"]["npv"]
+    assert stored > 0  # the stored base NPV is positive (residual recovers capital)
+    r = c.get(f"/api/assets/{aid}/live?t=tk")
+    assert r.status_code == 200
+    npv_base = r.json()["comparison"]["npv_base"]
+    # Before the fix this came out ~-1.7M (residual ignored). After threading the
+    # residual it tracks the stored base within the irreducible levered-CFO vs
+    # unlevered-FCF footing gap (the business EV is on unlevered FCF; live
+    # recomputes on CFO+CFI). Tolerance: within 15% of the residual value.
+    residual = 3_000_000.0
+    assert abs(npv_base - stored) < 0.15 * residual
+    # And unambiguously NOT the old spurious deep-negative.
+    assert npv_base > -0.25 * residual
+
+
 def test_live_revenue_actual_moves_npv(monkeypatch, tmp_path):
     c = _client(monkeypatch, tmp_path)
     aid = _operational_asset(c)

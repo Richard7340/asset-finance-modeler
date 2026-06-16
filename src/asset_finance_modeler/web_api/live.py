@@ -46,18 +46,22 @@ def _get_asset_or_404(asset_id: str) -> Scenario:
     return s
 
 
-def _resolve_valuation(asset: Scenario) -> tuple[float, float, str, str]:
-    """Resolve (discount_rate, terminal_growth, terminal_method, npv_convention)
-    for an asset by re-resolving its base model config (the snapshot does not
-    store the discount rate). Falls back to a generic 8% / no-terminal if the
-    config cannot be resolved."""
+def _resolve_valuation(asset: Scenario) -> tuple[float, float, str, str, float]:
+    """Resolve (discount_rate, terminal_growth, terminal_method, npv_convention,
+    residual_value) for an asset by re-resolving its base model config (the
+    snapshot does not store the discount rate / terminal). ``residual_value`` is
+    the base valuation's exit/terminal inflow at horizon end (e.g. a real-estate
+    sale) so the LIVE recomputation can honour the SAME terminal as the base —
+    otherwise the recomputed base NPV is spuriously negative for residual-backed
+    assets. Falls back to a generic 8% / no-terminal / no-residual if the config
+    cannot be resolved."""
     model_id = (asset.inputs_snapshot or {}).get("model_id") or asset.base_model
     overrides = (asset.inputs_snapshot or {}).get("overrides", asset.overrides) or {}
 
     # SVJ hybrid: consolidated unlevered NPV at the deal WACC (no terminal).
     if model_id == "svj_hybrid":
         wacc = float(overrides.get("wacc", _WACC))
-        return wacc, 0.0, "none", "sum"
+        return wacc, 0.0, "none", "sum", 0.0
 
     try:
         if model_id in _BUSINESS_IDS:
@@ -67,7 +71,7 @@ def _resolve_valuation(asset: Scenario) -> tuple[float, float, str, str]:
         elif model_id in _preset_ids():
             cfg = load_preset(model_id).model_dump()
         else:
-            return 0.08, 0.0, "none", "dcf"
+            return 0.08, 0.0, "none", "dcf", 0.0
         cfg = apply_overrides(cfg, overrides)
         val = cfg.get("valuation") or {}
         return (
@@ -75,9 +79,10 @@ def _resolve_valuation(asset: Scenario) -> tuple[float, float, str, str]:
             float(val.get("terminal_growth_rate", 0.0) or 0.0),
             str(val.get("terminal_method", "none")),
             "dcf",
+            float(val.get("residual_value", 0.0) or 0.0),
         )
     except Exception:  # noqa: BLE001 — conservative fallback, never 500 on this
-        return 0.08, 0.0, "none", "dcf"
+        return 0.08, 0.0, "none", "dcf", 0.0
 
 
 def _elapsed_years(asset: Scenario, n_years: int) -> int:
@@ -143,7 +148,13 @@ def get_live(asset_id: str) -> dict[str, Any]:
             detail="asset snapshot has no annual statements to reproject",
         )
 
-    discount_rate, terminal_growth, terminal_method, convention = _resolve_valuation(asset)
+    (
+        discount_rate,
+        terminal_growth,
+        terminal_method,
+        convention,
+        residual_value,
+    ) = _resolve_valuation(asset)
     elapsed = _elapsed_years(asset, n_years)
     actuals = _actuals_store().list(scenario_id=asset_id)
     by_line = _aggregate_actuals(asset, actuals, snapshot)
@@ -156,6 +167,7 @@ def get_live(asset_id: str) -> dict[str, Any]:
         terminal_growth=terminal_growth,
         terminal_method=terminal_method,
         npv_convention=convention,  # type: ignore[arg-type]
+        residual_value=residual_value,
     )
 
     base_kpis = result["base"]["kpis"]

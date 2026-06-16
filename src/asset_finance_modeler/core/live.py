@@ -62,7 +62,18 @@ def _npv(
     terminal_growth: float,
     terminal_method: str,
     convention: str,
+    residual_value: float = 0.0,
 ) -> float:
+    # A residual / exit (terminal) inflow recovered at horizon end — e.g. the
+    # sale of a real-estate property. The BASE valuation adds it to the last
+    # modelled year's FCF; the LIVE recomputation must honour the SAME terminal
+    # so the recomputed base NPV tracks the stored/engine base (rather than
+    # showing a spurious negative) and the live/base delta stays attributable to
+    # the actuals. The residual is a future exit value, unchanged by past
+    # operational deviations, so it is applied identically to base and live.
+    if residual_value and fcf:
+        fcf = list(fcf)
+        fcf[-1] += residual_value
     if convention == "sum":
         return consolidate_npv(fcf, discount_rate)
     if not fcf:
@@ -109,12 +120,16 @@ def _kpis(
     terminal_growth: float,
     terminal_method: str,
     convention: str,
+    residual_value: float = 0.0,
 ) -> dict[str, Any]:
     income = series["income_statement"]
     rows = income["rows"]
     cash_flow = series["cash_flow"]
     fcf = _annual_fcf(income, cash_flow)
-    npv = _npv(fcf, discount_rate, terminal_growth, terminal_method, convention)
+    npv = _npv(
+        fcf, discount_rate, terminal_growth, terminal_method, convention,
+        residual_value,
+    )
     irr = _irr_series(fcf)
     dscr = _dscr(rows.get("ebitda") or [], cash_flow.get("cff") or [])
     return {
@@ -212,14 +227,19 @@ def compute_live(
     terminal_growth: float = 0.0,
     terminal_method: str = "none",
     npv_convention: Literal["dcf", "sum"] = "dcf",
+    residual_value: float = 0.0,
 ) -> dict[str, Any]:
     """Return ``{base: {series, kpis}, live: {series, kpis}, deviation_summary}``.
 
     ``base_output`` is the frozen snapshot shape (``income_statement`` with
     ``rows`` + ``cash_flow``). ``actuals_by_line_by_year`` maps a trackable
     line_path to ``{year_index: aggregated_real_value}``. ``elapsed_years`` is
-    the number of model years already elapsed (past). See the module docstring
-    for the documented simplifications.
+    the number of model years already elapsed (past). ``residual_value`` is the
+    base valuation's exit/terminal inflow at horizon end (e.g. a real-estate
+    sale): it is added to the last year's FCF for BOTH the base and the live
+    NPV recomputation so the recomputed base tracks the stored/engine base
+    (instead of a spurious negative) while the delta stays attributable to the
+    actuals. See the module docstring for the documented simplifications.
     """
     base_series = {
         "income_statement": copy.deepcopy(base_output.get("income_statement") or {"rows": {}}),
@@ -245,10 +265,12 @@ def compute_live(
                 _shift_cfo(cash_flow, year, ni_after - ni_before)
 
     base_kpis = _kpis(
-        base_series, discount_rate, terminal_growth, terminal_method, npv_convention
+        base_series, discount_rate, terminal_growth, terminal_method,
+        npv_convention, residual_value,
     )
     live_kpis = _kpis(
-        live_series, discount_rate, terminal_growth, terminal_method, npv_convention
+        live_series, discount_rate, terminal_growth, terminal_method,
+        npv_convention, residual_value,
     )
 
     deviation_summary = {

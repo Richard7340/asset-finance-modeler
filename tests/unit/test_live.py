@@ -105,3 +105,99 @@ def test_base_not_mutated():
         "income_statement.rows.revenue": {0: 9999.0}}, elapsed_years=1,
         discount_rate=0.08)
     assert base == snapshot
+
+
+# ---------------------------------------------------------------------------
+# Terminal / residual value honoring (fix(live): honrar valor terminal/residual
+# en la recomputacion base-vs-live). For an asset whose BASE valuation includes
+# a residual/exit inflow (e.g. real estate sale at horizon end), the base NPV
+# recomputed by ``compute_live`` must carry that SAME residual — otherwise the
+# base panel shows a spuriously negative NPV that contradicts the stored one.
+# ---------------------------------------------------------------------------
+
+
+def _residual_base_output() -> dict:
+    """A 3-year base whose CFO+CFI footing is negative without a terminal: a
+    big upfront capex (year 0) recovered only by an exit/residual at horizon
+    end. Mirrors the real-estate shape (acquire, rent, sell)."""
+    return {
+        "income_statement": {
+            "years": [1, 2, 3],
+            "rows": {
+                "revenue": [240.0, 245.0, 250.0],
+                "ebitda": [210.0, 214.0, 218.0],
+                "ebit": [110.0, 114.0, 118.0],
+                "interest_expense": [70.0, 60.0, 50.0],
+                "ebt": [40.0, 54.0, 68.0],
+                "tax": [10.0, 13.5, 17.0],
+                "net_income": [30.0, 40.5, 51.0],
+            },
+        },
+        "cash_flow": {
+            "years": [1, 2, 3],
+            "cfo": [130.0, 140.5, 151.0],
+            "cfi": [-3000.0, 0.0, 0.0],
+            "cff": [1800.0, -60.0, -65.0],
+        },
+    }
+
+
+def test_residual_value_lifts_base_npv_out_of_spurious_negative():
+    """Without the residual the recomputed base NPV is deeply negative (the
+    capex is never recovered); threading the residual makes it materially
+    higher (no longer a spurious structural negative)."""
+    base = _residual_base_output()
+    out_no_res = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=0, discount_rate=0.06
+    )
+    out_res = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=0, discount_rate=0.06,
+        residual_value=3000.0,
+    )
+    npv_no_res = out_no_res["deviation_summary"]["npv_base"]
+    npv_res = out_res["deviation_summary"]["npv_base"]
+    # Residual is recovered at horizon end -> the recomputed base must rise by
+    # roughly the PV of 3000 at 6% over 3 years (~2519), and the spurious
+    # ~-2.5k+ deficit must be largely closed.
+    assert npv_no_res < -2000.0
+    assert npv_res > npv_no_res
+    assert abs((npv_res - npv_no_res) - 3000.0 / (1.06 ** 3)) < 5.0
+
+
+def test_residual_applied_to_both_base_and_live_no_actuals():
+    """With no actuals, live == base even when a residual is threaded (the
+    residual is a future exit value unaffected by past operational deviations)."""
+    base = _residual_base_output()
+    out = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=1, discount_rate=0.06,
+        residual_value=3000.0,
+    )
+    assert out["live"]["kpis"]["npv"] == out["base"]["kpis"]["npv"]
+    assert out["deviation_summary"]["npv_delta"] == 0.0
+
+
+def test_residual_above_base_actual_still_raises_live():
+    """An above-base actual in a past year must still raise the live NPV even
+    with a residual threaded (residual unchanged, actuals move the delta)."""
+    base = _residual_base_output()
+    actuals = {"income_statement.rows.revenue": {0: 480.0}}  # double base y0
+    out = compute_live(
+        base, actuals_by_line_by_year=actuals, elapsed_years=1,
+        discount_rate=0.06, residual_value=3000.0,
+    )
+    assert out["live"]["kpis"]["npv"] > out["base"]["kpis"]["npv"]
+
+
+def test_no_residual_default_unchanged():
+    """residual_value defaults to 0 -> existing no-terminal behaviour is exact
+    (regression guard for infra/SVJ whose base must stay as-is)."""
+    base = _base_output()
+    out_default = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=1, discount_rate=0.08
+    )
+    out_zero = compute_live(
+        base, actuals_by_line_by_year={}, elapsed_years=1, discount_rate=0.08,
+        residual_value=0.0,
+    )
+    assert out_default["deviation_summary"]["npv_base"] == \
+        out_zero["deviation_summary"]["npv_base"]
