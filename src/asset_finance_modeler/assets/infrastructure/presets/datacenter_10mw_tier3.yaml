@@ -16,9 +16,13 @@ production:
   tier: 3
 
 revenue:
+  # Illustrative / market-typical Tier-3 retail colocation pricing.
+  # 135 k€/MW-IT-month ≈ 1.62 M€/MW-IT/yr contracted revenue, within the
+  # 1.5-2.5 M€/MW-IT/yr band for fully-fitted Tier-3 space, matched to the
+  # ~91.6 M€ facility capex so the example values out as a credible asset.
   - type: sla
     name: Colocation Hosting
-    price_per_mw_month: 45000
+    price_per_mw_month: 135000
     uptime_target: 0.999
 
 capex:

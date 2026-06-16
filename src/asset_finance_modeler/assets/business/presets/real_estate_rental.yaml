@@ -1,3 +1,6 @@
+# Valores ilustrativos / de mercado: inmueble en alquiler. Renta bruta ~8%
+# sobre 3 M€ de adquisición, gastos de comunidad/IBI/mantenimiento típicos y
+# valor residual de venta al final del horizonte. TIR ~7,5% y DSCR ~1,6.
 meta:
   name: "Inmueble en alquiler"
   horizon:

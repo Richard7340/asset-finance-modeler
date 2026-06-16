@@ -15,16 +15,21 @@ production:
   depth_of_discharge: 0.90
   cycles_per_day: 1.5
 
+# Illustrative / market-typical 20 MW / 4h BESS. Arbitrage-proxy spread
+# ~€70/MWh cycled (1.5 cycles/day) + €40k/MW-yr capacity revenue, against a
+# ~€220/kWh (€0.22M/MWh) install cost — sized so the example values out as a
+# believable asset (modestly positive NPV, IRR ~8% project / ~16% equity,
+# DSCR ~1.6).
 revenue:
   - type: ppa
     name: Arbitrage-proxy
-    price_eur_per_unit: 55.0
+    price_eur_per_unit: 70.0
     volume_fraction: 1.0
     escalation_pct_yr: 0.015
     tenor_years: 20
   - type: capacity
     name: Capacity Market
-    eur_per_mw_yr: 35000
+    eur_per_mw_yr: 40000
 
 capex:
   items:

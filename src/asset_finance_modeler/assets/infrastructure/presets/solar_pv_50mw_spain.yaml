@@ -7,22 +7,26 @@ meta:
   initial_cash: 0
   base_currency: EUR
 
+# Illustrative / market-typical 50 MWp Spanish solar PV. Yield ~1,750 kWh/kWp
+# (good Iberian site), PPA + merchant prices in the credible €55-66/MWh band,
+# capex ~€0.42/Wp — sized so the example values out as a believable asset
+# (modestly positive NPV, IRR in the ~7-13% range, healthy DSCR).
 production:
   type: solar_pv
   capacity_mwp: 50
-  specific_yield_kwh_kwp: 1600
+  specific_yield_kwh_kwp: 1750
   performance_ratio: 0.82
 
 revenue:
   - type: ppa
     name: PPA
-    price_eur_per_unit: 42.0
+    price_eur_per_unit: 56.0
     volume_fraction: 0.70
     escalation_pct_yr: 0.02
     tenor_years: 15
   - type: merchant
     name: Merchant
-    base_price_eur_per_unit: 55.0
+    base_price_eur_per_unit: 66.0
     volume_fraction: 0.30
     capture_ratio: 0.85
     escalation_pct_yr: 0.01

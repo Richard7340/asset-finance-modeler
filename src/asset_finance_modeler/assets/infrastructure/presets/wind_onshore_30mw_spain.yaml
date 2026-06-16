@@ -7,23 +7,28 @@ meta:
   initial_cash: 0
   base_currency: EUR
 
+# Illustrative / market-typical 30 MW Spanish onshore wind. Capacity factor
+# ~0.37 (≈3,240 full-load hours, a strong but realistic Iberian site), capex
+# ~€1.1M/MW, PPA + merchant prices in the credible €66-72/MWh band — sized so
+# the example values out as a believable asset (near-breakeven/modestly
+# positive NPV, IRR ~6.5-7%, DSCR 1.30).
 production:
   type: wind_onshore
   capacity_mw: 30
-  capacity_factor: 0.32
+  capacity_factor: 0.37
   availability: 0.97
   wake_losses: 0.04
 
 revenue:
   - type: ppa
     name: PPA
-    price_eur_per_unit: 48.0
+    price_eur_per_unit: 66.0
     volume_fraction: 0.80
     escalation_pct_yr: 0.015
     tenor_years: 12
   - type: merchant
     name: Merchant
-    base_price_eur_per_unit: 55.0
+    base_price_eur_per_unit: 72.0
     volume_fraction: 0.20
     capture_ratio: 0.95
     escalation_pct_yr: 0.01
@@ -42,7 +47,7 @@ capex:
       depreciation_method: straight_line
   contingency_pct: 0.10
   development_cost: 500000
-  grid_connection_cost: 1200000
+  grid_connection_cost: 800000
 
 opex:
   om_fixed_eur_per_mw_yr: 18000
