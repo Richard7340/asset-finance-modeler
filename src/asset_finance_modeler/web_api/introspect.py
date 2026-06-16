@@ -21,6 +21,27 @@ _KNOWN_OPTIONAL_CURVE_FIELDS = frozenset(
 )
 
 
+# Editable leaves that exist in a config but move NO KPI (no engine reads them).
+# Surfacing them would show a user an input that silently does nothing, so they
+# are hidden from the schema tree (E4). Matched on the leaf name only. These are
+# inert across every asset type that carries them.
+_INERT_LEAF_FIELDS = frozenset(
+    {
+        "mra_eur",  # financing.reserves.* — never consumed
+        "working_capital_eur",  # financing.reserves.* — never consumed
+        "target_irr",  # financing.equity.* — no hurdle/waterfall consumer
+        "distribution_lock_years",  # financing.equity.* — no distribution gate
+        "r_and_d_deduction_pct",  # taxes.* — declared but never applied
+        "uptime_target",  # SLA stream — cosmetic, no KPI impact
+    }
+)
+
+# ``meta.inflation_annual`` is LIVE for SaaS (it escalates the scalar fixed-opex
+# buckets) but inert on infra/business, which reuse the shared ModelMeta yet
+# never read it. So it is hidden unless the tree is built for a SaaS model.
+_SAAS_ONLY_LEAF_FIELDS = frozenset({"inflation_annual"})
+
+
 def _leaf(path: str, value: Any) -> dict[str, Any]:
     if isinstance(value, bool):
         t = "bool"
@@ -37,20 +58,31 @@ def _leaf(path: str, value: Any) -> dict[str, Any]:
     }
 
 
-def schema_tree(config: dict[str, Any], _path: str = "") -> list[dict[str, Any]]:
+def schema_tree(
+    config: dict[str, Any], _path: str = "", *, asset_type: str | None = None
+) -> list[dict[str, Any]]:
     """Flatten a model config dict into editable input leaves with dotted/
     indexed paths and inferred types. Lists of dicts -> indexed paths; scalar
-    leaves carry value+type+section. Skips None and nested empty containers."""
+    leaves carry value+type+section. Skips None, nested empty containers, and
+    leaves that move no KPI (see ``_INERT_LEAF_FIELDS`` / ``_SAAS_ONLY_LEAF_FIELDS``).
+
+    ``asset_type`` (e.g. "saas") keeps fields that are live for that asset type
+    but inert elsewhere (currently ``meta.inflation_annual``)."""
     leaves: list[dict[str, Any]] = []
     for key, val in config.items():
         path = f"{_path}.{key}" if _path else key
+        # Hide editable-but-inert leaves so no surfaced input does nothing (E4).
+        if key in _INERT_LEAF_FIELDS:
+            continue
+        if key in _SAAS_ONLY_LEAF_FIELDS and asset_type != "saas":
+            continue
         if isinstance(val, dict):
-            leaves.extend(schema_tree(val, path))
+            leaves.extend(schema_tree(val, path, asset_type=asset_type))
         elif isinstance(val, list):
             for i, item in enumerate(val):
                 ip = f"{path}[{i}]"
                 if isinstance(item, dict):
-                    leaves.extend(schema_tree(item, ip))
+                    leaves.extend(schema_tree(item, ip, asset_type=asset_type))
                 elif not isinstance(item, list):
                     leaves.append(_leaf(ip, item))
         elif val is not None:

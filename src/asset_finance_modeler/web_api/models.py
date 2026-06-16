@@ -263,7 +263,7 @@ def model_schema(model_id: str) -> dict[str, Any]:
 
     if model_id in _SAAS_IDS:
         cfg = load_saas_preset(model_id[len("saas_") :]).model_dump()
-        return {"inputs": schema_tree(cfg)}
+        return {"inputs": schema_tree(cfg, asset_type="saas")}
 
     if model_id not in _preset_ids():
         raise HTTPException(status_code=404, detail=f"unknown model: {model_id}")
