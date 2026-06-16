@@ -357,6 +357,55 @@ export async function getVariance(id: string, linePath?: string): Promise<Varian
 }
 
 // ---------------------------------------------------------------------------
+// Reproyección viva (LIVE) — base congelado vs live (reales + reproyección) (F3)
+// ---------------------------------------------------------------------------
+
+/** KPIs for one scenario (base or live). */
+export type LiveKpis = {
+  npv: number;
+  irr_project: number;
+  dscr_min: number;
+  dscr_avg: number;
+};
+
+/** One scenario's full output (base or live). */
+export type LiveScenario = {
+  kpis: LiveKpis;
+  income_statement: IncomeStatement;
+  cash_flow: CashFlow;
+};
+
+/** Head-to-head comparison between base and live. */
+export type LiveComparison = {
+  npv_base: number;
+  npv_live: number;
+  /** npv_live - npv_base. */
+  delta: number;
+  irr_base: number;
+  irr_live: number;
+  dscr_min_base: number;
+  dscr_min_live: number;
+  /** Whole years elapsed since commissioning. */
+  elapsed_years: number;
+  /** Total model years. */
+  n_years: number;
+};
+
+export type LiveResult = {
+  base: LiveScenario;
+  live: LiveScenario;
+  comparison: LiveComparison;
+};
+
+/**
+ * Base-vs-live reprojection for an operational asset. Throws on 422 for a
+ * non-operational asset (the caller gates on lifecycle, so this is defensive).
+ */
+export async function getLive(id: string): Promise<LiveResult> {
+  return getJson<LiveResult>(`/api/assets/${id}/live`);
+}
+
+// ---------------------------------------------------------------------------
 // Portfolio (Cartera) — aggregate view
 // ---------------------------------------------------------------------------
 

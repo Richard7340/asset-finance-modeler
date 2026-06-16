@@ -29,6 +29,7 @@ import Toolbar from "./components/Toolbar";
 import ViewTransition from "./components/ViewTransition";
 import ActualsGrid from "./components/ActualsGrid";
 import VariancePanel from "./components/VariancePanel";
+import LivePanel from "./components/LivePanel";
 
 type Selection = {
   modelId: string;
@@ -296,6 +297,7 @@ export default function App() {
                     trackingFrequency={selection.trackingFrequency}
                   />
                   <VariancePanel assetId={selection.assetId} />
+                  <LivePanel assetId={selection.assetId} />
                 </>
               )}
             </main>
