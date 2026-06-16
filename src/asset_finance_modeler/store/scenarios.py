@@ -51,6 +51,7 @@ class ScenarioStore(Protocol):
         lifecycle: str | None = None,
     ) -> list[Scenario]: ...
     def delete(self, scenario_id: str) -> None: ...
+    def force_delete(self, scenario_id: str) -> None: ...
     def set_canonical(self, scenario_id: str, name: str | None = None) -> None: ...
 
 
@@ -225,6 +226,20 @@ class SQLiteScenarioStore:
             raise PermissionError(f"Cannot delete canonical scenario {scenario_id}")
         with self._conn() as conn:
             conn.execute("UPDATE scenarios SET is_deleted = 1 WHERE id = ?", (scenario_id,))
+
+    def force_delete(self, scenario_id: str) -> None:
+        """Soft-delete a scenario unconditionally, clearing the canonical flag
+        first so a user can delete their own operational/canonical asset. The
+        canonical-protection in ``delete`` is kept for the scenario-versioning
+        use case; this is the explicit user-driven asset-deletion path."""
+        existing = self.get(scenario_id)
+        if existing is None:
+            return
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE scenarios SET is_canonical = 0, is_deleted = 1 WHERE id = ?",
+                (scenario_id,),
+            )
 
     def set_canonical(self, scenario_id: str, name: str | None = None) -> None:
         with self._conn() as conn:
