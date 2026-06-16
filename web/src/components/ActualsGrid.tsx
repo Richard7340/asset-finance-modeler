@@ -59,6 +59,7 @@ export default function ActualsGrid({ assetId, trackingFrequency }: Props) {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["actuals", assetId] });
     queryClient.invalidateQueries({ queryKey: ["variance", assetId] });
+    queryClient.invalidateQueries({ queryKey: ["live", assetId] });
   };
 
   const addMutation = useMutation({
