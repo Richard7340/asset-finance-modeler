@@ -65,27 +65,41 @@ def _npv(
     residual_value: float = 0.0,
 ) -> float:
     # A residual / exit (terminal) inflow recovered at horizon end — e.g. the
-    # sale of a real-estate property. The BASE valuation adds it to the last
-    # modelled year's FCF; the LIVE recomputation must honour the SAME terminal
-    # so the recomputed base NPV tracks the stored/engine base (rather than
-    # showing a spurious negative) and the live/base delta stays attributable to
-    # the actuals. The residual is a future exit value, unchanged by past
-    # operational deviations, so it is applied identically to base and live.
+    # sale of a real-estate property. The LIVE recomputation must honour the SAME
+    # terminal as the base so the recomputed base NPV tracks the stored/engine
+    # base (rather than showing a spurious negative) and the live/base delta
+    # stays attributable to the actuals. The residual is a future exit value,
+    # unchanged by past operational deviations, so it is applied identically to
+    # base and live.
+    #
+    # L4: only fold the residual into fcf[-1] when there is NO Gordon/exit
+    # terminal — otherwise the perpetuity would grow the residual (double-count).
+    # With a terminal method we add the residual's discounted PV separately so it
+    # contributes exactly its own discounted value, not a perpetuity-grown one.
+    add_residual_pv = 0.0
     if residual_value and fcf:
-        fcf = list(fcf)
-        fcf[-1] += residual_value
+        if terminal_method != "none":
+            # period_rate == wacc_annual here (periods_per_year=1); discount the
+            # residual at horizon end (n = len(fcf)).
+            add_residual_pv = residual_value / ((1 + discount_rate) ** len(fcf))
+        else:
+            fcf = list(fcf)
+            fcf[-1] += residual_value
     if convention == "sum":
-        return consolidate_npv(fcf, discount_rate)
+        return consolidate_npv(fcf, discount_rate) + add_residual_pv
     if not fcf:
         return 0.0
     try:
-        return compute_dcf(
-            fcf_series=fcf,
-            wacc_annual=discount_rate,
-            terminal_growth=terminal_growth,
-            periods_per_year=1,
-            terminal_method=terminal_method,  # type: ignore[arg-type]
-        )["enterprise_value"]
+        return (
+            compute_dcf(
+                fcf_series=fcf,
+                wacc_annual=discount_rate,
+                terminal_growth=terminal_growth,
+                periods_per_year=1,
+                terminal_method=terminal_method,  # type: ignore[arg-type]
+            )["enterprise_value"]
+            + add_residual_pv
+        )
     except ValueError:
         return 0.0
 
