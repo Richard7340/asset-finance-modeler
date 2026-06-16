@@ -1,7 +1,18 @@
 import type React from "react";
-import { MapPin, TrendingUp, TrendingDown, ArrowUpRight } from "lucide-react";
-import type { PortfolioAsset, SavedAssetSummary, Lifecycle } from "../api";
-import { eur, pct } from "../format";
+import {
+  MapPin,
+  TrendingUp,
+  TrendingDown,
+  ArrowUpRight,
+  Clock,
+} from "lucide-react";
+import type {
+  PortfolioAsset,
+  SavedAssetSummary,
+  Lifecycle,
+  TrackingFrequency,
+} from "../api";
+import { eur, pct, fmtDateTime, fmtRelative, isFresh } from "../format";
 import Sparkline from "./Sparkline";
 import { assetTech } from "../lib/assetTech";
 
@@ -14,6 +25,10 @@ export type AssetCardRow = {
   name: string;
   model_id: string;
   location?: string | null;
+  /** Most-recent-activity timestamp (latest actual, else created_at). */
+  last_update?: string;
+  /** Tracking cadence — sets the freshness-dot window for operational assets. */
+  tracking_frequency?: TrackingFrequency | null;
 };
 
 type Props = {
@@ -53,7 +68,43 @@ function StatusChip({ lifecycle }: { lifecycle?: Lifecycle }) {
   );
 }
 
-/** A single headline figure inside the card (label over a tabular-nums value). */
+/**
+ * "Actualizado <relativo>" line with a freshness dot. The dot is calm-green when
+ * the asset is current within its tracking cadence and a muted grey otherwise —
+ * never alarming red — so a reader sees at a glance which assets are kept up to
+ * date. Absolute timestamp lives in the tooltip.
+ */
+function UpdatedLine({
+  iso,
+  frequency,
+}: {
+  iso?: string;
+  frequency?: TrackingFrequency | null;
+}) {
+  if (!iso) return null;
+  const fresh = isFresh(iso, frequency);
+  return (
+    <div
+      className="flex items-center gap-1.5 text-[11px] text-slate-400"
+      title={`Última actualización: ${fmtDateTime(iso)}`}
+    >
+      <span
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+          fresh ? "bg-emerald-500" : "bg-slate-300"
+        }`}
+        aria-hidden
+      />
+      <Clock size={11} strokeWidth={2} className="shrink-0" aria-hidden />
+      <span className="truncate">Actualizado {fmtRelative(iso)}</span>
+    </div>
+  );
+}
+
+/**
+ * A subordinate headline figure (TIR / % cartera): label over a tabular-nums
+ * value. The primary metric (VAN) is rendered larger and inline, not via this
+ * helper, to establish a clear visual hierarchy.
+ */
 function Figure({
   label,
   value,
@@ -112,8 +163,14 @@ export default function AssetCards({
         const irr = m?.irr;
         const contrib = m && totalNpv !== 0 && isIncluded ? m.npv / totalNpv : undefined;
         const npvPositive = (npv ?? 0) >= 0;
-        const sparkColor = !isIncluded ? "#94a3b8" : npvPositive ? POS : NEG;
-        const TrendIcon = npvPositive ? TrendingUp : TrendingDown;
+        // Trend direction from the stored series (first vs last finite point),
+        // so the sparkline reads as up/down at a glance — not just decoration.
+        const finite = series.filter((v) => Number.isFinite(v));
+        const trendUp =
+          finite.length >= 2 ? finite[finite.length - 1] >= finite[0] : npvPositive;
+        const sparkColor = !isIncluded ? "#94a3b8" : trendUp ? POS : NEG;
+        const TrendIcon = trendUp ? TrendingUp : TrendingDown;
+        const endValue = finite.length ? finite[finite.length - 1] : undefined;
 
         return (
           <div
@@ -127,7 +184,7 @@ export default function AssetCards({
                 onOpen(r.id);
               }
             }}
-            className={`surface surface-hover group relative flex cursor-pointer flex-col overflow-hidden p-4 transition hover:-translate-y-0.5 ${
+            className={`surface surface-hover group relative flex cursor-pointer flex-col overflow-hidden p-4 transition hover:-translate-y-0.5 hover:border-accent-300 hover:shadow-md ${
               isIncluded ? "" : "opacity-60"
             }`}
           >
@@ -170,37 +227,53 @@ export default function AssetCards({
               />
             </div>
 
-            {/* Headline figures. */}
-            <div className="mt-3.5 grid grid-cols-3 gap-3">
-              <Figure
-                label="VAN"
-                value={npv !== undefined ? eur(npv) : "—"}
-                tone={npv === undefined ? "mute" : npvPositive ? "pos" : "neg"}
-              />
-              <Figure
-                label="TIR"
-                value={irr !== undefined && Number.isFinite(irr) ? pct(irr) : "—"}
-                tone={
-                  irr === undefined || !Number.isFinite(irr)
-                    ? "mute"
-                    : irr < 0
-                      ? "neg"
-                      : undefined
-                }
-              />
-              <Figure
-                label={lifecycle === "opportunity" ? "Rentab." : "% cartera"}
-                value={
-                  lifecycle === "opportunity"
-                    ? m && Number.isFinite(m.yield_pct)
-                      ? pct(m.yield_pct)
-                      : "—"
-                    : contrib !== undefined
-                      ? pct(contrib)
-                      : "—"
-                }
-                tone={contrib === undefined && lifecycle !== "opportunity" ? "mute" : undefined}
-              />
+            {/* Headline figures — VAN is the decision metric, so it leads
+                large and first; TIR + contribution are clearly subordinate. */}
+            <div className="mt-3.5 flex items-end justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                  VAN
+                </div>
+                <div
+                  className={`mt-0.5 text-xl font-semibold leading-none tabular-nums ${
+                    npv === undefined
+                      ? "text-slate-400"
+                      : npvPositive
+                        ? "text-emerald-600"
+                        : "text-rose-600"
+                  }`}
+                >
+                  {npv !== undefined ? eur(npv) : "—"}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0 text-right">
+                <Figure
+                  label="TIR"
+                  value={irr !== undefined && Number.isFinite(irr) ? pct(irr) : "—"}
+                  tone={
+                    irr === undefined || !Number.isFinite(irr)
+                      ? "mute"
+                      : irr < 0
+                        ? "neg"
+                        : undefined
+                  }
+                />
+                <Figure
+                  label={lifecycle === "opportunity" ? "Rentab." : "% cartera"}
+                  value={
+                    lifecycle === "opportunity"
+                      ? m && Number.isFinite(m.yield_pct)
+                        ? pct(m.yield_pct)
+                        : "—"
+                      : contrib !== undefined
+                        ? pct(contrib)
+                        : "—"
+                  }
+                  tone={
+                    contrib === undefined && lifecycle !== "opportunity" ? "mute" : undefined
+                  }
+                />
+              </div>
             </div>
 
             {/* Mini trend curve + secondary figures (CAPEX / ingresos). */}
@@ -220,13 +293,28 @@ export default function AssetCards({
                 </span>
               </div>
               {series.length >= 2 ? (
-                <Sparkline
-                  values={series}
-                  color={sparkColor}
-                  width={96}
-                  height={28}
-                  className="shrink-0"
-                />
+                <div className="flex shrink-0 items-end gap-1.5">
+                  <Sparkline
+                    values={series}
+                    color={sparkColor}
+                    width={84}
+                    height={28}
+                  />
+                  {/* End-value tag with a directional arrow so the curve means
+                      something at a glance (year-N flow vs. the start). */}
+                  <span
+                    className={`inline-flex items-center gap-0.5 text-[11px] font-medium tabular-nums ${
+                      !isIncluded
+                        ? "text-slate-400"
+                        : trendUp
+                          ? "text-emerald-600"
+                          : "text-rose-600"
+                    }`}
+                  >
+                    <TrendIcon size={11} strokeWidth={2.5} aria-hidden />
+                    {endValue !== undefined ? eur(endValue) : ""}
+                  </span>
+                </div>
               ) : (
                 <TrendIcon
                   size={18}
@@ -237,8 +325,13 @@ export default function AssetCards({
               )}
             </div>
 
+            {/* Freshness: when the figures were last refreshed (calm dot). */}
+            <div className="mt-3">
+              <UpdatedLine iso={r.last_update} frequency={r.tracking_frequency} />
+            </div>
+
             {/* Footer: include toggle + status + row action. */}
-            <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+            <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
               <label
                 className="flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-500"
                 onClick={(e) => e.stopPropagation()}

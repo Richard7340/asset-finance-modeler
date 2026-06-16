@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from asset_finance_modeler.assets.business.loader import load_business_preset
 from asset_finance_modeler.core.scenario import Scenario, new_scenario_id
 from asset_finance_modeler.deals.svj import run_svj
+from asset_finance_modeler.store.actuals import SQLiteActualsStore
 from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
 from asset_finance_modeler.web_api.auth import require_token
 from asset_finance_modeler.web_api.models import (
@@ -53,6 +54,28 @@ def _store() -> SQLiteScenarioStore:
     store = SQLiteScenarioStore(_db_path())
     store.initialize()
     return store
+
+
+def _actuals_store() -> SQLiteActualsStore:
+    store = SQLiteActualsStore(_db_path())
+    store.initialize()
+    return store
+
+
+def _last_update_iso(scenario: Scenario, actuals: SQLiteActualsStore) -> str:
+    """Most-recent-activity timestamp for an asset, as an ISO string.
+
+    Operational assets are tracked by ingesting real actuals, so the freshest
+    signal a reader cares about is the latest actual's ``entered_at``. When there
+    are no actuals (every opportunity, and operational assets not yet tracked),
+    fall back to the scenario's ``created_at``. Returns the max of the two so a
+    re-saved scenario never appears staler than its actuals.
+    """
+    created = scenario.created_at.isoformat()
+    latest_actual = actuals.max_entered_at(scenario.id)
+    if latest_actual and latest_actual > created:
+        return latest_actual
+    return created
 
 
 def _run_model(model_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
@@ -126,6 +149,7 @@ def save_asset(body: SaveAssetBody) -> dict[str, Any]:
 @router.get("")
 def list_assets(lifecycle: str | None = None) -> dict[str, Any]:
     scenarios = _store().list(lifecycle=lifecycle)
+    actuals = _actuals_store()
     return {
         "assets": [
             {
@@ -133,6 +157,7 @@ def list_assets(lifecycle: str | None = None) -> dict[str, Any]:
                 "name": s.name,
                 "model_id": s.base_model,
                 "created_at": s.created_at.isoformat(),
+                "last_update": _last_update_iso(s, actuals),
                 "kpis": s.results_snapshot.get("kpis", {}),
                 "lifecycle": s.lifecycle,
                 "commissioning_date": (
@@ -158,6 +183,7 @@ def get_asset(asset_id: str) -> dict[str, Any]:
         "overrides": s.inputs_snapshot.get("overrides", s.overrides),
         "results_snapshot": s.results_snapshot,
         "created_at": s.created_at.isoformat(),
+        "last_update": _last_update_iso(s, _actuals_store()),
         **_location_of(s.inputs_snapshot or {}),
     }
 
