@@ -15,7 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import { getPortfolio, listAssets } from "../api";
-import type { PortfolioAsset, SavedAssetSummary } from "../api";
+import type { PortfolioAsset, SavedAssetSummary, TrackingFrequency } from "../api";
 import { eur, eurExact, pct } from "../format";
 import AnimatedNumber from "./AnimatedNumber";
 import Sparkline from "./Sparkline";
@@ -221,7 +221,14 @@ export default function PortfolioOverview({
   const rows = useMemo(() => {
     const byId = new Map<
       string,
-      { id: string; name: string; model_id: string; location?: string | null }
+      {
+        id: string;
+        name: string;
+        model_id: string;
+        location?: string | null;
+        last_update?: string;
+        tracking_frequency?: TrackingFrequency | null;
+      }
     >();
     for (const a of allAssets)
       byId.set(a.id, {
@@ -229,6 +236,8 @@ export default function PortfolioOverview({
         name: a.name,
         model_id: a.model_id,
         location: a.location,
+        last_update: a.last_update,
+        tracking_frequency: a.tracking_frequency,
       });
     for (const a of portfolio?.assets ?? [])
       if (!byId.has(a.id))

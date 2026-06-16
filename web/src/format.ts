@@ -54,6 +54,52 @@ export function fmtDate(iso: string): string {
   });
 }
 
+/**
+ * Human "freshness" label for a timestamp, es-ES: "hoy", "ayer", "hace N días",
+ * "hace N meses", and the absolute short date for anything older than ~a year.
+ * Used for the per-asset "Actualizado …" line; pair with `fmtDate` for the
+ * exact value in a tooltip.
+ */
+export function fmtRelative(iso: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const ms = now.getTime() - d.getTime();
+  if (ms < 0) return "hoy"; // clock skew / future stamp — treat as fresh
+  const days = Math.floor(ms / 86_400_000);
+  if (days === 0) return "hoy";
+  if (days === 1) return "ayer";
+  if (days < 30) return `hace ${days} días`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `hace ${months} ${months === 1 ? "mes" : "meses"}`;
+  return fmtDate(iso);
+}
+
+/**
+ * Whether a timestamp is "fresh" relative to a tracking cadence — drives the
+ * calm freshness dot. Operational assets are expected to be kept current within
+ * their tracking window (with a grace factor); opportunities have no cadence, so
+ * a generous default keeps recently-saved ones calm without ever alarming.
+ */
+export function isFresh(
+  iso: string,
+  frequency?: "daily" | "monthly" | "quarterly" | null,
+  now: Date = new Date(),
+): boolean {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const days = (now.getTime() - d.getTime()) / 86_400_000;
+  if (days < 0) return true;
+  const windowDays =
+    frequency === "daily"
+      ? 3
+      : frequency === "monthly"
+        ? 45
+        : frequency === "quarterly"
+          ? 135
+          : 45; // opportunities / untracked: ~6 weeks grace
+  return days <= windowDays;
+}
+
 /** Long date + time for the "revisando" banner. */
 export function fmtDateTime(iso: string): string {
   const d = new Date(iso);

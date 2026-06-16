@@ -170,6 +170,16 @@ class SQLiteActualsStore:
             rows = conn.execute(sql, params).fetchall()
         return [self._from_row(r) for r in rows]
 
+    def max_entered_at(self, scenario_id: str) -> str | None:
+        """Return the most recent ``entered_at`` ISO string for a scenario, or
+        ``None`` if it has no actuals. Cheap (indexed scan, single aggregate)."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT MAX(entered_at) AS m FROM asset_actuals WHERE scenario_id = ?",
+                (scenario_id,),
+            ).fetchone()
+        return row["m"] if row and row["m"] else None
+
     def delete(self, actual_id: str) -> None:
         with self._conn() as conn:
             conn.execute("DELETE FROM asset_actuals WHERE id = ?", (actual_id,))

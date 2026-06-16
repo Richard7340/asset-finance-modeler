@@ -142,6 +142,8 @@ export type SavedAssetSummary = {
   name: string;
   model_id: string;
   created_at: string;
+  /** Most-recent-activity timestamp (latest actual's entered_at, else created_at). */
+  last_update: string;
   kpis: Kpis;
   lifecycle: Lifecycle;
   commissioning_date: string | null;
