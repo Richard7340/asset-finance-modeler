@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from asset_finance_modeler.assets.business.loader import (
     business_preset_ids,
@@ -73,10 +73,29 @@ def _ppy_of(cfg_dict: dict[str, Any]) -> int:
     return _FREQ_PPY.get(freq, 12)
 
 
+def _validate(model_cls: type[BaseModel], cfg_dict: dict[str, Any]) -> Any:
+    """Validate a config dict against its Pydantic model, turning a
+    ValidationError (e.g. an out-of-range override) into a clear HTTP 400
+    instead of a 500 (FIX 2). Applied to every model-run path so no override
+    can 500."""
+    try:
+        return model_cls.model_validate(cfg_dict)
+    except ValidationError as exc:
+        errs = exc.errors()
+        if errs:
+            e = errs[0]
+            loc = ".".join(str(p) for p in e.get("loc", ()))
+            msg = e.get("msg", "invalid value")
+            detail = f"invalid override value: {loc}: {msg}" if loc else f"invalid override value: {msg}"
+        else:  # pragma: no cover — defensive
+            detail = "invalid override value"
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+
 def _run_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     """Validate, run, and shape an infrastructure config dict into a JSON-
     serializable payload with annualized statements + KPIs."""
-    cfg = InfrastructureModelConfig.model_validate(cfg_dict)
+    cfg = _validate(InfrastructureModelConfig, cfg_dict)
     out = InfrastructureModel(cfg).run()
     return _run_financial_output(out, _ppy_of(cfg_dict))
 
@@ -125,7 +144,7 @@ def _run_financial_output(out: FinancialOutput, ppy: int) -> dict[str, Any]:
 
 def _run_business_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     """Validate, run, and shape a business config dict (same payload shape)."""
-    cfg = BusinessModelConfig.model_validate(cfg_dict)
+    cfg = _validate(BusinessModelConfig, cfg_dict)
     out = BusinessModel(cfg).run()
     return _run_financial_output(out, _ppy_of(cfg_dict))
 
@@ -140,7 +159,7 @@ def _run_saas_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     ``None`` (rendered "n/a"); the enterprise value is surfaced as ``npv`` so the
     portfolio aggregation (which keys off ``npv``) works uniformly.
     """
-    cfg = SaasModelConfig.model_validate(cfg_dict)
+    cfg = _validate(SaasModelConfig, cfg_dict)
     out: ModelResults = SaasModel(cfg).run()
     ppy = _ppy_of(cfg_dict)
 

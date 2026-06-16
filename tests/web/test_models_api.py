@@ -78,3 +78,26 @@ def test_invalid_override_path_returns_400(monkeypatch):
     )
     assert r.status_code == 400
     assert "production.does_not_exist.deep" in r.json()["detail"]
+
+
+def test_out_of_range_override_returns_400(monkeypatch):
+    """FIX 2: an out-of-range override (violates a Pydantic bound) is a client
+    error (400) with a clear field message, not a 500."""
+    c = _client(monkeypatch)
+    r = c.post(
+        "/api/models/saas_gestnova/run?t=tk",
+        json={"overrides": {"revenue.sources[0].retention.monthly_churn_rate": 1.5}},
+    )
+    assert r.status_code == 400, r.text
+    assert "monthly_churn_rate" in r.json()["detail"]
+
+
+def test_valid_saas_override_still_runs(monkeypatch):
+    """A valid in-range override still returns 200."""
+    c = _client(monkeypatch)
+    r = c.post(
+        "/api/models/saas_gestnova/run?t=tk",
+        json={"overrides": {"revenue.sources[0].retention.monthly_churn_rate": 0.02}},
+    )
+    assert r.status_code == 200, r.text
+    assert "kpis" in r.json()
