@@ -1,9 +1,13 @@
 @import "tailwindcss";
 
+/* Class-based dark mode: `dark:` variants apply under <html class="dark">. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ------------------------------------------------------------------ */
 /* Fund-grade design system                                            */
 /* Restrained palette: near-black slate base, deep indigo accent,      */
 /* emerald / rose reserved strictly for +/- signal. Calm, premium.     */
+/* Dark "operations" theme: deep ink/slate surfaces, muted accents.    */
 /* ------------------------------------------------------------------ */
 
 @theme {
@@ -27,6 +31,9 @@
 
 :root {
   color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
 }
 
 html,
@@ -105,4 +112,120 @@ table {
 /* Recharts: quiet the default focus outlines / cursors. */
 .recharts-surface:focus {
   outline: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark "operations" theme                                             */
+/* The app is authored with a light slate palette; rather than adding  */
+/* a `dark:` variant to every utility across ~15 components, we remap   */
+/* the handful of dominant surface/text/border utilities here. This    */
+/* keeps a single source of truth and guarantees full coverage.        */
+/* ------------------------------------------------------------------ */
+
+.dark body {
+  background-color: #0b1220;
+  color: #e2e8f0;
+}
+
+/* App root background (App.tsx sets bg-slate-50 on the shell). */
+.dark .bg-slate-50 {
+  background-color: #0b1220;
+}
+.dark .bg-slate-50\/80,
+.dark .bg-slate-50\/70,
+.dark .bg-slate-50\/60,
+.dark .bg-slate-50\/40 {
+  background-color: rgb(17 26 46 / 0.6);
+}
+.dark .bg-slate-100 {
+  background-color: #1c2740;
+}
+
+/* Cards / panels. */
+.dark .surface {
+  background-color: #111a2e;
+  border-color: rgb(30 41 59 / 0.9);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.4),
+    0 1px 1px rgb(0 0 0 / 0.3);
+}
+.dark .surface-hover:hover {
+  box-shadow:
+    0 4px 16px rgb(0 0 0 / 0.5),
+    0 2px 6px rgb(0 0 0 / 0.35);
+  border-color: rgb(79 70 229 / 0.5); /* accent-600 */
+}
+
+/* Plain white surfaces (sidebars, tables, map card). */
+.dark .bg-white {
+  background-color: #111a2e;
+}
+
+/* Borders. */
+.dark .border-slate-100 {
+  border-color: rgb(30 41 59 / 0.6);
+}
+.dark .border-slate-200 {
+  border-color: rgb(30 41 59 / 0.9);
+}
+.dark .border-slate-300 {
+  border-color: #334155;
+}
+
+/* Text ramp — keep the relative hierarchy, lift for contrast on ink. */
+.dark .text-slate-900 {
+  color: #f1f5f9;
+}
+.dark .text-slate-800 {
+  color: #e2e8f0;
+}
+.dark .text-slate-700 {
+  color: #cbd5e1;
+}
+.dark .text-slate-600 {
+  color: #b2bdce;
+}
+.dark .text-slate-500 {
+  color: #94a3b8;
+}
+.dark .text-slate-400 {
+  color: #7c8aa0;
+}
+
+/* Accent tints used for selection/banners read too bright on ink — calm them. */
+.dark .bg-accent-50 {
+  background-color: rgb(99 102 241 / 0.12);
+}
+.dark .border-accent-200 {
+  border-color: rgb(99 102 241 / 0.35);
+}
+.dark .text-accent-800,
+.dark .text-accent-700 {
+  color: #a5b4fc;
+}
+.dark .hover\:bg-accent-50\/40:hover,
+.dark .hover\:bg-accent-100:hover {
+  background-color: rgb(99 102 241 / 0.16);
+}
+.dark .hover\:bg-slate-50:hover {
+  background-color: rgb(30 41 59 / 0.5);
+}
+.dark .hover\:border-slate-200:hover {
+  border-color: rgb(51 65 85 / 0.9);
+}
+
+/* Quiet hover/zebra tints used in lists/tables. */
+.dark .hover\:bg-rose-50:hover {
+  background-color: rgb(190 18 60 / 0.18);
+}
+
+/* Scrollbar tuned for ink. */
+.dark * {
+  scrollbar-color: rgb(51 65 85) transparent;
+}
+.dark *::-webkit-scrollbar-thumb {
+  background-color: rgb(51 65 85);
+}
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(71 85 105);
 }

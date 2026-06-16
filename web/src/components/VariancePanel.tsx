@@ -13,25 +13,16 @@ import {
 } from "recharts";
 import { getVariance } from "../api";
 import type { VarianceLine } from "../api";
+import { useChartTheme } from "../hooks/useChartTheme";
+import type { ChartTheme } from "../hooks/useChartTheme";
 
 type Props = { assetId: string };
 
-// Sober palette: a muted indigo for base, a neutral slate for real points.
+// Sober palette: a muted indigo for base, a neutral series for real points
+// (which flips to a light tone on the dark ink surface).
 const C = {
   base: "#6366f1",
   actual: "#0f172a",
-  grid: "#eef2f7",
-  slate: "#94a3b8",
-  positive: "#0f766e",
-  negative: "#b91c1c",
-};
-const AXIS = { fontSize: 11, fill: "#64748b" };
-const tooltipStyle = {
-  fontSize: 12,
-  borderRadius: 10,
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 6px 24px rgb(15 23 42 / 0.10)",
-  padding: "8px 10px",
 };
 
 function fmtNum(v: number | null | undefined): string {
@@ -105,7 +96,15 @@ export default function VariancePanel({ assetId }: Props) {
   );
 }
 
+/** The realised points need a light marker to read on the dark ink surface. */
+function actualColor(ct: ChartTheme): string {
+  return ct.dark ? "#e2e8f0" : C.actual;
+}
+
 function LineVariance({ line }: { line: VarianceLine }) {
+  const ct = useChartTheme();
+  const AXIS = { fontSize: 11, fill: ct.axis };
+  const tooltipStyle = ct.tooltip;
   const [openChart, setOpenChart] = useState(true);
   const unit = line.unit ? ` ${line.unit}` : "";
 
@@ -190,9 +189,9 @@ function LineVariance({ line }: { line: VarianceLine }) {
         <div className="mt-3 h-48 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-              <XAxis dataKey="year" tick={AXIS} stroke={C.slate} interval={0} />
-              <YAxis tick={AXIS} stroke={C.slate} width={52} />
+              <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+              <XAxis dataKey="year" tick={AXIS} stroke={ct.axisStroke} interval={0} />
+              <YAxis tick={AXIS} stroke={ct.axisStroke} width={52} />
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={(v: number, name: string) => [
@@ -213,7 +212,7 @@ function LineVariance({ line }: { line: VarianceLine }) {
                 dot={false}
                 isAnimationActive={false}
               />
-              <Scatter dataKey="actual" fill={C.actual} line={false} />
+              <Scatter dataKey="actual" fill={actualColor(ct)} line={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

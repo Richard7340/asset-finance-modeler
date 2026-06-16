@@ -15,7 +15,9 @@ import type {
   SavedAssetSummary,
   TrackingFrequency,
 } from "./api";
+import { Moon, Sun } from "lucide-react";
 import { useRun } from "./hooks/useRun";
+import { useTheme } from "./hooks/useTheme";
 import { fmtDateTime } from "./format";
 import AssetPanel from "./components/AssetPanel";
 import Dashboard from "./components/Dashboard";
@@ -48,6 +50,7 @@ type View = "portfolio" | "detail";
 
 export default function App() {
   const queryClient = useQueryClient();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [view, setView] = useState<View>("portfolio");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
@@ -202,6 +205,15 @@ export default function App() {
                 }`}
               >
                 Inicio
+              </button>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={theme === "dark" ? "Tema claro" : "Tema oscuro"}
+                title={theme === "dark" ? "Tema claro" : "Tema oscuro"}
+                className="grid h-8 w-8 place-items-center rounded-md text-slate-300 transition hover:bg-white/5 hover:text-white"
+              >
+                {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
               </button>
               {recalcBadge}
               {view === "detail" && selection && (

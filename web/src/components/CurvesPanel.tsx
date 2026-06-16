@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { getCurves } from "../api";
+import { useChartTheme } from "../hooks/useChartTheme";
 import type {
   Curve,
   ModelSchema,
@@ -31,16 +32,6 @@ const HORIZON = 30;
 
 const C = {
   accent: "#4f46e5",
-  slate: "#94a3b8",
-  grid: "#eef2f7",
-};
-const AXIS = { fontSize: 11, fill: "#64748b" };
-const tooltipStyle = {
-  fontSize: 12,
-  borderRadius: 10,
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 6px 24px rgb(15 23 42 / 0.10)",
-  padding: "8px 10px",
 };
 
 /** True for inputs that select a price curve (path ends with `..._curve_name`). */
@@ -179,6 +170,9 @@ function CurveCardResolved({
   selectedName: string;
   onChangeOverride?: (path: string, value: OverrideValue | undefined) => void;
 }) {
+  const ct = useChartTheme();
+  const axisTick = { fontSize: 11, fill: ct.axis };
+  const tooltipStyleT = ct.tooltip;
   const pointsPath = pointsPathFor(inp.path);
   const parameter = matched?.parameter ?? inp.path.split(".").slice(-2)[0];
   const unit = unitFromParameter(matched?.parameter);
@@ -300,7 +294,7 @@ function CurveCardResolved({
           cx={cx}
           cy={cy}
           r={dragging ? 4.5 : 2.5}
-          fill={dragging ? C.accent : "#fff"}
+          fill={dragging ? C.accent : ct.sliceStroke}
           stroke={C.accent}
           strokeWidth={1.5}
         />
@@ -522,23 +516,23 @@ function CurveCardResolved({
                   : undefined
               }
             >
-              <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+              <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
               <XAxis
                 dataKey="year"
-                tick={AXIS}
-                stroke={C.slate}
+                tick={axisTick}
+                stroke={ct.axisStroke}
                 interval={4}
                 label={{
                   value: "Año",
                   position: "insideBottomRight",
                   offset: -2,
                   fontSize: 10,
-                  fill: "#94a3b8",
+                  fill: ct.axis,
                 }}
               />
               <YAxis
-                tick={AXIS}
-                stroke={C.slate}
+                tick={axisTick}
+                stroke={ct.axisStroke}
                 width={44}
                 label={
                   unit
@@ -547,13 +541,13 @@ function CurveCardResolved({
                         angle: -90,
                         position: "insideLeft",
                         fontSize: 10,
-                        fill: "#94a3b8",
+                        fill: ct.axis,
                       }
                     : undefined
                 }
               />
               <Tooltip
-                contentStyle={tooltipStyle}
+                contentStyle={tooltipStyleT}
                 formatter={(v: number) => [`${v}${unit ? ` ${unit}` : ""}`, "Precio"]}
                 labelFormatter={(l) => `Año ${l}`}
               />

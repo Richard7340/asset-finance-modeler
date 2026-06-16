@@ -18,6 +18,7 @@ import type { PortfolioAsset, SavedAssetSummary } from "../api";
 import { eur, eurExact, pct } from "../format";
 import AnimatedNumber from "./AnimatedNumber";
 import Reveal, { useStaggerReveal } from "./Reveal";
+import { useChartTheme } from "../hooks/useChartTheme";
 
 type Props = {
   /** Open a saved asset in the detail editor (drill-in). */
@@ -62,14 +63,6 @@ function rateTone(v: number | undefined): string {
   return "text-slate-800";
 }
 
-const tooltipStyle = {
-  fontSize: 12,
-  borderRadius: 10,
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 6px 24px rgb(15 23 42 / 0.10)",
-  padding: "8px 10px",
-};
-
 function Kpi({
   label,
   value,
@@ -112,6 +105,9 @@ function Kpi({
 }
 
 export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }: Props) {
+  const ct = useChartTheme();
+  const tooltipStyle = ct.tooltip;
+  const cursorFill = ct.dark ? "rgb(99 102 241 / 0.14)" : "rgb(99 102 241 / 0.06)";
   const assetsQuery = useQuery({
     queryKey: ["assets", lifecycle ?? "all"],
     queryFn: () => listAssets(lifecycle),
@@ -281,7 +277,7 @@ export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }:
                     innerRadius="58%"
                     outerRadius="86%"
                     paddingAngle={1.5}
-                    stroke="#fff"
+                    stroke={ct.sliceStroke}
                     strokeWidth={2}
                     animationDuration={800}
                   >
@@ -329,24 +325,24 @@ export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }:
                   layout="vertical"
                   margin={{ left: 8, right: 16 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} horizontal={false} />
                   <XAxis
                     type="number"
                     tickFormatter={(v: number) => eur(Number(v))}
                     fontSize={11}
-                    stroke="#94a3b8"
+                    stroke={ct.axisStroke}
                   />
                   <YAxis
                     type="category"
                     dataKey="name"
                     fontSize={11}
-                    stroke="#94a3b8"
+                    stroke={ct.axisStroke}
                     width={140}
                   />
                   <Tooltip
                     formatter={(v: number) => eur(Number(v))}
                     contentStyle={tooltipStyle}
-                    cursor={{ fill: "rgb(99 102 241 / 0.06)" }}
+                    cursor={{ fill: cursorFill }}
                   />
                   <Bar dataKey="npv" name="VAN" radius={[0, 4, 4, 0]} animationDuration={800}>
                     {chartData.map((d) => (
@@ -476,24 +472,24 @@ export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }:
                 layout="vertical"
                 margin={{ left: 8, right: 16 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} horizontal={false} />
                 <XAxis
                   type="number"
                   tickFormatter={(v: number) => eur(Number(v))}
                   fontSize={11}
-                  stroke="#94a3b8"
+                  stroke={ct.axisStroke}
                 />
                 <YAxis
                   type="category"
                   dataKey="name"
                   fontSize={11}
-                  stroke="#94a3b8"
+                  stroke={ct.axisStroke}
                   width={140}
                 />
                 <Tooltip
                   formatter={(v: number) => eur(Number(v))}
                   contentStyle={tooltipStyle}
-                  cursor={{ fill: "rgb(99 102 241 / 0.06)" }}
+                  cursor={{ fill: cursorFill }}
                 />
                 <Bar dataKey="revenue_y1" name="Ingresos año 1" fill={REV_BAR} radius={[0, 4, 4, 0]} animationDuration={800} />
               </BarChart>
