@@ -555,6 +555,62 @@ def test_dsra_zero_months_unchanged():
 
 
 # ---------------------------------------------------------------------------
+# E3: infra project NPV/IRR must be UNLEVERED (financing-independent). The
+# levered figures live under npv_equity / irr_equity.
+# ---------------------------------------------------------------------------
+
+
+def _solar_unlevered(periods: int = 120) -> InfrastructureModelConfig:
+    cfg = _solar_config(periods)
+    cfg.timeline = PermitsTimeline()
+    cfg.financing = ProjectFinanceConfig()  # all-equity
+    return cfg
+
+
+def _solar_levered(periods: int = 120) -> InfrastructureModelConfig:
+    cfg = _solar_config(periods)
+    cfg.timeline = PermitsTimeline()
+    cfg.financing = ProjectFinanceConfig(
+        senior=SeniorDebtConfig(
+            tenor_years=15, interest_rate=0.05, dscr_target=1.30, auto_size=True
+        ),
+        max_leverage=0.70,
+    )
+    return cfg
+
+
+def test_infra_project_npv_irr_unlevered_financing_independent():
+    """The project EV (``npv``) and ``irr_project`` are computed on UNLEVERED
+    FCF, so they do NOT change when debt is added. Equity metrics DO change."""
+    unlev = InfrastructureModel(_solar_unlevered()).run()
+    lev = InfrastructureModel(_solar_levered()).run()
+
+    # Project EV / NPV / IRR identical regardless of leverage.
+    assert lev.project_kpis.npv == pytest.approx(unlev.project_kpis.npv, rel=1e-6)
+    assert lev.summary["enterprise_value"] == pytest.approx(
+        unlev.summary["enterprise_value"], rel=1e-6
+    )
+    assert lev.project_kpis.irr_project == pytest.approx(
+        unlev.project_kpis.irr_project, rel=1e-6
+    )
+
+    # Equity metrics DO move with leverage (levered equity NPV/IRR differ).
+    assert lev.project_kpis.npv_equity != pytest.approx(
+        unlev.project_kpis.npv_equity, rel=1e-3
+    )
+
+
+def test_infra_project_npv_unaffected_by_cash_sweep():
+    """A pure financing lever (cash sweep) must not move the project EV/NPV."""
+    base = InfrastructureModel(_solar_with_sweep(sweep_enabled=False)).run()
+    swept = InfrastructureModel(_solar_with_sweep(sweep_enabled=True)).run()
+    assert swept.project_kpis.npv == pytest.approx(base.project_kpis.npv, rel=1e-6)
+    assert swept.project_kpis.irr_project == pytest.approx(
+        base.project_kpis.irr_project, rel=1e-6
+    )
+
+
+# ---------------------------------------------------------------------------
 # P2-2: cash sweep prepays debt with excess cash
 # ---------------------------------------------------------------------------
 

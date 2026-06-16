@@ -353,13 +353,27 @@ class InfrastructureModel:
             debt_outstanding=debt_balance,
         )
 
-        # 12. Valuation (DCF on annual FCF)
-        fcf = [cf["cfo"][t] + cf["cfi"][t] for t in range(n)]
+        # 12. Valuation (DCF on UNLEVERED annual FCF — financing-independent).
+        #     The project EV / NPV / IRR must not move with leverage or cash
+        #     sweep (E3). Unlevered FCF = EBIT*(1-t) + D&A - capex ± ΔWC,
+        #     discounted at WACC. The levered view (interest + principal) lives
+        #     under npv_equity / irr_equity in _compute_kpis. (Business/SaaS/SVJ
+        #     already value on unlevered FCF; this brings infra in line.)
         years = n // ppy
+        tax_rate = cfg.taxes.corporate_income_tax_rate
+        # ΔWC per period (infra uses dso=dpo=0 → 0, but kept for correctness).
+        delta_wc = [cf["delta_ar"][t] - cf["delta_ap"][t] for t in range(n)]
+        unlevered_fcf = [
+            (pnl["ebit"][t] * (1.0 - tax_rate) if pnl["ebit"][t] > 0 else pnl["ebit"][t])
+            + cap["book_depreciation"][t]
+            - cap["capex_spend"][t]
+            - delta_wc[t]
+            for t in range(n)
+        ]
         fcf_annual = (
-            [sum(fcf[y * ppy : (y + 1) * ppy]) for y in range(years)]
+            [sum(unlevered_fcf[y * ppy : (y + 1) * ppy]) for y in range(years)]
             if years > 0
-            else fcf
+            else unlevered_fcf
         )
         try:
             val = compute_dcf(
