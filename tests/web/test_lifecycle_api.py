@@ -64,3 +64,30 @@ def test_patch_invalid_lifecycle_422(monkeypatch, tmp_path):
     aid = c.post("/api/assets?t=tk", json={"model_id": "bess_20mw_4h", "name": "B"}).json()["id"]
     r = c.patch(f"/api/assets/{aid}/lifecycle?t=tk", json={"lifecycle": "bogus"})
     assert r.status_code == 422
+
+
+def test_delete_operational_asset_succeeds(monkeypatch, tmp_path):
+    """FIX 1: an operational (canonical) asset must be deletable via the API
+    (was 500: SQLiteScenarioStore.delete raised PermissionError on canonical)."""
+    c = _client(monkeypatch, tmp_path)
+    aid = c.post("/api/assets?t=tk",
+                 json={"model_id": "bess_20mw_4h", "name": "B"}).json()["id"]
+    c.patch(f"/api/assets/{aid}/lifecycle?t=tk", json={"lifecycle": "operational"})
+    r = c.delete(f"/api/assets/{aid}?t=tk")
+    assert r.status_code == 200
+    # gone from the listing
+    lst = c.get("/api/assets?t=tk").json()["assets"]
+    assert all(a["id"] != aid for a in lst)
+    # and individually 404
+    assert c.get(f"/api/assets/{aid}?t=tk").status_code == 404
+
+
+def test_delete_opportunity_asset_succeeds(monkeypatch, tmp_path):
+    """Non-operational delete still works."""
+    c = _client(monkeypatch, tmp_path)
+    aid = c.post("/api/assets?t=tk",
+                 json={"model_id": "bess_20mw_4h", "name": "B"}).json()["id"]
+    r = c.delete(f"/api/assets/{aid}?t=tk")
+    assert r.status_code == 200
+    lst = c.get("/api/assets?t=tk").json()["assets"]
+    assert all(a["id"] != aid for a in lst)

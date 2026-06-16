@@ -164,7 +164,10 @@ def get_asset(asset_id: str) -> dict[str, Any]:
 
 @router.delete("/{asset_id}")
 def delete_asset(asset_id: str) -> dict[str, Any]:
-    _store().delete(asset_id)
+    # A user must be able to delete their own asset, even after promotion to
+    # operational (which sets is_canonical=True). force_delete clears the
+    # canonical flag and soft-deletes, so this never 500s (FIX 1).
+    _store().force_delete(asset_id)
     return {"ok": True}
 
 
