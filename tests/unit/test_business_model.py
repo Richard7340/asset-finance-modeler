@@ -136,6 +136,37 @@ def test_business_tax_loss_carryforward():
     assert out_off.pnl["tax"][1] == pytest.approx(100_000)
 
 
+def test_business_opex_line_growth_moves_ebitda():
+    """E2: bumping one opex line's growth_pct_yr raises opex and lowers EBITDA/NI.
+
+    Previously every fixed line escalated by the shared escalation_pct_yr and the
+    per-line growth_pct_yr was ignored entirely.
+    """
+    cfg = BusinessModelConfig(
+        meta={"name": "OG", "horizon": {"periods": 3, "frequency": "Y"}},
+        revenue=[{"name": "Ventas", "year1_amount": 1_000_000, "growth_pct_yr": 0.0}],
+        cogs={"pct_of_revenue": 0.0},
+        opex={
+            "fixed_lines": [{"name": "Personal", "year1_amount": 200_000}],
+            "variable_pct_of_revenue": 0.0,
+            "escalation_pct_yr": 0.0,
+        },
+        capex={"items": []},
+        taxes={"corporate_income_tax_rate": 0.25},
+        valuation={"discount_rate_annual": 0.10, "terminal_method": "none"},
+    )
+    base = BusinessModel(cfg).run()
+
+    bumped = cfg.model_copy(deep=True)
+    bumped.opex.fixed_lines[0].growth_pct_yr = 0.20  # 20%/yr on the one line
+    out = BusinessModel(bumped).run()
+
+    # Year-1 unchanged (growth^0 = 1); later years' opex up → EBITDA/NI down.
+    assert out.pnl["ebitda"][0] == pytest.approx(base.pnl["ebitda"][0])
+    assert out.pnl["ebitda"][2] < base.pnl["ebitda"][2]
+    assert out.pnl["net_income"][2] < base.pnl["net_income"][2]
+
+
 def test_business_cfo_stays_levered():
     """P0-4: the cash-flow statement CFO remains levered (real cash, interest paid).
 

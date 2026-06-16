@@ -26,13 +26,19 @@ def opex_series(
     escalation_pct_yr: float,
     years: int,
 ) -> list[float]:
-    """Annual opex = sum(fixed_lines escalated) + variable_pct * revenue[y]."""
+    """Annual opex = sum(fixed_lines escalated) + variable_pct * revenue[y].
+
+    Each fixed line grows by its own ``growth_pct_yr`` when set (E2); a line that
+    leaves it unset (None / absent) falls back to the shared ``escalation_pct_yr``
+    — mirroring the per-line growth already honored on the revenue side.
+    """
     out: list[float] = []
     for y in range(years):
-        fixed = sum(
-            float(ln["year1_amount"]) * (1.0 + escalation_pct_yr) ** y
-            for ln in fixed_lines
-        )
+        fixed = 0.0
+        for ln in fixed_lines:
+            g = ln.get("growth_pct_yr")
+            rate = escalation_pct_yr if g is None else float(g)
+            fixed += float(ln["year1_amount"]) * (1.0 + rate) ** y
         var = variable_pct * (revenue[y] if y < len(revenue) else 0.0)
         out.append(fixed + var)
     return out

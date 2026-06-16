@@ -23,7 +23,10 @@ class RevenueLine(BaseModel):
 class OpexLine(BaseModel):
     name: str
     year1_amount: float
-    growth_pct_yr: float = 0.0
+    # Per-line annual growth. When None (default) the line escalates by the
+    # shared ``OpexConfigB.escalation_pct_yr``; when set (incl. 0.0) it overrides
+    # the shared escalation for that line — mirrors the revenue side (E2).
+    growth_pct_yr: float | None = None
 
 
 class CapexItemB(BaseModel):
