@@ -15,26 +15,24 @@ import { getLive } from "../api";
 import type { LiveResult } from "../api";
 import { eur, mult, pct } from "../format";
 import AnimatedNumber from "./AnimatedNumber";
+import { useChartTheme } from "../hooks/useChartTheme";
+import type { ChartTheme } from "../hooks/useChartTheme";
 
 type Props = { assetId: string };
 
-// Sober palette shared with VariancePanel: muted indigo for the base line,
-// dark slate for the realised points, a dashed reprojection for the future.
+// Sober palette shared with VariancePanel: muted slate for the base line,
+// indigo (dashed) for the reprojection, and a realised-point marker that flips
+// to a light tone on the dark ink surface.
 const C = {
   base: "#94a3b8",
   reproj: "#6366f1",
   actual: "#0f172a",
-  grid: "#eef2f7",
-  slate: "#94a3b8",
 };
-const AXIS = { fontSize: 11, fill: "#64748b" };
-const tooltipStyle = {
-  fontSize: 12,
-  borderRadius: 10,
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 6px 24px rgb(15 23 42 / 0.10)",
-  padding: "8px 10px",
-};
+
+/** The realised points need a light marker to read on the dark ink surface. */
+function actualColor(ct: ChartTheme): string {
+  return ct.dark ? "#e2e8f0" : C.actual;
+}
 
 function fmtNum(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
@@ -187,6 +185,9 @@ function CompareCards({ data }: { data: LiveResult }) {
  * the elapsed years), and the reprojected future drawn dashed.
  */
 function LiveChart({ data }: { data: LiveResult }) {
+  const ct = useChartTheme();
+  const AXIS = { fontSize: 11, fill: ct.axis };
+  const tooltipStyle = ct.tooltip;
   const baseCfo = data.base.cash_flow.cfo;
   const liveCfo = data.live.cash_flow.cfo;
   const years = data.base.cash_flow.years;
@@ -209,9 +210,9 @@ function LiveChart({ data }: { data: LiveResult }) {
     <div className="mt-4 h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-          <XAxis dataKey="year" tick={AXIS} stroke={C.slate} interval={0} />
-          <YAxis tick={AXIS} stroke={C.slate} width={52} />
+          <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+          <XAxis dataKey="year" tick={AXIS} stroke={ct.axisStroke} interval={0} />
+          <YAxis tick={AXIS} stroke={ct.axisStroke} width={52} />
           <Tooltip
             contentStyle={tooltipStyle}
             formatter={(v: number, name: string) => [
@@ -244,7 +245,7 @@ function LiveChart({ data }: { data: LiveResult }) {
             connectNulls
             isAnimationActive={false}
           />
-          <Scatter dataKey="actual" fill={C.actual} line={false} />
+          <Scatter dataKey="actual" fill={actualColor(ct)} line={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

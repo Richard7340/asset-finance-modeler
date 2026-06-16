@@ -17,9 +17,12 @@ import type { RunResult, IncomeStatement, CashFlow } from "../api";
 import { isHybridResult } from "../api";
 import { eur } from "../format";
 import Reveal from "./Reveal";
+import { useChartTheme } from "../hooks/useChartTheme";
+import type { ChartTheme } from "../hooks/useChartTheme";
 
 // Cohesive palette: indigo accent primary, ink for the "net" series,
-// emerald/rose strictly for +/- signal.
+// emerald/rose strictly for +/- signal. The "net/ink" series flips to a light
+// tone in dark mode so it stays legible on the ink surface.
 const C = {
   accent: "#4f46e5", // indigo-600
   accentSoft: "#818cf8", // indigo-400
@@ -31,7 +34,10 @@ const C = {
   amber: "#f59e0b",
 };
 
-const AXIS = { fontSize: 11, fill: "#64748b" };
+/** The dark "net/ink" series needs a light stroke to be visible on ink. */
+function inkStroke(ct: ChartTheme): string {
+  return ct.dark ? "#e2e8f0" : C.ink;
+}
 
 function Panel({
   title,
@@ -59,16 +65,11 @@ function Panel({
 
 const fmtK = (v: number) => `${Math.round(Number(v) / 1000)}k`;
 
-const tooltipStyle = {
-  fontSize: 12,
-  borderRadius: 10,
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 6px 24px rgb(15 23 42 / 0.10)",
-  padding: "8px 10px",
-};
-
 /** Income statement as a chart: Ingresos / EBITDA bars + Beneficio neto line. */
 function IncomeStatementChart({ is }: { is: IncomeStatement }) {
+  const ct = useChartTheme();
+  const AXIS = { fontSize: 11, fill: ct.axis };
+  const tooltipStyle = ct.tooltip;
   const data = is.years.map((year, i) => ({
     year: `A${year}`,
     revenue: is.rows.revenue[i] ?? 0,
@@ -79,14 +80,14 @@ function IncomeStatementChart({ is }: { is: IncomeStatement }) {
     <Panel title="Resultado por año" subtitle="Ingresos · EBITDA · Beneficio neto">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-          <XAxis dataKey="year" tick={AXIS} stroke={C.slate} />
-          <YAxis tickFormatter={fmtK} tick={AXIS} stroke={C.slate} width={56} />
+          <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+          <XAxis dataKey="year" tick={AXIS} stroke={ct.axisStroke} />
+          <YAxis tickFormatter={fmtK} tick={AXIS} stroke={ct.axisStroke} width={56} />
           <Tooltip formatter={(v: number) => eur(Number(v))} contentStyle={tooltipStyle} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar dataKey="revenue" name="Ingresos" fill={C.accent} radius={[3, 3, 0, 0]} maxBarSize={26} animationDuration={700} />
           <Bar dataKey="ebitda" name="EBITDA" fill={C.accentSoft} radius={[3, 3, 0, 0]} maxBarSize={26} animationDuration={700} />
-          <Line type="monotone" dataKey="net" name="Beneficio neto" stroke={C.ink} strokeWidth={2} dot={{ r: 2 }} animationDuration={900} />
+          <Line type="monotone" dataKey="net" name="Beneficio neto" stroke={inkStroke(ct)} strokeWidth={2} dot={{ r: 2 }} animationDuration={900} />
         </ComposedChart>
       </ResponsiveContainer>
     </Panel>
@@ -95,6 +96,9 @@ function IncomeStatementChart({ is }: { is: IncomeStatement }) {
 
 /** Cash flow: CFO/CFI/CFF bars + FCF and CUMULATIVE FCF lines. */
 function CashFlowChart({ cf }: { cf: CashFlow }) {
+  const ct = useChartTheme();
+  const AXIS = { fontSize: 11, fill: ct.axis };
+  const tooltipStyle = ct.tooltip;
   let cum = 0;
   const data = cf.years.map((y, i) => {
     const fcf = (cf.cfo[i] ?? 0) + (cf.cfi[i] ?? 0);
@@ -118,17 +122,17 @@ function CashFlowChart({ cf }: { cf: CashFlow }) {
               <stop offset="100%" stopColor={C.accent} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-          <XAxis dataKey="year" tick={AXIS} stroke={C.slate} />
-          <YAxis tickFormatter={fmtK} tick={AXIS} stroke={C.slate} width={56} />
+          <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+          <XAxis dataKey="year" tick={AXIS} stroke={ct.axisStroke} />
+          <YAxis tickFormatter={fmtK} tick={AXIS} stroke={ct.axisStroke} width={56} />
           <Tooltip formatter={(v: number) => eur(Number(v))} contentStyle={tooltipStyle} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <ReferenceLine y={0} stroke="#cbd5e1" />
+          <ReferenceLine y={0} stroke={ct.zeroLine} />
           <Bar dataKey="cfo" name="CFO" fill={C.accent} radius={[3, 3, 0, 0]} maxBarSize={22} animationDuration={700} />
           <Bar dataKey="cfi" name="CFI" fill={C.slate} radius={[3, 3, 0, 0]} maxBarSize={22} animationDuration={700} />
-          <Bar dataKey="cff" name="CFF" fill="#cbd5e1" radius={[3, 3, 0, 0]} maxBarSize={22} animationDuration={700} />
+          <Bar dataKey="cff" name="CFF" fill={ct.zeroLine} radius={[3, 3, 0, 0]} maxBarSize={22} animationDuration={700} />
           <Area type="monotone" dataKey="cum" name="FCF acumulado" stroke={C.accent} strokeWidth={2} fill="url(#cumFcf)" dot={false} animationDuration={900} />
-          <Line type="monotone" dataKey="fcf" name="FCF anual" stroke={C.ink} strokeWidth={2} dot={false} animationDuration={900} />
+          <Line type="monotone" dataKey="fcf" name="FCF anual" stroke={inkStroke(ct)} strokeWidth={2} dot={false} animationDuration={900} />
         </ComposedChart>
       </ResponsiveContainer>
     </Panel>
@@ -137,6 +141,9 @@ function CashFlowChart({ cf }: { cf: CashFlow }) {
 
 /** Legacy svj_hybrid curves: cashflows, market curves, bridge, DSCR profile. */
 function HybridCharts({ data }: { data: RunResult }) {
+  const ct = useChartTheme();
+  const AXIS = { fontSize: 11, fill: ct.axis };
+  const tooltipStyle = ct.tooltip;
   const cashflows = (data.cashflows?.years ?? []).map((year, i) => ({
     year,
     fv: data.cashflows?.fv[i] ?? 0,
@@ -164,9 +171,9 @@ function HybridCharts({ data }: { data: RunResult }) {
       <Panel title="Cashflows por año" subtitle="FV vs BESS">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={cashflows} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-            <XAxis dataKey="year" tick={AXIS} stroke={C.slate} />
-            <YAxis tickFormatter={fmtK} tick={AXIS} stroke={C.slate} width={48} />
+            <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+            <XAxis dataKey="year" tick={AXIS} stroke={ct.axisStroke} />
+            <YAxis tickFormatter={fmtK} tick={AXIS} stroke={ct.axisStroke} width={48} />
             <Tooltip formatter={(v: number) => fmtK(v)} contentStyle={tooltipStyle} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar dataKey="fv" name="FV" fill={C.accent} radius={[3, 3, 0, 0]} maxBarSize={22} animationDuration={700} />
@@ -178,9 +185,9 @@ function HybridCharts({ data }: { data: RunResult }) {
       <Panel title="Curvas de mercado" subtitle="Spread capture · Ancillary" delay={60}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={curves} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-            <XAxis dataKey="year" tick={AXIS} stroke={C.slate} />
-            <YAxis tick={AXIS} stroke={C.slate} width={48} />
+            <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+            <XAxis dataKey="year" tick={AXIS} stroke={ct.axisStroke} />
+            <YAxis tick={AXIS} stroke={ct.axisStroke} width={48} />
             <Tooltip contentStyle={tooltipStyle} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Line type="monotone" dataKey="spread" name="Spread capture" stroke={C.accent} dot={false} strokeWidth={2} animationDuration={900} />
@@ -192,11 +199,11 @@ function HybridCharts({ data }: { data: RunResult }) {
       <Panel title="Bridge VAN" subtitle="FV → BESS → Híbrido" delay={120}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={bridge} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-            <XAxis dataKey="name" tick={AXIS} stroke={C.slate} />
-            <YAxis tickFormatter={fmtK} tick={AXIS} stroke={C.slate} width={48} />
+            <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+            <XAxis dataKey="name" tick={AXIS} stroke={ct.axisStroke} />
+            <YAxis tickFormatter={fmtK} tick={AXIS} stroke={ct.axisStroke} width={48} />
             <Tooltip formatter={(v: number) => fmtK(v)} contentStyle={tooltipStyle} />
-            <ReferenceLine y={0} stroke="#cbd5e1" />
+            <ReferenceLine y={0} stroke={ct.zeroLine} />
             <Bar dataKey="value" name="VAN" radius={[3, 3, 0, 0]} maxBarSize={48} animationDuration={700}>
               {bridge.map((b) => (
                 <Cell key={b.name} fill={b.value >= 0 ? C.pos : C.neg} />
@@ -209,9 +216,9 @@ function HybridCharts({ data }: { data: RunResult }) {
       <Panel title="Perfil DSCR" subtitle="Deuda subordinada" delay={180}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={dscr} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-            <XAxis dataKey="year" tick={AXIS} stroke={C.slate} />
-            <YAxis tick={AXIS} stroke={C.slate} width={48} domain={[0, "auto"]} />
+            <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+            <XAxis dataKey="year" tick={AXIS} stroke={ct.axisStroke} />
+            <YAxis tick={AXIS} stroke={ct.axisStroke} width={48} domain={[0, "auto"]} />
             <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}×`} contentStyle={tooltipStyle} />
             <ReferenceLine y={1} stroke={C.neg} strokeDasharray="4 4" />
             <Line type="monotone" dataKey="dscr" name="DSCR" stroke={C.accent} dot={false} strokeWidth={2} animationDuration={900} />
