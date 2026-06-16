@@ -258,6 +258,105 @@ export async function setLifecycle(
 }
 
 // ---------------------------------------------------------------------------
+// Datos reales (actuals) + varianza real-vs-base (F2)
+// ---------------------------------------------------------------------------
+
+/** A model line that can receive real data (e.g. revenue, ebitda, cfo). */
+export type TrackableLine = {
+  path: string;
+  label: string;
+  /** Unit hint from the backend; may be "". */
+  unit: string;
+};
+
+/** A single real-data point entered for a line at a period. */
+export type Actual = {
+  id: string;
+  period_start: string;
+  line_path: string;
+  value: number;
+  unit: string;
+  note: string;
+  entered_by: string;
+  entered_at: string;
+};
+
+/** An actual to create (subset the POST body accepts). */
+export type ActualInput = {
+  period_start: string;
+  line_path: string;
+  value: number;
+  unit?: string;
+  note?: string;
+};
+
+/** Per-line variance series: frozen base vs aggregated actuals by model year. */
+export type VarianceLine = {
+  line_path: string;
+  label: string;
+  unit: string;
+  /** Frozen base series (annual), one value per model year. */
+  base: number[];
+  /** Real series aggregated by year; null where no actual was entered. */
+  actual: (number | null)[];
+  /** Absolute deviation (actual - base) per year; null where no actual. */
+  deviation: (number | null)[];
+  /** Relative deviation (decimal); null where no actual or base is 0. */
+  deviation_pct: (number | null)[];
+  /** Sum of actuals over the years that have data. */
+  cumulative_actual: number;
+  /** Sum of base over the same years (so partial series are fair). */
+  cumulative_base: number;
+  /** cumulative_actual / cumulative_base (decimal); null if no data. */
+  fulfillment_pct: number | null;
+};
+
+export type Variance = { lines: VarianceLine[] };
+
+export async function getLines(id: string): Promise<TrackableLine[]> {
+  const d = await getJson<{ lines: TrackableLine[] }>(`/api/assets/${id}/lines`);
+  return d.lines;
+}
+
+export async function getActuals(
+  id: string,
+  opts?: { linePath?: string; since?: string; until?: string },
+): Promise<Actual[]> {
+  const qs: string[] = [];
+  if (opts?.linePath) qs.push(`line_path=${encodeURIComponent(opts.linePath)}`);
+  if (opts?.since) qs.push(`since=${encodeURIComponent(opts.since)}`);
+  if (opts?.until) qs.push(`until=${encodeURIComponent(opts.until)}`);
+  const q = qs.length ? `?${qs.join("&")}` : "";
+  const d = await getJson<{ actuals: Actual[] }>(`/api/assets/${id}/actuals${q}`);
+  return d.actuals;
+}
+
+export async function postActuals(
+  id: string,
+  actuals: ActualInput[],
+): Promise<{ ids: string[] }> {
+  const r = await fetch(withToken(`/api/assets/${id}/actuals`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actuals }),
+  });
+  if (!r.ok) throw new Error(`postActuals failed: ${r.status}`);
+  return r.json();
+}
+
+export async function deleteActual(id: string, actualId: string): Promise<void> {
+  const r = await fetch(withToken(`/api/assets/${id}/actuals/${actualId}`), {
+    method: "DELETE",
+  });
+  if (!r.ok) throw new Error(`deleteActual failed: ${r.status}`);
+}
+
+export async function getVariance(id: string, linePath?: string): Promise<Variance> {
+  const q = linePath ? `?line_path=${encodeURIComponent(linePath)}` : "";
+  return getJson<Variance>(`/api/assets/${id}/variance${q}`);
+}
+
+// ---------------------------------------------------------------------------
 // Portfolio (Cartera) — aggregate view
 // ---------------------------------------------------------------------------
 
