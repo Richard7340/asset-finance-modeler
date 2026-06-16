@@ -172,6 +172,16 @@ table {
   border-color: #334155;
 }
 
+/* Dividers (divide-*) — Tailwind sets border-color on the divided children, so
+   they need the same dark remap as the borders above, otherwise bright slate
+   hairlines show through on ink backgrounds. */
+.dark .divide-slate-100 > * + * {
+  border-color: rgb(30 41 59 / 0.6);
+}
+.dark .divide-slate-200 > * + * {
+  border-color: rgb(30 41 59 / 0.9);
+}
+
 /* Text ramp — keep the relative hierarchy, lift for contrast on ink. */
 .dark .text-slate-900 {
   color: #f1f5f9;
