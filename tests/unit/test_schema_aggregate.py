@@ -34,7 +34,9 @@ def test_valuation_with_sensitivity():
         discount_rate_annual=0.20,
         sensitivity_grid=SensitivityGrid(wacc=[0.15, 0.20], growth=[0.02, 0.03]),
     )
-    assert v.terminal_method == "gordon"
+    # P3: default terminal_method is now "none" (no perpetuity on finite-life
+    # assets); Gordon/exit_multiple remain available as explicit opt-ins.
+    assert v.terminal_method == "none"
 
 
 def test_external_data_empty():

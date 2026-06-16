@@ -42,6 +42,23 @@ _INERT_LEAF_FIELDS = frozenset(
 _SAAS_ONLY_LEAF_FIELDS = frozenset({"inflation_annual"})
 
 
+# Optional config BLOCKS that are frequently None in a preset but the engine
+# DOES consume when present (mezzanine is auto-sized into the debt stack). Like
+# the curve fields, we surface the block's editable leaves even when None so the
+# platform can attach/enable it via the API (A4). Maps the leaf key (under
+# ``financing``) to the default field values to expose. Editing any leaf
+# instantiates the block (the override path then resolves).
+def _mezzanine_defaults() -> dict[str, Any]:
+    from asset_finance_modeler.assets.infrastructure.schema import (  # noqa: PLC0415
+        MezzanineDebtConfig,
+    )
+
+    return MezzanineDebtConfig().model_dump()
+
+
+_OPTIONAL_CONFIG_BLOCKS: dict[str, Any] = {"mezzanine": _mezzanine_defaults}
+
+
 def _leaf(path: str, value: Any) -> dict[str, Any]:
     if isinstance(value, bool):
         t = "bool"
@@ -92,6 +109,12 @@ def schema_tree(
             # can attach a curve. Carry value=None; type "text" (curve name or
             # JSON points list both edit as text).
             leaves.append(_leaf(path, None))
+        elif key in _OPTIONAL_CONFIG_BLOCKS:
+            # Surface an optional config block (e.g. financing.mezzanine) even
+            # when None so it is editable via the API (A4). Expand its default
+            # field values as leaves; editing any of them enables the block.
+            defaults = _OPTIONAL_CONFIG_BLOCKS[key]()
+            leaves.extend(schema_tree(defaults, path, asset_type=asset_type))
     return leaves
 
 
@@ -119,8 +142,27 @@ def set_by_path(config: dict[str, Any], path: str, value: Any) -> dict[str, Any]
     node: Any = out
     try:
         for k in keys[:-1]:
+            # Instantiate an optional config block on first write into it: a
+            # preset renders ``financing.mezzanine`` as None, but an override
+            # into it must enable the block (A4). Seed it with its defaults so
+            # the remaining keys resolve and the engine consumes it.
+            if (
+                isinstance(node, dict)
+                and node.get(k) is None
+                and k in _OPTIONAL_CONFIG_BLOCKS
+            ):
+                node[k] = _OPTIONAL_CONFIG_BLOCKS[k]()
             node = node[k]
-        node[keys[-1]] = value
+        leaf = keys[-1]
+        # Reject a typo'd LEAF key on a dict parent: the leaf must already exist
+        # (A2). Otherwise ``node[leaf] = value`` silently ADDS a key the engine
+        # never reads, so the override 200s with no effect. ``model_dump()``
+        # renders every schema field (incl. optional curve slots that are None),
+        # so legitimate settable leaves are present and still accepted. List
+        # indices fall through to the IndexError guard below.
+        if isinstance(node, dict) and leaf not in node:
+            raise InvalidPathError(path)
+        node[leaf] = value
     except (KeyError, IndexError, TypeError) as exc:
         raise InvalidPathError(path) from exc
     return out

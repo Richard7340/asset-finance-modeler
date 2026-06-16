@@ -92,6 +92,46 @@ def test_out_of_range_override_returns_400(monkeypatch):
     assert "monthly_churn_rate" in r.json()["detail"]
 
 
+def test_dsra_months_moves_a_surfaced_kpi(monkeypatch):
+    """A3: changing financing.reserves.dsra_months must move a surfaced KPI.
+    The DSRA is restricted cash tied up by equity, so a longer reserve hold
+    defers equity cash and lowers npv_equity / irr_equity. dsra_months is the
+    live (exposed) reserves leaf, so the change must be observable via the API.
+    """
+    c = _client(monkeypatch)
+    base = c.post("/api/models/bess_20mw_4h/run?t=tk", json={"overrides": {}}).json()
+    hi = c.post(
+        "/api/models/bess_20mw_4h/run?t=tk",
+        json={"overrides": {"financing.reserves.dsra_months": 36}},
+    ).json()
+    assert hi["kpis"]["irr_equity"] is not None
+    assert hi["kpis"]["irr_equity"] != base["kpis"]["irr_equity"], (
+        base["kpis"], hi["kpis"],
+    )
+
+
+def test_mezzanine_surfaced_in_schema_and_moves_kpi(monkeypatch):
+    """A4: MezzanineDebtConfig is surfaced in the schema tree even when None
+    (like the curve fields) so it is editable via the API, and a mezzanine
+    override moves a KPI (it adds a debt tranche → changes irr_equity)."""
+    c = _client(monkeypatch)
+    leaves = c.get("/api/models/bess_20mw_4h/schema?t=tk").json()["inputs"]
+    paths = {l["path"] for l in leaves}
+    assert any(p.startswith("financing.mezzanine.") for p in paths), sorted(
+        p for p in paths if "financing" in p
+    )
+    base = c.post("/api/models/bess_20mw_4h/run?t=tk", json={"overrides": {}}).json()
+    mz = c.post(
+        "/api/models/bess_20mw_4h/run?t=tk",
+        json={"overrides": {"financing.mezzanine.interest_rate": 0.12}},
+    )
+    assert mz.status_code == 200, mz.text
+    mzj = mz.json()
+    assert mzj["kpis"]["irr_equity"] != base["kpis"]["irr_equity"], (
+        base["kpis"], mzj["kpis"],
+    )
+
+
 def test_valid_saas_override_still_runs(monkeypatch):
     """A valid in-range override still returns 200."""
     c = _client(monkeypatch)

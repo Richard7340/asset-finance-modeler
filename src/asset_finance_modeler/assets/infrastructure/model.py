@@ -399,6 +399,7 @@ class InfrastructureModel:
             cap_book_depr=cap["book_depreciation"],
             debt_drawdowns=debt_drawdowns,
             debt_principal=debt_principal,
+            dsra_funding_flows=funding_flows,
             debt_balance=debt_balance,
             debt_metrics=debt_metrics,
             senior_ds=senior_ds,
@@ -843,6 +844,7 @@ class InfrastructureModel:
         cap_book_depr: list[float],
         debt_drawdowns: list[float],
         debt_principal: list[float],
+        dsra_funding_flows: list[float],
         debt_balance: list[float],
         debt_metrics: dict,
         senior_ds: list[float],
@@ -867,7 +869,13 @@ class InfrastructureModel:
             ni_yr = sum(pnl["net_income"][y * ppy : (y + 1) * ppy])
             dep_yr = sum(cap_book_depr[y * ppy : (y + 1) * ppy])
             rep_yr = sum(debt_principal[y * ppy : (y + 1) * ppy])
-            equity_cf.append(ni_yr + dep_yr - rep_yr)
+            # DSRA funding flow (A3): a reserve BUILD ties up cash (financing
+            # outflow, negative) so it defers equity distributions; a RELEASE
+            # returns cash. So dsra_months directly moves npv_equity/irr_equity —
+            # a longer reserve hold lowers equity NPV at Ke. The reserve is fully
+            # released by horizon end, so the timing (not the total) is what bites.
+            dsra_yr = sum(dsra_funding_flows[y * ppy : (y + 1) * ppy])
+            equity_cf.append(ni_yr + dep_yr - rep_yr + dsra_yr)
 
         has_debt = sum(debt_balance) > 0
 
