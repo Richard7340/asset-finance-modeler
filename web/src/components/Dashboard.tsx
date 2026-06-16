@@ -5,6 +5,7 @@ import { listAssets, setLifecycle } from "../api";
 import type { SavedAssetSummary } from "../api";
 import AssetGroup from "./AssetGroup";
 import PortfolioOverview from "./PortfolioOverview";
+import AssetsMap from "./AssetsMap";
 
 type Props = {
   onOpenAsset: (a: SavedAssetSummary) => void;
@@ -38,6 +39,7 @@ export default function Dashboard({ onOpenAsset }: Props) {
         count={counts.op}
       >
         <PortfolioOverview onOpenAsset={onOpenAsset} lifecycle="operational" />
+        <AssetsMap onOpenAsset={onOpenAsset} />
       </AssetGroup>
 
       <AssetGroup

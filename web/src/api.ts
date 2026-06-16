@@ -128,6 +128,13 @@ export async function getCurve(name: string): Promise<Curve> {
 export type Lifecycle = "opportunity" | "operational";
 export type TrackingFrequency = "daily" | "monthly" | "quarterly";
 
+/** Optional free-text location + coordinates for the portfolio map (F4-2). */
+export type AssetLocation = {
+  location?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+};
+
 export type SavedAssetSummary = {
   id: string;
   name: string;
@@ -137,7 +144,7 @@ export type SavedAssetSummary = {
   lifecycle: Lifecycle;
   commissioning_date: string | null;
   tracking_frequency: TrackingFrequency | null;
-};
+} & AssetLocation;
 
 export type SavedAsset = {
   id: string;
@@ -146,7 +153,7 @@ export type SavedAsset = {
   overrides: Overrides;
   results_snapshot: RunResult | null;
   created_at: string;
-};
+} & AssetLocation;
 
 // ---------------------------------------------------------------------------
 // Models
@@ -229,11 +236,12 @@ export async function saveAsset(
   modelId: string,
   name: string,
   overrides: Overrides,
+  location?: AssetLocation,
 ): Promise<{ id: string }> {
   const r = await fetch(withToken("/api/assets"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model_id: modelId, name, overrides }),
+    body: JSON.stringify({ model_id: modelId, name, overrides, ...(location ?? {}) }),
   });
   if (!r.ok) throw new Error(`save failed: ${r.status}`);
   return r.json();
@@ -420,7 +428,7 @@ export type PortfolioAsset = {
   irr: number;
   /** Yield = VAN / CAPEX, decimal. */
   yield_pct: number;
-};
+} & AssetLocation;
 
 export type PortfolioTotals = {
   npv: number;

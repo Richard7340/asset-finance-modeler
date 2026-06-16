@@ -83,6 +83,20 @@ class SaveAssetBody(BaseModel):
     name: str
     overrides: dict[str, Any] = {}
     tags: list[str] = []
+    # Optional location for the portfolio map (F4-2). Free text + optional
+    # coordinates; stored in inputs_snapshot so no DB migration is needed.
+    location: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+
+
+def _location_of(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Extract the optional location block persisted in inputs_snapshot."""
+    return {
+        "location": snapshot.get("location"),
+        "lat": snapshot.get("lat"),
+        "lon": snapshot.get("lon"),
+    }
 
 
 @router.post("")
@@ -94,7 +108,14 @@ def save_asset(body: SaveAssetBody) -> dict[str, Any]:
         name=body.name,
         base_model=body.model_id,
         overrides=overrides,
-        inputs_snapshot={"model_id": body.model_id, "overrides": overrides},
+        inputs_snapshot={
+            "model_id": body.model_id,
+            "overrides": overrides,
+            # Persist location alongside the inputs (optional; map-only).
+            "location": body.location,
+            "lat": body.lat,
+            "lon": body.lon,
+        },
         results_snapshot=results,
         tags=body.tags or [],
     )
@@ -118,6 +139,7 @@ def list_assets(lifecycle: str | None = None) -> dict[str, Any]:
                     s.commissioning_date.isoformat() if s.commissioning_date else None
                 ),
                 "tracking_frequency": s.tracking_frequency,
+                **_location_of(s.inputs_snapshot or {}),
             }
             for s in scenarios
         ]
@@ -136,6 +158,7 @@ def get_asset(asset_id: str) -> dict[str, Any]:
         "overrides": s.inputs_snapshot.get("overrides", s.overrides),
         "results_snapshot": s.results_snapshot,
         "created_at": s.created_at.isoformat(),
+        **_location_of(s.inputs_snapshot or {}),
     }
 
 
@@ -250,6 +273,7 @@ def portfolio(ids: str | None = None, lifecycle: str | None = None) -> dict[str,
                 "revenue_y1": metrics["revenue_y1"],
                 "capex": metrics["capex"],
                 "yield_pct": metrics["yield_pct"],
+                **_location_of(snapshot),
             }
         )
         totals["npv"] += metrics["npv"]
