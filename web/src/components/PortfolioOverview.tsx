@@ -17,6 +17,7 @@ import { getPortfolio, listAssets } from "../api";
 import type { PortfolioAsset, SavedAssetSummary } from "../api";
 import { eur, eurExact, pct } from "../format";
 import AnimatedNumber from "./AnimatedNumber";
+import Sparkline from "./Sparkline";
 import Reveal, { useStaggerReveal } from "./Reveal";
 import { useChartTheme } from "../hooks/useChartTheme";
 
@@ -69,6 +70,7 @@ function Kpi({
   format,
   text,
   hint,
+  series,
 }: {
   label: string;
   value?: number;
@@ -76,7 +78,10 @@ function Kpi({
   /** Plain text value (e.g. asset count) when not a count-up figure. */
   text?: string;
   hint?: string;
+  /** Optional mini-trend (e.g. per-asset distribution) rendered to the right. */
+  series?: number[];
 }) {
+  const hasSpark = Array.isArray(series) && series.filter(Number.isFinite).length >= 2;
   return (
     <div className="surface surface-hover relative overflow-hidden p-4">
       <span
@@ -87,17 +92,22 @@ function Kpi({
         <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
           {label}
         </div>
-        {text !== undefined ? (
-          <div className="mt-1.5 text-2xl font-semibold tabular-nums text-slate-900">
-            {text}
-          </div>
-        ) : (
-          <AnimatedNumber
-            value={value ?? 0}
-            format={format ?? ((n) => String(n))}
-            className="mt-1.5 block text-2xl font-semibold tabular-nums text-slate-900"
-          />
-        )}
+        <div className="mt-1.5 flex items-end justify-between gap-2">
+          {text !== undefined ? (
+            <div className="text-2xl font-semibold tabular-nums text-slate-900">
+              {text}
+            </div>
+          ) : (
+            <AnimatedNumber
+              value={value ?? 0}
+              format={format ?? ((n) => String(n))}
+              className="block text-2xl font-semibold tabular-nums text-slate-900"
+            />
+          )}
+          {hasSpark && (
+            <Sparkline values={series as number[]} className="shrink-0 opacity-90" />
+          )}
+        </div>
         {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
       </div>
     </div>
@@ -233,7 +243,12 @@ export default function PortfolioOverview({ onOpenAsset, lifecycle, rowAction }:
           totals?.irr_weighted !== undefined ? "sm:grid-cols-5" : "sm:grid-cols-4"
         }`}
       >
-        <Kpi label="VAN total" value={totals?.npv ?? 0} format={eur} />
+        <Kpi
+          label="VAN total"
+          value={totals?.npv ?? 0}
+          format={eur}
+          series={chartData.map((d) => d.npv)}
+        />
         <Kpi label="CAPEX total" value={totals?.capex ?? 0} format={eur} />
         <Kpi label="Ingresos año 1" value={totals?.revenue_y1 ?? 0} format={eur} />
         {totals?.irr_weighted !== undefined && (
