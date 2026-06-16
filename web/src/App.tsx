@@ -6,6 +6,7 @@ import {
   getSchema,
   isHybridResult,
   isEmbed,
+  setLifecycle,
 } from "./api";
 import type {
   Lifecycle,
@@ -15,12 +16,13 @@ import type {
   SavedAssetSummary,
   TrackingFrequency,
 } from "./api";
-import { Moon, Sun } from "lucide-react";
+import { ArrowLeft, Building2, Moon, Search, Sun } from "lucide-react";
 import { useRun } from "./hooks/useRun";
 import { useTheme } from "./hooks/useTheme";
 import { fmtDateTime } from "./format";
 import AssetPanel from "./components/AssetPanel";
 import Dashboard from "./components/Dashboard";
+import type { DashboardPage } from "./components/Dashboard";
 import DynamicInputs from "./components/DynamicInputs";
 import CurvesPanel from "./components/CurvesPanel";
 import KpiCards from "./components/KpiCards";
@@ -53,6 +55,8 @@ export default function App() {
   const queryClient = useQueryClient();
   const { theme, toggle: toggleTheme } = useTheme();
   const [view, setView] = useState<View>("portfolio");
+  // Which primary page is active. Cartera (operational) is the landing page.
+  const [page, setPage] = useState<DashboardPage>("cartera");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
 
@@ -94,10 +98,17 @@ export default function App() {
       trackingFrequency: a.tracking_frequency ?? null,
     });
     setOverrides(full.overrides ?? {});
+    // Remember which page this asset belongs to, so "back" returns there.
+    if (a.lifecycle === "operational") setPage("cartera");
+    else if (a.lifecycle === "opportunity") setPage("oportunidades");
     setView("detail");
   };
 
-  const showPortfolio = () => setView("portfolio");
+  // Switch to a primary page (from the header tabs or the detail back button).
+  const goToPage = (p: DashboardPage) => {
+    setPage(p);
+    setView("portfolio");
+  };
 
   const handleDeleteAsset = async (id: string) => {
     await deleteAsset(id);
@@ -112,6 +123,16 @@ export default function App() {
   const refreshCartera = () => {
     queryClient.invalidateQueries({ queryKey: ["assets"] });
     queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+  };
+
+  // Demote the asset currently open in the detail editor back to an
+  // opportunity, then return to the Oportunidades page where it now lives.
+  const demoteCurrent = async () => {
+    if (!selection?.assetId) return;
+    await setLifecycle(selection.assetId, { lifecycle: "opportunity" });
+    queryClient.invalidateQueries({ queryKey: ["assets"] });
+    queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+    goToPage("oportunidades");
   };
 
   // Editing an input clears the "reviewing saved asset" banner (it becomes a
@@ -196,17 +217,52 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={showPortfolio}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  view === "portfolio"
-                    ? "bg-white/10 text-white"
-                    : "text-slate-300 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                Inicio
-              </button>
+              <nav className="flex items-center gap-1 rounded-lg bg-white/5 p-1">
+                <button
+                  type="button"
+                  onClick={() => goToPage("cartera")}
+                  aria-current={
+                    view === "portfolio" && page === "cartera" ? "page" : undefined
+                  }
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                    view === "portfolio" && page === "cartera"
+                      ? "bg-white/15 text-white"
+                      : "text-slate-300 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  <Building2 size={15} strokeWidth={2} />
+                  Cartera
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToPage("oportunidades")}
+                  aria-current={
+                    view === "portfolio" && page === "oportunidades"
+                      ? "page"
+                      : undefined
+                  }
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                    view === "portfolio" && page === "oportunidades"
+                      ? "bg-white/15 text-white"
+                      : "text-slate-300 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  <Search size={15} strokeWidth={2} />
+                  Oportunidades
+                </button>
+              </nav>
+              {view === "detail" && (
+                <button
+                  type="button"
+                  onClick={() => goToPage(page)}
+                  className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
+                >
+                  <ArrowLeft size={15} strokeWidth={2} />
+                  {page === "oportunidades"
+                    ? "Volver a Oportunidades"
+                    : "Volver a Cartera"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -230,10 +286,10 @@ export default function App() {
         </header>
       )}
 
-      <ViewTransition viewKey={view}>
+      <ViewTransition viewKey={`${view}:${page}`}>
         {view === "portfolio" ? (
           <main className="flex-1 overflow-y-auto p-5 lg:p-8">
-            <Dashboard onOpenAsset={selectAsset} />
+            <Dashboard page={page} onOpenAsset={selectAsset} />
           </main>
         ) : (
           <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[264px_336px_1fr]">
@@ -305,6 +361,19 @@ export default function App() {
               {/* Seguimiento: solo para activos en operación (F2). */}
               {selection?.assetId && selection.lifecycle === "operational" && (
                 <>
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                      Seguimiento operativo
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={demoteCurrent}
+                      className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
+                      title="Devolver este activo a la lista de oportunidades"
+                    >
+                      Devolver a oportunidad
+                    </button>
+                  </div>
                   <AssetAlerts assetId={selection.assetId} />
                   <ActualsGrid
                     assetId={selection.assetId}

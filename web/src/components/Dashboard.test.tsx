@@ -24,13 +24,14 @@ function wrap(ui: React.ReactNode) {
 }
 
 const ASSETS = [
-  { id: "scn-1", name: "Planta", model_id: "solar_pv_50mw_spain", created_at: "2026-01-01T00:00:00Z", kpis: {}, lifecycle: "operational", commissioning_date: "2026-01-01T00:00:00Z", tracking_frequency: "monthly" },
+  { id: "scn-1", name: "Planta", model_id: "solar_pv_50mw_spain", created_at: "2026-01-01T00:00:00Z", kpis: {}, lifecycle: "operational", commissioning_date: "2026-01-01T00:00:00Z", tracking_frequency: "monthly", lat: 37.39, lon: -5.99 },
   { id: "scn-2", name: "Oportunidad X", model_id: "bess_20mw_4h", created_at: "2026-02-01T00:00:00Z", kpis: {}, lifecycle: "opportunity", commissioning_date: null, tracking_frequency: null },
 ] as never[];
 
 describe("Dashboard", () => {
   beforeEach(() => {
-    // Honour the lifecycle filter so each section gets only its own bucket.
+    vi.clearAllMocks();
+    // Honour the lifecycle filter so each page gets only its own bucket.
     vi.mocked(listAssets).mockImplementation((lifecycle?: unknown) =>
       Promise.resolve(
         lifecycle
@@ -40,22 +41,37 @@ describe("Dashboard", () => {
     );
   });
 
-  it("muestra las dos secciones Cartera y Oportunidades", async () => {
-    wrap(<Dashboard onOpenAsset={() => {}} />);
+  it("la página Cartera muestra solo activos en operación", async () => {
+    wrap(<Dashboard page="cartera" onOpenAsset={() => {}} />);
     await waitFor(() => {
       expect(screen.getByText("Cartera · activos en operación")).toBeTruthy();
-      expect(screen.getByText("Oportunidades · valoraciones")).toBeTruthy();
     });
+    expect(screen.queryByText("Oportunidades · valoraciones")).toBeNull();
   });
 
-  it("el botón Marcar en operación llama a setLifecycle con operational", async () => {
-    wrap(<Dashboard onOpenAsset={() => {}} />);
-    // The action column only renders in the Oportunidades section. Click the
-    // first "Marcar en operación" button (its row is scn-2, the lone opportunity).
+  it("la página Oportunidades muestra solo valoraciones", async () => {
+    wrap(<Dashboard page="oportunidades" onOpenAsset={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByText("Oportunidades · valoraciones")).toBeTruthy();
+    });
+    expect(screen.queryByText("Cartera · activos en operación")).toBeNull();
+  });
+
+  it("Marcar en operación promociona (setLifecycle operational) en Oportunidades", async () => {
+    wrap(<Dashboard page="oportunidades" onOpenAsset={() => {}} />);
     const btns = await screen.findAllByText("Marcar en operación");
     fireEvent.click(btns[0]);
     await waitFor(() =>
       expect(setLifecycle).toHaveBeenCalledWith("scn-2", { lifecycle: "operational" }),
+    );
+  });
+
+  it("Devolver a oportunidad degrada (setLifecycle opportunity) en Cartera", async () => {
+    wrap(<Dashboard page="cartera" onOpenAsset={() => {}} />);
+    const btns = await screen.findAllByText("Devolver a oportunidad");
+    fireEvent.click(btns[0]);
+    await waitFor(() =>
+      expect(setLifecycle).toHaveBeenCalledWith("scn-1", { lifecycle: "opportunity" }),
     );
   });
 });
