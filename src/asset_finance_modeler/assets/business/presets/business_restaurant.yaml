@@ -1,3 +1,6 @@
+# Valores ilustrativos / de mercado: restaurante como negocio en marcha.
+# Adquisición ~5x EBITDA (~0,84 M€) en lugar de solo la reforma, para que el
+# ejemplo arroje una TIR de compra creíble (~21%) y un VAN razonable.
 meta:
   name: "Restaurante"
   horizon:
@@ -23,8 +26,8 @@ opex:
   variable_pct_of_revenue: 0.05
 capex:
   items:
-    - name: "Reforma+equipamiento"
-      amount: 250000
+    - name: "Adquisición (fondo de comercio + reforma + equipamiento)"
+      amount: 840000
       period: 0
       depreciation_years: 8
 taxes:

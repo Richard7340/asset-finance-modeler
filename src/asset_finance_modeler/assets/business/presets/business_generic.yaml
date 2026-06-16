@@ -1,3 +1,6 @@
+# Valores ilustrativos / de mercado: PYME genérica como negocio en marcha.
+# Inversión de entrada ~0,9 M€ (no solo el capex operativo) para una TIR de
+# compra creíble (~14%) y un VAN razonable a un descuento del 10%.
 meta:
   name: "Negocio genérico"
   horizon:
@@ -19,8 +22,8 @@ opex:
   escalation_pct_yr: 0.02
 capex:
   items:
-    - name: "Inversión inicial"
-      amount: 400000
+    - name: "Inversión inicial (adquisición + activos)"
+      amount: 900000
       period: 0
       depreciation_years: 10
 taxes:

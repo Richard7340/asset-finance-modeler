@@ -1,3 +1,6 @@
+# Valores ilustrativos / de mercado: planta industrial en marcha. Inversión
+# total ~5 M€ (terreno + nave + maquinaria) para una TIR de proyecto creíble
+# (~15%), DSCR holgado (~2,2) y un VAN razonable a un descuento del 9%.
 meta:
   name: "Planta industrial"
   horizon:
@@ -18,8 +21,8 @@ opex:
   variable_pct_of_revenue: 0.06
 capex:
   items:
-    - name: "Maquinaria"
-      amount: 3000000
+    - name: "Terreno + nave + maquinaria"
+      amount: 5000000
       period: 0
       depreciation_years: 15
 financing:
