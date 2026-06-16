@@ -38,6 +38,89 @@ def _base_output() -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# L1: cost / margin overlay must preserve NI = EBT - tax and shift CFO by the
+# AFTER-TAX (net_income) delta, not the raw pre-tax delta. L2: interest_expense
+# is a cost into EBT (higher interest -> lower EBT/NI/CFO).
+# Base year 0: revenue 1000, ebitda 400, ebit 300, ebt 250 (interest 50),
+# tax 62.5 (eff rate 25%), net_income 187.5, cfo 287.5.
+# ---------------------------------------------------------------------------
+
+_TRACKABLE_LINES = ["revenue", "ebitda", "ebit", "ebt", "tax", "net_income",
+                    "interest_expense"]
+
+
+def _assert_ni_consistent(rows: dict, year: int) -> None:
+    """NI = EBT - tax on the spliced live series for ``year``."""
+    ebt = rows["ebt"][year]
+    tax = rows["tax"][year]
+    ni = rows["net_income"][year]
+    assert abs(ni - (ebt - tax)) < 1e-6, (
+        f"NI {ni} != EBT {ebt} - tax {tax} = {ebt - tax}"
+    )
+
+
+def test_cost_line_overlay_preserves_ni_and_after_tax_cfo():
+    """L1: overriding EBITDA on a profitable base preserves NI = EBT - tax on
+    the spliced series, and CFO moves by the AFTER-TAX delta; tax is recomputed
+    at the base year's effective rate (not shifted by the raw pre-tax delta)."""
+    base = _base_output()
+    # ebitda 400 -> 300 (pre-tax delta -100). eff rate at base = 62.5/250 = 0.25.
+    actuals = {"income_statement.rows.ebitda": {0: 300.0}}
+    out = compute_live(base, actuals_by_line_by_year=actuals, elapsed_years=1,
+                       discount_rate=0.08)
+    rows = out["live"]["series"]["income_statement"]["rows"]
+    # ebitda/ebit/ebt all shift by -100.
+    assert rows["ebitda"][0] == 300.0
+    assert rows["ebit"][0] == 200.0
+    assert rows["ebt"][0] == 150.0
+    # tax recomputed at 25% on new ebt 150 -> 37.5 (NOT 62.5 - 100 = -37.5).
+    assert abs(rows["tax"][0] - 37.5) < 1e-6
+    # NI = EBT - tax = 150 - 37.5 = 112.5.
+    assert abs(rows["net_income"][0] - 112.5) < 1e-6
+    _assert_ni_consistent(rows, 0)
+    # CFO shifts by the AFTER-TAX (NI) delta: 112.5 - 187.5 = -75 (not -100).
+    base_cfo = base["cash_flow"]["cfo"][0]
+    assert abs(out["live"]["series"]["cash_flow"]["cfo"][0] - (base_cfo - 75.0)) < 1e-6
+
+
+def test_higher_interest_lowers_ebt_ni_cfo():
+    """L2: a higher interest_expense actual is a cost into EBT -> EBT/NI/CFO
+    all fall (current code wrongly raises them)."""
+    base = _base_output()
+    # interest 50 -> 90 (delta +40 cost). eff rate 25%.
+    actuals = {"income_statement.rows.interest_expense": {0: 90.0}}
+    out = compute_live(base, actuals_by_line_by_year=actuals, elapsed_years=1,
+                       discount_rate=0.08)
+    rows = out["live"]["series"]["income_statement"]["rows"]
+    assert rows["interest_expense"][0] == 90.0
+    # EBT down by 40 -> 210; tax 25% -> 52.5; NI = 157.5.
+    assert abs(rows["ebt"][0] - 210.0) < 1e-6
+    assert abs(rows["tax"][0] - 52.5) < 1e-6
+    assert abs(rows["net_income"][0] - 157.5) < 1e-6
+    _assert_ni_consistent(rows, 0)
+    # NI/CFO below base.
+    assert rows["net_income"][0] < base["income_statement"]["rows"]["net_income"][0]
+    assert out["live"]["series"]["cash_flow"]["cfo"][0] < base["cash_flow"]["cfo"][0]
+    # Less cash early -> live NPV below base.
+    assert out["live"]["kpis"]["npv"] < out["base"]["kpis"]["npv"]
+
+
+def test_every_trackable_line_keeps_ni_eq_ebt_minus_tax():
+    """Overriding EVERY trackable P&L line (one at a time) keeps NI = EBT - tax
+    on the spliced live series (not just revenue)."""
+    base = _base_output()
+    base_vals = {k: base["income_statement"]["rows"][k][0] for k in _TRACKABLE_LINES}
+    for key in _TRACKABLE_LINES:
+        # Perturb the line by a non-trivial amount.
+        new_val = base_vals[key] * 1.3 if base_vals[key] else 100.0
+        actuals = {f"income_statement.rows.{key}": {0: new_val}}
+        out = compute_live(base, actuals_by_line_by_year=actuals,
+                           elapsed_years=1, discount_rate=0.08)
+        rows = out["live"]["series"]["income_statement"]["rows"]
+        _assert_ni_consistent(rows, 0)
+
+
 def test_no_actuals_live_equals_base():
     base = _base_output()
     out = compute_live(base, actuals_by_line_by_year={}, elapsed_years=1,
