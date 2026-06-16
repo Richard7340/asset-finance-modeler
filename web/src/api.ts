@@ -95,9 +95,11 @@ export function isHybridResult(r: RunResult): r is HybridResult {
  * Override values can be:
  *  - number  → a scalar input
  *  - string  → a curve selector (e.g. `spread_curve_name` = "spread_da_es")
+ *             or a free-text/enum input
+ *  - boolean → a flag input (e.g. `taxes.enabled`)
  *  - number[] → a custom curve supplied by the user (e.g. `spread_points`)
  */
-export type OverrideValue = number | string | number[];
+export type OverrideValue = number | string | boolean | number[];
 export type Overrides = Record<string, OverrideValue>;
 
 // ---------------------------------------------------------------------------

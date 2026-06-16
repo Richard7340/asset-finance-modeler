@@ -188,6 +188,52 @@ function humanLabel(inp: SchemaInput): string {
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
 
+/** Parent object prefix of a path, e.g. `revenue[0].base_price` → `revenue[0]`. */
+function parentPrefix(path: string): string {
+  const i = path.lastIndexOf(".");
+  return i === -1 ? "" : path.slice(0, i);
+}
+
+// Scalar leaf-name tokens whose value is superseded when a sibling price curve
+// is active (backend precedence: curve_name > points > scalar). Used only to
+// flag the affected scalars, not to disable unrelated siblings (volume, etc.).
+const CURVE_GOVERNED_TOKENS = ["price", "spread", "capture", "escalation"];
+
+/**
+ * For every parent prefix that has an active curve (a non-empty `*_curve_name`
+ * — from override or schema default — or a `*_points` override array), the
+ * sibling price-family scalars are overridden by the curve. Returns the set of
+ * those prefixes so the affected scalar inputs can show a "definido por la
+ * curva" hint and be de-emphasized.
+ */
+function activeCurvePrefixes(
+  schema: ModelSchema,
+  overrides: Overrides,
+): Set<string> {
+  const out = new Set<string>();
+  for (const inp of schema.inputs) {
+    if (!isCurveNameInput(inp)) continue;
+    const prefix = parentPrefix(inp.path);
+    const pointsPath = pointsPathFor(inp.path);
+    const nameOv = overrides[inp.path];
+    const pointsActive = Array.isArray(overrides[pointsPath]);
+    const nameActive =
+      typeof nameOv === "string"
+        ? nameOv.length > 0
+        : typeof inp.value === "string" && inp.value.length > 0;
+    if (nameActive || pointsActive) out.add(prefix);
+  }
+  return out;
+}
+
+/** True if `inp` is a price-family scalar superseded by an active sibling curve. */
+function isGovernedByCurve(inp: SchemaInput, prefixes: Set<string>): boolean {
+  if (inp.type !== "number") return false;
+  if (!prefixes.has(parentPrefix(inp.path))) return false;
+  const leaf = inp.path.split(".").pop() ?? inp.path;
+  return CURVE_GOVERNED_TOKENS.some((t) => leaf.includes(t));
+}
+
 export default function DynamicInputs({
   schema,
   overrides,
@@ -205,6 +251,11 @@ export default function DynamicInputs({
     enabled: hasCurveInputs,
   });
   const curves = curvesData?.curves ?? [];
+  // Prefixes whose price-family scalars are superseded by an active curve.
+  const curvePrefixes = useMemo(
+    () => activeCurvePrefixes(schema, overrides),
+    [schema, overrides],
+  );
   // Group inputs by section.
   const sections = useMemo(() => {
     const map = new Map<string, SchemaInput[]>();
@@ -277,6 +328,91 @@ export default function DynamicInputs({
                       : typeof inp.value === "number"
                         ? inp.value
                         : 0;
+                  const governed = isGovernedByCurve(inp, curvePrefixes);
+                  return (
+                    <label
+                      key={inp.path}
+                      className={`flex items-center justify-between gap-3 ${
+                        governed ? "opacity-60" : ""
+                      }`}
+                    >
+                      <span
+                        className="min-w-0 flex-1 text-xs text-slate-600"
+                        title={inp.path}
+                      >
+                        <span className="block truncate">{humanLabel(inp)}</span>
+                        {governed && (
+                          <span className="block text-[10px] font-normal text-slate-400">
+                            definido por la curva
+                          </span>
+                        )}
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={current}
+                        title={
+                          governed
+                            ? "Una curva activa define este valor; edita la curva para cambiarlo."
+                            : undefined
+                        }
+                        onChange={(e) => {
+                          const v = e.target.valueAsNumber;
+                          // Clearing the field (NaN) removes the override so the
+                          // input reverts to the schema default — not a forced 0.
+                          if (Number.isNaN(v)) {
+                            onChangeOverride(inp.path, undefined);
+                          } else {
+                            onChangeNumber(inp.path, v);
+                          }
+                        }}
+                        className="w-32 rounded border border-slate-300 px-2 py-1 text-right text-sm tabular-nums transition focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+                      />
+                    </label>
+                  );
+                })}
+                {otherInputs.map((inp) => {
+                  const ov = overrides[inp.path];
+                  if (inp.type === "bool") {
+                    const checked =
+                      typeof ov === "boolean"
+                        ? ov
+                        : typeof inp.value === "boolean"
+                          ? inp.value
+                          : false;
+                    return (
+                      <label
+                        key={inp.path}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <span
+                          className="min-w-0 flex-1 truncate text-xs text-slate-600"
+                          title={inp.path}
+                        >
+                          {humanLabel(inp)}
+                        </span>
+                        <input
+                          type="checkbox"
+                          role="switch"
+                          aria-label={humanLabel(inp)}
+                          checked={checked}
+                          onChange={(e) =>
+                            onChangeOverride(inp.path, e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-slate-300 text-accent-600 transition focus:ring-1 focus:ring-accent-500"
+                        />
+                      </label>
+                    );
+                  }
+                  // text / enum: free-text input (live override on change).
+                  const text =
+                    typeof ov === "string"
+                      ? ov
+                      : ov == null && typeof inp.value === "string"
+                        ? inp.value
+                        : inp.value == null
+                          ? ""
+                          : String(inp.value);
                   return (
                     <label
                       key={inp.path}
@@ -289,37 +425,23 @@ export default function DynamicInputs({
                         {humanLabel(inp)}
                       </span>
                       <input
-                        type="number"
-                        step="any"
-                        value={current}
+                        type="text"
+                        aria-label={humanLabel(inp)}
+                        value={text}
                         onChange={(e) => {
-                          const v = e.target.valueAsNumber;
-                          onChangeNumber(
+                          const v = e.target.value;
+                          // Empty string clears the override (revert to default);
+                          // otherwise commit the string value.
+                          onChangeOverride(
                             inp.path,
-                            Number.isNaN(v) ? 0 : v,
+                            v.length === 0 ? undefined : v,
                           );
                         }}
-                        className="w-32 rounded border border-slate-300 px-2 py-1 text-right text-sm tabular-nums transition focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+                        className="w-32 truncate rounded border border-slate-300 px-2 py-1 text-right text-sm transition focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
                       />
                     </label>
                   );
                 })}
-                {otherInputs.map((inp) => (
-                  <div
-                    key={inp.path}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <span
-                      className="min-w-0 flex-1 truncate text-xs text-slate-500"
-                      title={inp.path}
-                    >
-                      {humanLabel(inp)}
-                    </span>
-                    <span className="w-32 truncate text-right text-xs text-slate-400">
-                      {String(inp.value)}
-                    </span>
-                  </div>
-                ))}
               </div>
             )}
           </div>
