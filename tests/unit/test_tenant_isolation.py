@@ -61,3 +61,29 @@ def test_workspace_isolation(tmp_path):
     assert ws1[0].name == "A"
     all_u1 = store.list(user_id="u1")
     assert len(all_u1) == 3
+
+
+def test_get_scoped_by_workspace(tmp_path):
+    """get(id, workspace_id) only returns the row if it belongs to that
+    workspace; None for another workspace; unscoped get(id) still works."""
+    store = SQLiteScenarioStore(str(tmp_path / "test.db"))
+    store.initialize()
+    s = Scenario(id=new_scenario_id(), name="A", base_model="test", workspace_id="ws1")
+    store.save(s)
+    assert store.get(s.id, workspace_id="ws1") is not None
+    assert store.get(s.id, workspace_id="ws2") is None  # cross-tenant denied
+    assert store.get(s.id) is not None  # unscoped (admin/internal) still works
+
+
+def test_delete_scoped_by_workspace(tmp_path):
+    """force_delete is a no-op across workspaces; deletes within the owner."""
+    store = SQLiteScenarioStore(str(tmp_path / "test.db"))
+    store.initialize()
+    s = Scenario(id=new_scenario_id(), name="A", base_model="test", workspace_id="ws1")
+    store.save(s)
+    # Wrong workspace -> no-op, row survives.
+    store.force_delete(s.id, workspace_id="ws2")
+    assert store.get(s.id) is not None
+    # Owner -> soft-deletes.
+    store.force_delete(s.id, workspace_id="ws1")
+    assert store.get(s.id).is_deleted
