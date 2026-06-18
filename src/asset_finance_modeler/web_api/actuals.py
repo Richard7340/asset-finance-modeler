@@ -21,7 +21,7 @@ from pydantic import BaseModel, field_validator
 from asset_finance_modeler.core.scenario import Scenario
 from asset_finance_modeler.store.actuals import Actual, SQLiteActualsStore
 from asset_finance_modeler.web_api.assets import _db_path, _store
-from asset_finance_modeler.web_api.auth import require_token
+from asset_finance_modeler.web_api.auth import TenantContext, require_token, tenant_ctx
 
 # Human labels + default unit per trackable line key. Units are the model's
 # native magnitudes (monetary for P&L/CF). Currency is left generic ("") since
@@ -48,8 +48,12 @@ def _actuals_store() -> SQLiteActualsStore:
     return store
 
 
-def _get_asset_or_404(asset_id: str) -> Scenario:
-    s = _store().get(asset_id)
+def _get_asset_or_404(asset_id: str, workspace_id: str | None = None) -> Scenario:
+    # Scoped to the tenant's workspace so actuals for an asset can only be read
+    # or written by the tenant that owns the parent asset. Actuals are child rows
+    # of a scenario (no tenant column of their own); gating the parent lookup is
+    # the isolation boundary for the whole actuals/variance surface.
+    s = _store().get(asset_id, workspace_id=workspace_id)
     if s is None or s.is_deleted:
         raise HTTPException(status_code=404, detail=f"unknown asset: {asset_id}")
     return s
@@ -161,14 +165,18 @@ class PostActualsBody(BaseModel):
 
 
 @router.get("/{asset_id}/lines")
-def get_lines(asset_id: str) -> dict[str, Any]:
-    asset = _get_asset_or_404(asset_id)
+def get_lines(
+    asset_id: str, tenant: TenantContext = Depends(tenant_ctx)
+) -> dict[str, Any]:
+    asset = _get_asset_or_404(asset_id, workspace_id=tenant.workspace_id)
     return {"lines": _trackable_lines(asset.results_snapshot)}
 
 
 @router.post("/{asset_id}/actuals")
-def post_actuals(asset_id: str, body: PostActualsBody) -> dict[str, Any]:
-    _get_asset_or_404(asset_id)
+def post_actuals(
+    asset_id: str, body: PostActualsBody, tenant: TenantContext = Depends(tenant_ctx)
+) -> dict[str, Any]:
+    _get_asset_or_404(asset_id, workspace_id=tenant.workspace_id)
     items = [
         Actual(
             scenario_id=asset_id,
@@ -190,8 +198,9 @@ def list_actuals(
     line_path: str | None = None,
     since: str | None = None,
     until: str | None = None,
+    tenant: TenantContext = Depends(tenant_ctx),
 ) -> dict[str, Any]:
-    _get_asset_or_404(asset_id)
+    _get_asset_or_404(asset_id, workspace_id=tenant.workspace_id)
     rows = _actuals_store().list(
         scenario_id=asset_id, line_path=line_path, since=since, until=until
     )
@@ -213,8 +222,10 @@ def list_actuals(
 
 
 @router.delete("/{asset_id}/actuals/{actual_id}")
-def delete_actual(asset_id: str, actual_id: str) -> dict[str, Any]:
-    _get_asset_or_404(asset_id)
+def delete_actual(
+    asset_id: str, actual_id: str, tenant: TenantContext = Depends(tenant_ctx)
+) -> dict[str, Any]:
+    _get_asset_or_404(asset_id, workspace_id=tenant.workspace_id)
     _actuals_store().delete(actual_id)
     return {"ok": True}
 
@@ -281,8 +292,12 @@ def _variance_for_line(
 
 
 @router.get("/{asset_id}/variance")
-def get_variance(asset_id: str, line_path: str | None = None) -> dict[str, Any]:
-    asset = _get_asset_or_404(asset_id)
+def get_variance(
+    asset_id: str,
+    line_path: str | None = None,
+    tenant: TenantContext = Depends(tenant_ctx),
+) -> dict[str, Any]:
+    asset = _get_asset_or_404(asset_id, workspace_id=tenant.workspace_id)
     all_lines = _trackable_lines(asset.results_snapshot)
     if line_path is not None:
         all_lines = [ln for ln in all_lines if ln["path"] == line_path]
