@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_user_workspace ON scenarios(user_id, workspace_id
 class ScenarioStore(Protocol):
     def initialize(self) -> None: ...
     def save(self, scenario: Scenario) -> None: ...
-    def get(self, scenario_id: str) -> Scenario | None: ...
+    def get(self, scenario_id: str, workspace_id: str | None = None) -> Scenario | None: ...
     def list(
         self,
         base_model: str | None = None,
@@ -50,8 +50,8 @@ class ScenarioStore(Protocol):
         workspace_id: str | None = None,
         lifecycle: str | None = None,
     ) -> list[Scenario]: ...
-    def delete(self, scenario_id: str) -> None: ...
-    def force_delete(self, scenario_id: str) -> None: ...
+    def delete(self, scenario_id: str, workspace_id: str | None = None) -> None: ...
+    def force_delete(self, scenario_id: str, workspace_id: str | None = None) -> None: ...
     def set_canonical(self, scenario_id: str, name: str | None = None) -> None: ...
 
 
@@ -76,6 +76,19 @@ class SQLiteScenarioStore:
             # Migration: add workspace_id column if it doesn't exist
             try:
                 conn.execute('ALTER TABLE scenarios ADD COLUMN workspace_id TEXT')
+            except Exception:
+                pass
+            # Migration: backfill legacy rows. Before tenant isolation, assets
+            # saved via the REST layer carried workspace_id=NULL (the Scenario
+            # default). The REST layer now scopes every list/get to a workspace
+            # and uses 'default' for header-less (direct/dev/MCP) flows, so a
+            # WHERE workspace_id='default' query would NOT match those NULL rows
+            # and they'd silently disappear. Backfill NULL -> 'default' so legacy
+            # data stays visible under the default tenant. Idempotent.
+            try:
+                conn.execute(
+                    "UPDATE scenarios SET workspace_id = 'default' WHERE workspace_id IS NULL"
+                )
             except Exception:
                 pass
             # Migration: add lifecycle columns if upgrading an existing DB
@@ -181,9 +194,21 @@ class SQLiteScenarioStore:
                 row,
             )
 
-    def get(self, scenario_id: str) -> Scenario | None:
+    def get(self, scenario_id: str, workspace_id: str | None = None) -> Scenario | None:
+        """Fetch a scenario by id. When ``workspace_id`` is given, the row is
+        only returned if it belongs to that workspace — so a tenant can never
+        read another tenant's asset by guessing its id. When ``workspace_id`` is
+        ``None`` (admin/internal/cross-tenant tooling) the scoping is skipped."""
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM scenarios WHERE id = ?", (scenario_id,)).fetchone()
+            if workspace_id is not None:
+                row = conn.execute(
+                    "SELECT * FROM scenarios WHERE id = ? AND workspace_id = ?",
+                    (scenario_id, workspace_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT * FROM scenarios WHERE id = ?", (scenario_id,)
+                ).fetchone()
         if row is None:
             return None
         return self._from_row(row)
@@ -218,8 +243,9 @@ class SQLiteScenarioStore:
             rows = conn.execute(sql, params).fetchall()
         return [self._from_row(r) for r in rows]
 
-    def delete(self, scenario_id: str) -> None:
-        existing = self.get(scenario_id)
+    def delete(self, scenario_id: str, workspace_id: str | None = None) -> None:
+        # workspace-scoped lookup: a tenant can only delete its own row.
+        existing = self.get(scenario_id, workspace_id=workspace_id)
         if existing is None:
             return
         if existing.is_canonical:
@@ -227,12 +253,16 @@ class SQLiteScenarioStore:
         with self._conn() as conn:
             conn.execute("UPDATE scenarios SET is_deleted = 1 WHERE id = ?", (scenario_id,))
 
-    def force_delete(self, scenario_id: str) -> None:
+    def force_delete(self, scenario_id: str, workspace_id: str | None = None) -> None:
         """Soft-delete a scenario unconditionally, clearing the canonical flag
         first so a user can delete their own operational/canonical asset. The
         canonical-protection in ``delete`` is kept for the scenario-versioning
-        use case; this is the explicit user-driven asset-deletion path."""
-        existing = self.get(scenario_id)
+        use case; this is the explicit user-driven asset-deletion path.
+
+        When ``workspace_id`` is given the delete is scoped to that workspace, so
+        a tenant can never delete another tenant's asset (the lookup returns
+        ``None`` and the call is a no-op)."""
+        existing = self.get(scenario_id, workspace_id=workspace_id)
         if existing is None:
             return
         with self._conn() as conn:
