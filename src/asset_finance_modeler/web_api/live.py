@@ -36,14 +36,16 @@ from asset_finance_modeler.web_api.actuals import (
     _year_index,
 )
 from asset_finance_modeler.web_api.assets import _store
-from asset_finance_modeler.web_api.auth import require_token
+from asset_finance_modeler.web_api.auth import TenantContext, require_token, tenant_ctx
 from asset_finance_modeler.web_api.models import _BUSINESS_IDS, _SAAS_IDS, _preset_ids
 
 router = APIRouter(prefix="/api/assets", dependencies=[Depends(require_token)])
 
 
-def _get_asset_or_404(asset_id: str) -> Scenario:
-    s = _store().get(asset_id)
+def _get_asset_or_404(asset_id: str, workspace_id: str | None = None) -> Scenario:
+    # Tenant-scoped: LIVE reprojection only resolves an asset the caller's
+    # workspace owns.
+    s = _store().get(asset_id, workspace_id=workspace_id)
     if s is None or s.is_deleted:
         raise HTTPException(status_code=404, detail=f"unknown asset: {asset_id}")
     return s
@@ -130,8 +132,10 @@ def _statements(series: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/{asset_id}/live")
-def get_live(asset_id: str) -> dict[str, Any]:
-    asset = _get_asset_or_404(asset_id)
+def get_live(
+    asset_id: str, tenant: TenantContext = Depends(tenant_ctx)
+) -> dict[str, Any]:
+    asset = _get_asset_or_404(asset_id, workspace_id=tenant.workspace_id)
     if asset.lifecycle != "operational":
         raise HTTPException(
             status_code=422,

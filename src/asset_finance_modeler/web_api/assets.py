@@ -20,7 +20,7 @@ from asset_finance_modeler.core.scenario import Scenario, new_scenario_id
 from asset_finance_modeler.deals.svj import run_svj
 from asset_finance_modeler.store.actuals import SQLiteActualsStore
 from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
-from asset_finance_modeler.web_api.auth import require_token
+from asset_finance_modeler.web_api.auth import TenantContext, require_token, tenant_ctx
 from asset_finance_modeler.web_api.models import (
     _BUSINESS_IDS,
     _SAAS_IDS,
@@ -123,7 +123,9 @@ def _location_of(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("")
-def save_asset(body: SaveAssetBody) -> dict[str, Any]:
+def save_asset(
+    body: SaveAssetBody, tenant: TenantContext = Depends(tenant_ctx)
+) -> dict[str, Any]:
     overrides = body.overrides or {}
     results = _run_model(body.model_id, overrides)
     scenario = Scenario(
@@ -141,14 +143,19 @@ def save_asset(body: SaveAssetBody) -> dict[str, Any]:
         },
         results_snapshot=results,
         tags=body.tags or [],
+        # Stamp the owning tenant so it is only ever listed/read/deleted by it.
+        user_id=tenant.user_id,
+        workspace_id=tenant.workspace_id,
     )
     _store().save(scenario)
     return {"id": scenario.id}
 
 
 @router.get("")
-def list_assets(lifecycle: str | None = None) -> dict[str, Any]:
-    scenarios = _store().list(lifecycle=lifecycle)
+def list_assets(
+    lifecycle: str | None = None, tenant: TenantContext = Depends(tenant_ctx)
+) -> dict[str, Any]:
+    scenarios = _store().list(lifecycle=lifecycle, workspace_id=tenant.workspace_id)
     actuals = _actuals_store()
     return {
         "assets": [
@@ -172,8 +179,10 @@ def list_assets(lifecycle: str | None = None) -> dict[str, Any]:
 
 
 @router.get("/{asset_id}")
-def get_asset(asset_id: str) -> dict[str, Any]:
-    s = _store().get(asset_id)
+def get_asset(
+    asset_id: str, tenant: TenantContext = Depends(tenant_ctx)
+) -> dict[str, Any]:
+    s = _store().get(asset_id, workspace_id=tenant.workspace_id)
     if s is None or s.is_deleted:
         raise HTTPException(status_code=404, detail=f"unknown asset: {asset_id}")
     return {
@@ -189,11 +198,14 @@ def get_asset(asset_id: str) -> dict[str, Any]:
 
 
 @router.delete("/{asset_id}")
-def delete_asset(asset_id: str) -> dict[str, Any]:
+def delete_asset(
+    asset_id: str, tenant: TenantContext = Depends(tenant_ctx)
+) -> dict[str, Any]:
     # A user must be able to delete their own asset, even after promotion to
     # operational (which sets is_canonical=True). force_delete clears the
-    # canonical flag and soft-deletes, so this never 500s (FIX 1).
-    _store().force_delete(asset_id)
+    # canonical flag and soft-deletes, so this never 500s (FIX 1). Scoped to the
+    # tenant's workspace: deleting another tenant's asset id is a silent no-op.
+    _store().force_delete(asset_id, workspace_id=tenant.workspace_id)
     return {"ok": True}
 
 
@@ -204,9 +216,11 @@ class LifecycleBody(BaseModel):
 
 
 @router.patch("/{asset_id}/lifecycle")
-def set_lifecycle(asset_id: str, body: LifecycleBody) -> dict[str, Any]:
+def set_lifecycle(
+    asset_id: str, body: LifecycleBody, tenant: TenantContext = Depends(tenant_ctx)
+) -> dict[str, Any]:
     store = _store()
-    s = store.get(asset_id)
+    s = store.get(asset_id, workspace_id=tenant.workspace_id)
     if s is None or s.is_deleted:
         raise HTTPException(status_code=404, detail=f"unknown asset: {asset_id}")
     if body.lifecycle == "operational":
@@ -265,11 +279,16 @@ def _normalize_run(result: dict[str, Any]) -> dict[str, float]:
 
 
 @portfolio_router.get("")
-def portfolio(ids: str | None = None, lifecycle: str | None = None) -> dict[str, Any]:
+def portfolio(
+    ids: str | None = None,
+    lifecycle: str | None = None,
+    tenant: TenantContext = Depends(tenant_ctx),
+) -> dict[str, Any]:
     """Aggregate saved (non-deleted) assets by re-running each one fresh, so
     valuations reflect current inputs. Optional ?ids=id1,id2 limits the set.
     Assets that fail to run are reported in `skipped` (not silently dropped,
-    not fatal) so a broken asset stays visible (FIX 4)."""
+    not fatal) so a broken asset stays visible (FIX 4). Scoped to the tenant's
+    workspace so a portfolio never aggregates another tenant's assets."""
     wanted: set[str] | None = None
     if ids:
         wanted = {i.strip() for i in ids.split(",") if i.strip()}
@@ -278,7 +297,7 @@ def portfolio(ids: str | None = None, lifecycle: str | None = None) -> dict[str,
     skipped: list[dict[str, Any]] = []
     totals = {"npv": 0.0, "capex": 0.0, "revenue_y1": 0.0, "count": 0, "irr_weighted": 0.0}
     _irr_capex_sum = 0.0
-    for s in _store().list(lifecycle=lifecycle):
+    for s in _store().list(lifecycle=lifecycle, workspace_id=tenant.workspace_id):
         if wanted is not None and s.id not in wanted:
             continue
         snapshot = s.inputs_snapshot or {}
