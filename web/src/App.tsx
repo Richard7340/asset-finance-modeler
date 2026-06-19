@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -82,6 +82,36 @@ export default function App() {
   const [overrides, setOverrides] = useState<Overrides>({});
 
   const modelId = selection?.modelId ?? null;
+
+  // Report the asset/scenario currently in focus to a host (webOS Portfolio
+  // app embeds this UI in an iframe). This lets the agent know what the user is
+  // looking at ("modify THIS asset", "simulate what I'm seeing"). It is a safe
+  // no-op when not embedded: when there is no distinct parent window
+  // (top-level page), window.parent === window and we skip posting.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.parent === window) return; // not embedded → no-op
+    try {
+      window.parent.postMessage(
+        {
+          type: "portfolio:state",
+          selectedAsset: selection?.assetId ?? null,
+          selectedScenarioId: view === "detail" ? page : null,
+          modelId: selection?.modelId ?? null,
+          assetName: selection?.modelName ?? null,
+        },
+        "*",
+      );
+    } catch {
+      // Cross-origin or unavailable parent — ignore.
+    }
+  }, [
+    selection?.assetId,
+    selection?.modelId,
+    selection?.modelName,
+    view,
+    page,
+  ]);
 
   // Schema for the selected model.
   const schemaQuery = useQuery({
