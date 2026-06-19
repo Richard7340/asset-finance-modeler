@@ -246,6 +246,36 @@ table {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Agent spotlight — resaltado en vivo de un input cuando el agente lo  */
+/* toca (set_input). El parent (webOS) envía un comando por postMessage; */
+/* el motor aplica el override y "ilumina" el elemento con data-agent-id */
+/* correspondiente con un ring/glow temporal. Animación suave; la clase  */
+/* la retira un timeout en App.tsx.                                      */
+/* ------------------------------------------------------------------ */
+.agent-spotlight {
+  border-radius: 8px;
+  animation: agent-spotlight-pulse 1.6s ease-out 2;
+  outline: 2px solid rgb(99 102 241 / 0.9); /* accent-500 */
+  outline-offset: 3px;
+}
+@keyframes agent-spotlight-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(99 102 241 / 0.55);
+  }
+  60% {
+    box-shadow: 0 0 0 8px rgb(99 102 241 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(99 102 241 / 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-spotlight {
+    animation: none;
+  }
+}
+
 /* Scrollbar tuned for ink. */
 .dark * {
   scrollbar-color: rgb(51 65 85) transparent;

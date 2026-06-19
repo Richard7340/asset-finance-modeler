@@ -84,6 +84,7 @@ function CurveSelector({
             : inp.path}
         </span>
         <select
+          data-agent-id={`asset.${inp.path}`}
           value={dropdownValue}
           onChange={(e) => {
             const v = e.target.value;
@@ -383,6 +384,7 @@ export default function DynamicInputs({
                       <input
                         type="number"
                         step="any"
+                        data-agent-id={`asset.${inp.path}`}
                         value={current}
                         title={
                           governed
@@ -427,6 +429,7 @@ export default function DynamicInputs({
                         <input
                           type="checkbox"
                           role="switch"
+                          data-agent-id={`asset.${inp.path}`}
                           aria-label={humanLabel(inp)}
                           checked={checked}
                           onChange={(e) =>
@@ -459,6 +462,7 @@ export default function DynamicInputs({
                       </span>
                       <input
                         type="text"
+                        data-agent-id={`asset.${inp.path}`}
                         aria-label={humanLabel(inp)}
                         value={text}
                         onChange={(e) => {

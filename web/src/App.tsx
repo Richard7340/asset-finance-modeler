@@ -30,6 +30,8 @@ import {
 import { useRun } from "./hooks/useRun";
 import { useTheme } from "./hooks/useTheme";
 import { useLayout } from "./hooks/useLayout";
+import { useAgentBridge } from "./hooks/useAgentBridge";
+import type { AgentBridgeHandlers } from "./hooks/useAgentBridge";
 import ResizeDivider from "./components/ResizeDivider";
 import { fmtDateTime } from "./format";
 import AssetPanel from "./components/AssetPanel";
@@ -208,6 +210,66 @@ export default function App() {
       prev && prev.assetId ? { ...prev, assetId: null, savedAt: null } : prev,
     );
   };
+
+  // Select an asset by id (used by the agent bridge: "open THIS asset"). Mirrors
+  // selectAsset but takes only the id, fetching the full record itself.
+  const selectAssetById = async (id: string) => {
+    const full = await getAsset(id);
+    setSelection({
+      modelId: full.model_id,
+      modelName: full.name,
+      assetId: full.id,
+      savedAt: full.created_at,
+      lifecycle: null,
+      trackingFrequency: null,
+    });
+    setOverrides(full.overrides ?? {});
+    setView("detail");
+  };
+
+  // Force a re-run of the current scenario (used by the agent bridge `run`
+  // command). useRun re-simulates automatically on override changes; this
+  // covers the explicit "simulate again" with no parameter change by
+  // invalidating the cached run.
+  const runCurrent = () => {
+    if (!modelId) return;
+    queryClient.invalidateQueries({ queryKey: ["run", modelId] });
+  };
+
+  // Re-fetch the data the embedded UI is showing (parity with backend changes
+  // made by the agent via the financial-analysis skill, e.g. createScenario).
+  const refreshEmbedded = () => {
+    queryClient.invalidateQueries({ queryKey: ["assets"] });
+    queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+    queryClient.invalidateQueries({ queryKey: ["run"] });
+    queryClient.invalidateQueries({ queryKey: ["schema"] });
+  };
+
+  // Parent → iframe command bridge: lets the webOS Portfolio app (and through it
+  // the agent) operate the LIVE controls of this UI. Applying a command mutates
+  // React state, which re-simulates by construction (useRun). set_input also
+  // highlights the touched input via the shared spotlight (data-agent-id). Safe
+  // no-op when not embedded (the hook never subscribes). Origin/source validated
+  // inside the hook (same-origin parent only).
+  const agentHandlers = useMemo<AgentBridgeHandlers>(
+    () => ({
+      setInput: (path, value) => setOverride(path, value),
+      run: runCurrent,
+      navigate: (section) => {
+        if (section === "oportunidades") goToPage("oportunidades");
+        else if (section === "cartera") goToPage("cartera");
+        // Other sections (live/curvas/actuals/variance) live inside the detail
+        // view; the webOS toolbar handles those. Default: no-op.
+      },
+      selectAsset: (assetId) => selectAssetById(assetId),
+      refresh: refreshEmbedded,
+    }),
+    // setOverride/goToPage/selectAssetById/runCurrent/refreshEmbedded are stable
+    // closures over state setters; modelId is the only value they read that
+    // changes. eslint-disable-next-line react-hooks/exhaustive-deps
+    [modelId],
+  );
+  useAgentBridge(agentHandlers);
 
   const recalcBadge = isFetching ? (
     <span className="flex items-center gap-1.5 text-xs text-slate-300">
