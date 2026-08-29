@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps use `- [ ]`.
 
-**Goal:** Permitir eventos de capex en mitad de la vida del activo (repowering, augmentation, overhaul): inyectar un coste en el año N y, opcionalmente, **resetear la degradación** (la capacidad vuelve a ~100% y vuelve a degradar). General para cualquier activo. En SVJ: repowering del BESS en yr15 → vida 30 años.
+**Goal:** Permitir eventos de capex en mitad de la vida del activo (repowering, augmentation, overhaul): inyectar un coste en el año N y, opcionalmente, **resetear la degradación** (la capacidad vuelve a ~100% y vuelve a degradar). General para cualquier activo. En hybrid consolidated: repowering del BESS en yr15 → vida 30 años.
 
 **Architecture:** Dos funciones puras en `core/capex_events.py` (`apply_capex_events` añade importes al spend en su periodo; `apply_degradation_resets` reinicia la curva de degradación en los periodos de reset). Un schema `CapexEvent` + campo `capex_events` (opcional, default []) en el config del activo. El modelo añade los eventos al `capex_spend` y aplica los resets a la curva de degradación. Reutiliza `core/degradation.py` y `engines/capex.py`. Backward compatible (lista vacía = comportamiento actual).
 
@@ -209,4 +209,4 @@ git commit -m "feat(infra): modelo aplica eventos de capex + reset de degradacio
 - **Type consistency:** `apply_capex_events`, `apply_degradation_resets`, `CapexEvent(year, amount, resets_degradation, label)`, `capex_events` coherentes.
 - **Backward compat:** `capex_events` default vacío → comportamiento idéntico al actual; sin reset = curva base intacta.
 
-## Fases siguientes: F4 E5 outputs valoración (NPV equity@Ke, MOIC, recovery) · F5 E1 híbrido acoplado · F6 SVJ+validación · F7 Excel-foto.
+## Fases siguientes: F4 E5 outputs valoración (NPV equity@Ke, MOIC, recovery) · F5 E1 híbrido acoplado · F6 hybrid consolidated+validación · F7 Excel-foto.

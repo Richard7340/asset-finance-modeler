@@ -357,7 +357,7 @@ class InfrastructureModel:
         #     The project EV / NPV / IRR must not move with leverage or cash
         #     sweep (E3). Unlevered FCF = EBIT*(1-t) + D&A - capex ± ΔWC,
         #     discounted at WACC. The levered view (interest + principal) lives
-        #     under npv_equity / irr_equity in _compute_kpis. (Business/SaaS/SVJ
+        #     under npv_equity / irr_equity in _compute_kpis. (Business/SaaS/hybrid consolidated
         #     already value on unlevered FCF; this brings infra in line.)
         years = n // ppy
         tax_rate = cfg.taxes.corporate_income_tax_rate
@@ -796,7 +796,7 @@ class InfrastructureModel:
         P3-1 — amortization convention: the per-tranche debt service is built on
         the ANNUAL convention (one amortization row per year) and then spread
         EVENLY across the ``ppy`` periods of each year. This is the SAME
-        convention as the consolidated/SVJ path
+        convention as the consolidated/hybrid consolidated path
         (``HybridProject._tranche_debt_service``), so the SAME loan produces the
         SAME annual debt service in both paths. (Previously this series amortized
         monthly — periods_per_year=ppy, term=tenor*ppy — which over-counted

@@ -1,7 +1,7 @@
 # Simulador Financiero Gestnova — frontend + deploy
 
 SPA React (Vite + Tailwind v4 + react-query + recharts) que consume la API del motor
-(`/api/svj/*`). En producción, el propio FastAPI del motor sirve esta SPA construida
+(`/api/hybrid_consolidated/*`). En producción, el propio FastAPI del motor sirve esta SPA construida
 (`web/dist`) + la API en un solo puerto.
 
 ## Desarrollo local

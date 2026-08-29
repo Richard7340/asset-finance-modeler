@@ -1,0 +1,86 @@
+# Preset de REFERENCIA: cifras redondas de ejemplo, no de ningún proyecto real.
+# Sirve para probar la vía de consolidación híbrida de punta a punta.
+meta:
+  name: hybrid_pv_reference
+  horizon:
+    periods: 360
+    frequency: M
+  start_date: "2026-01-01"
+  initial_cash: 0
+  base_currency: EUR
+
+production:
+  type: solar_pv
+  capacity_mwp: 5.0
+  # The solar engine multiplies yield * performance_ratio, so leaving PR<1
+  # double-applies the performance ratio and under-counts production
+  # into the (already net) yield by setting performance_ratio: 1.0.
+  specific_yield_kwh_kwp: 1600
+  performance_ratio: 1.0
+
+revenue:
+  - type: ppa
+    name: PPA
+    price_eur_per_unit: 45.0
+    volume_fraction: 0.50
+    escalation_pct_yr: 0.02
+    tenor_years: 30
+  - type: merchant
+    name: Merchant
+    # Curve-driven realized capture price (Agere "captura solar Espana"):
+    # ~36 EUR/MWh in 2025 decaying with apuntamiento to ~29. The curve embeds
+    # the capture effect, so capture_ratio/escalation/base_price below are only
+    # the fallback if the curve is cleared. Surfaces in CurvesPanel with source.
+    price_curve_name: solar_capture_es
+    base_price_eur_per_unit: 40.0
+    volume_fraction: 0.50
+    capture_ratio: 0.85
+    escalation_pct_yr: -0.015
+
+capex:
+  items:
+    - name: EPC (modules + BOS + installation)
+      amount_per_unit: 0.90
+      unit: Wp
+      depreciation_years: 25
+      depreciation_method: straight_line
+  # development allowance. Original preset extras (5% contingency + €100k dev +
+  contingency_pct: 0.0
+  development_cost: 13200
+  grid_connection_cost: 0
+
+opex:
+  om_fixed_eur_per_mw_yr: 4000
+  om_variable_eur_per_mwh: 0.5
+  insurance_pct_capex: 0.0015
+  land_lease_eur_yr: 3000
+  management_fee_eur_yr: 2000
+  opex_escalation_pct_yr: 0.02
+
+degradation:
+  type: time_based
+  annual_rate: 0.006
+
+timeline:
+  development_months: 6
+  permitting_months: 12
+  construction_months: 8
+  grid_connection_months: 3
+
+financing:
+  senior:
+    tenor_years: 10
+    interest_rate: 0.032
+    amortization: french
+    auto_size: false
+  max_leverage: 0.50
+
+taxes:
+  corporate_income_tax_rate: 0.25
+  tax_loss_carryforward: true
+
+valuation:
+  discount_rate_annual: 0.06
+  cost_of_equity_annual: 0.075
+  terminal_growth_rate: 0.0
+  terminal_method: gordon

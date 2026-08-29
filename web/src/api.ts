@@ -19,7 +19,7 @@ export type AssetType =
   | "bess"
   | "wind"
   | "datacenter"
-  | "svj"
+  | "hybrid_consolidated"
   | "hybrid"
   | "business"
   | "real_estate";
@@ -72,7 +72,7 @@ export type GenericResult = {
   summary?: Record<string, unknown>;
 };
 
-/** Legacy svj_hybrid v1 result shape. */
+/** Legacy hybrid_consolidated v1 result shape. */
 export type HybridResult = {
   kpis: Kpis;
   cashflows: { years: number[]; fv: number[]; bess: number[] };
@@ -192,12 +192,12 @@ export async function runModel(
 }
 
 /**
- * Excel export. Only the legacy svj endpoint exists in the backend, so export
- * is only available for the svj_hybrid model. Returns false if the model is
+ * Excel export. Only the legacy hybrid_consolidated endpoint exists in the backend, so export
+ * is only available for the hybrid_consolidated model. Returns false if the model is
  * not exportable.
  */
 export function canExport(modelId: string): boolean {
-  return modelId === "svj_hybrid";
+  return modelId === "hybrid_consolidated";
 }
 
 export async function downloadExcel(
@@ -207,7 +207,7 @@ export async function downloadExcel(
   if (!canExport(modelId)) {
     throw new Error("Este modelo no admite exportación a Excel todavía.");
   }
-  const r = await fetch(withToken(`/api/svj/export`), {
+  const r = await fetch(withToken(`/api/hybrid_consolidated/export`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ overrides }),

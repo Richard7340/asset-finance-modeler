@@ -14,7 +14,7 @@ type Props = {
 // Spanish grouping of asset types into business families.
 const GROUPS: { title: string; types: AssetType[] }[] = [
   { title: "Energía / Renovables", types: ["solar", "bess", "wind", "datacenter"] },
-  { title: "Híbrido", types: ["hybrid", "svj"] },
+  { title: "Híbrido", types: ["hybrid", "hybrid_consolidated"] },
   { title: "Negocio", types: ["business"] },
   { title: "Inmobiliario", types: ["real_estate"] },
 ];

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps use `- [ ]`.
 
-**Goal:** Permitir modelar un GRUPO de activos (portfolio / híbrido) consolidando sus flujos de caja reales y calculando KPIs consolidados (NPV, IRR, capex total, DSCR peor). Núcleo general de "cualquiera modela su portfolio con su agente". El acoplamiento físico fino (un activo carga a otro, p.ej. FV→BESS) se trata en F6 (modelo SVJ) donde se concreta contra números objetivo — aquí construimos la consolidación general y bien acotada.
+**Goal:** Permitir modelar un GRUPO de activos (portfolio / híbrido) consolidando sus flujos de caja reales y calculando KPIs consolidados (NPV, IRR, capex total, DSCR peor). Núcleo general de "cualquiera modela su portfolio con su agente". El acoplamiento físico fino (un activo carga a otro, p.ej. FV→BESS) se trata en F6 (modelo hybrid consolidated) donde se concreta contra números objetivo — aquí construimos la consolidación general y bien acotada.
 
 **Architecture:** Helpers puros en `core/portfolio.py` (`consolidate_series`, `consolidate_outputs`) que suman las series por periodo de varios `FinancialOutput`. Un `HybridProject` (nuevo `assets/hybrid/model.py`) que corre N `InfrastructureModelConfig`, consolida, y calcula NPV (suma descontada del FCF consolidado con outlay en yr0 — MISMA convención que `npv_equity`, SIN terminal value Gordon) + IRR + capex total. Reutiliza `InfrastructureModel`, `compute_irr`. Aditivo, no toca el modelo existente.
 
@@ -175,9 +175,9 @@ git commit -m "feat(hybrid): HybridProject consolida N activos (FCF/NPV/IRR cons
 ---
 
 ## Self-Review
-- **Spec coverage (E1 núcleo):** consolidación de caja de N activos + KPIs consolidados (Tasks 1+2) → capacidad "modelar un portfolio". El acoplamiento físico de energía (FV carga BESS, conexión compartida) se hace en F6 contra los números SVJ. ✅ (acotado a propósito)
+- **Spec coverage (E1 núcleo):** consolidación de caja de N activos + KPIs consolidados (Tasks 1+2) → capacidad "modelar un portfolio". El acoplamiento físico de energía (FV carga BESS, conexión compartida) se hace en F6 contra los números hybrid consolidated. ✅ (acotado a propósito)
 - **Placeholders:** los `...` de Task 2 son explícitamente "verify-and-implement contra la estructura real" (como Fase 1 Task 4 / Fase 2 Task 3, que funcionó); el resto está codificado.
 - **Type consistency:** `consolidate_series`, `consolidate_npv`, `HybridProject`, `HybridResult` coherentes.
-- **NPV convention:** suma descontada con outlay yr0 (sin terminal Gordon) — coherente con `npv_equity` y con la validación SVJ de F6.
+- **NPV convention:** suma descontada con outlay yr0 (sin terminal Gordon) — coherente con `npv_equity` y con la validación hybrid consolidated de F6.
 
-## Fases siguientes: F6 modelo SVJ (incl. acoplamiento físico FV→BESS) + validación nº a nº · F7 Excel-foto.
+## Fases siguientes: F6 modelo hybrid consolidated (incl. acoplamiento físico FV→BESS) + validación nº a nº · F7 Excel-foto.

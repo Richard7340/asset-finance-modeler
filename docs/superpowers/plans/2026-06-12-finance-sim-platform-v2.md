@@ -8,7 +8,7 @@
 
 **Tech Stack:** FastAPI/pydantic/pytest (backend), React 19 + Vite + Tailwind v4 + react-query + recharts (frontend).
 
-**Repo/rama:** `/Users/rikyizquierdo/Documents/New project/asset-finance-modeler`, rama `feat/finance-engine-general-deals`. No romper los 557 tests ni la v1 (`deals/svj.py`, `/api/svj/*` se mantienen). Solo correr `tests/web tests/core tests/unit`.
+**Repo/rama:** `/Users/rikyizquierdo/Documents/New project/asset-finance-modeler`, rama `feat/finance-engine-general-deals`. No romper los 557 tests ni la v1 (`deals/hybrid_consolidated.py`, `/api/hybrid_consolidated/*` se mantienen). Solo correr `tests/web tests/core tests/unit`.
 
 ## File Structure
 - `web_api/introspect.py` — **Create**: `schema_tree`, `set_by_path` (puras).
@@ -32,7 +32,7 @@ from asset_finance_modeler.web_api.introspect import schema_tree, set_by_path
 
 
 def test_schema_tree_flattens_nested_and_lists():
-    cfg = {"production": {"capacity_mwp": 4.76}, "revenue": [{"price_eur_per_unit": 43.0}], "financing": {"senior": {"interest_rate": 0.032}}}
+    cfg = {"production": {"capacity_mwp": 5.0}, "revenue": [{"price_eur_per_unit": 45.0}], "financing": {"senior": {"interest_rate": 0.032}}}
     leaves = {l["path"]: l for l in schema_tree(cfg)}
     assert "production.capacity_mwp" in leaves
     assert "revenue[0].price_eur_per_unit" in leaves
@@ -42,7 +42,7 @@ def test_schema_tree_flattens_nested_and_lists():
 
 
 def test_set_by_path_nested_and_indexed():
-    cfg = {"production": {"capacity_mwp": 4.76}, "revenue": [{"price_eur_per_unit": 43.0}]}
+    cfg = {"production": {"capacity_mwp": 5.0}, "revenue": [{"price_eur_per_unit": 45.0}]}
     out = set_by_path(cfg, "revenue[0].price_eur_per_unit", 50.0)
     assert out["revenue"][0]["price_eur_per_unit"] == 50.0
     assert cfg["revenue"][0]["price_eur_per_unit"] == 43.0   # no muta el input
@@ -143,7 +143,7 @@ def test_list_models(monkeypatch):
     c = _client(monkeypatch)
     r = c.get("/api/models?t=tk")
     ids = {m["id"] for m in r.json()["models"]}
-    assert {"bess_20mw_4h", "solar_pv_50mw_spain", "svj_hybrid"} <= ids
+    assert {"bess_20mw_4h", "solar_pv_50mw_spain", "hybrid_consolidated"} <= ids
 
 
 def test_model_schema(monkeypatch):
@@ -218,16 +218,16 @@ class RunBody(BaseModel):
 @router.get("")
 def list_models() -> dict[str, Any]:
     models = [{"id": pid, "name": pid.replace("_", " ").title(), "asset_type": pid.split("_")[0]} for pid in _preset_ids()]
-    models.append({"id": "svj_hybrid", "name": "SVJ 1&2 — FV + BESS (Hibrido)", "asset_type": "hybrid"})
+    models.append({"id": "hybrid_consolidated", "name": "hybrid consolidated 1&2 — FV + BESS (Hibrido)", "asset_type": "hybrid"})
     return {"models": models}
 
 
 @router.get("/{model_id}/schema")
 def model_schema(model_id: str) -> dict[str, Any]:
-    if model_id == "svj_hybrid":
-        from asset_finance_modeler.deals.svj import svj_input_spec
+    if model_id == "hybrid_consolidated":
+        from asset_finance_modeler.deals.hybrid_consolidated import hybrid_consolidated_input_spec
         return {"inputs": [{"path": s["key"], "value": s["default"], "type": "number",
-                            "section": "deal", "label": s["label"]} for s in svj_input_spec()]}
+                            "section": "deal", "label": s["label"]} for s in hybrid_consolidated_input_spec()]}
     try:
         cfg = load_preset(model_id).model_dump()
     except Exception as exc:  # noqa: BLE001
@@ -237,9 +237,9 @@ def model_schema(model_id: str) -> dict[str, Any]:
 
 @router.post("/{model_id}/run")
 def model_run(model_id: str, body: RunBody) -> dict[str, Any]:
-    if model_id == "svj_hybrid":
-        from asset_finance_modeler.deals.svj import run_svj
-        return run_svj(body.overrides)
+    if model_id == "hybrid_consolidated":
+        from asset_finance_modeler.deals.hybrid_consolidated import run_hybrid_consolidated
+        return run_hybrid_consolidated(body.overrides)
     try:
         cfg = load_preset(model_id).model_dump()
     except Exception as exc:  # noqa: BLE001
@@ -283,7 +283,7 @@ def test_assets_crud(monkeypatch, tmp_path):
 ```
 
 - [ ] **Step 2 — Run, verify FAIL.**
-- [ ] **Step 3 — Implement** `web_api/assets.py` (use the Scenario+SQLiteScenarioStore API confirmed; POST runs the model via `models._run_config`/`run_svj` to capture results_snapshot, then saves a Scenario; GET list maps to `{id,name,model_id,created_at,kpis}`; GET {id} returns model_id+overrides+results_snapshot+created_at; DELETE). Router `/api/assets` with `Depends(require_token)`. Store path from `ASSET_FINANCE_DB_PATH`.
+- [ ] **Step 3 — Implement** `web_api/assets.py` (use the Scenario+SQLiteScenarioStore API confirmed; POST runs the model via `models._run_config`/`run_hybrid_consolidated` to capture results_snapshot, then saves a Scenario; GET list maps to `{id,name,model_id,created_at,kpis}`; GET {id} returns model_id+overrides+results_snapshot+created_at; DELETE). Router `/api/assets` with `Depends(require_token)`. Store path from `ASSET_FINANCE_DB_PATH`.
 - [ ] **Step 4 — Run, verify PASS.** Regression completa. ruff+mypy clean.
 - [ ] **Step 5 — Commit:**
 ```bash
@@ -322,7 +322,7 @@ git commit -m "feat(web_api): persistencia /api/assets (guardar/listar/revisar/b
 ## Self-Review
 - **Spec coverage:** introspección todos-los-inputs (A1), lista/schema/run genérico con PyG+FCF (A2), persistencia guardar/listar/revisar/borrar (A3), frontend cartera+presets+editor dinámico+estados financieros+guardar/revisar+IB-restyle (B1-B4). ✅
 - **Placeholders:** A1 código completo. A2/A3 con verify-first para la derivación del dir de presets y la API exacta de Scenario (patrón usado en fases previas con éxito). Frontend con contratos concretos.
-- **Type consistency:** `schema_tree`/`set_by_path`/`_run_config` (kpis,income_statement{years,rows},cash_flow), `/api/models`,`/api/assets`, contrato JSON coherente backend↔`api.ts`. SVJ v1 intacto.
-- **No rompe:** todo aditivo; `deals/svj.py` y `/api/svj/*` se mantienen; regresión en cada task.
+- **Type consistency:** `schema_tree`/`set_by_path`/`_run_config` (kpis,income_statement{years,rows},cash_flow), `/api/models`,`/api/assets`, contrato JSON coherente backend↔`api.ts`. hybrid consolidated v1 intacto.
+- **No rompe:** todo aditivo; `deals/hybrid_consolidated.py` y `/api/hybrid_consolidated/*` se mantienen; regresión en cada task.
 
 ## Notas trozos siguientes: activo nuevo de tipo arbitrario · multi-tenant/permisos workspace · migración webOS (iframe-kernel-bridge → `/api/models`+`/api/assets`).

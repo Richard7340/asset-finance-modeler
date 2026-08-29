@@ -1,0 +1,105 @@
+# Preset de REFERENCIA: cifras redondas de ejemplo, no de ningún proyecto real.
+# Sirve para probar la vía de consolidación híbrida de punta a punta.
+meta:
+  name: hybrid_bess_reference
+  horizon:
+    periods: 360
+    frequency: M
+  start_date: "2026-01-01"
+  initial_cash: 0
+  base_currency: EUR
+
+production:
+  type: bess
+  power_mw: 4.7
+  duration_hours: 3
+  round_trip_efficiency: 0.85
+  depth_of_discharge: 0.80
+  cycles_per_day: 0.9
+
+revenue:
+  - type: arbitrage
+    name: Arbitrage
+    spread_curve_name: spread_da_es
+    cycles_per_day: 0.9
+    spread_capture_ratio: 0.80
+  - type: ancillary
+    name: Ancillary Services (aFRR)
+    afrr_eur_mw_yr: 74000
+    curve_points:
+      - 1.0
+      - 0.8784
+      - 0.8108
+      - 0.7432
+      - 0.6486
+      - 0.5676
+      - 0.4865
+      - 0.4189
+      - 0.3649
+      - 0.3243
+      - 0.2973
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+      - 0.2838
+
+capex:
+  items:
+    - name: Battery + BOS + Integration
+      amount_per_unit: 130.6
+      unit: kWh
+      depreciation_years: 20
+      depreciation_method: straight_line
+  contingency_pct: 0.05
+  grid_connection_cost: 50000
+
+capex_events:
+  - year: 15
+    amount: 846000
+    resets_degradation: true
+    label: "repowering BESS"
+
+opex:
+  om_fixed_eur_per_mw_yr: 8000
+  insurance_pct_capex: 0.004
+  opex_escalation_pct_yr: 0.02
+
+degradation:
+  type: time_based
+  annual_rate: 0.006
+
+timeline:
+  construction_months: 8
+  grid_connection_months: 3
+
+financing:
+  subordinated:
+    principal: 1841000
+    interest_rate: 0.085
+    tenor_years: 7
+    amortization: french
+  max_leverage: 0.0
+
+taxes:
+  corporate_income_tax_rate: 0.25
+
+valuation:
+  discount_rate_annual: 0.06
+  cost_of_equity_annual: 0.085
+  terminal_growth_rate: 0.0
+  terminal_method: gordon

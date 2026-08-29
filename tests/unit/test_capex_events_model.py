@@ -35,10 +35,10 @@ def test_repowering_restores_capacity_and_adds_capex():
 
 
 def test_capex_event_is_depreciated():
-    # P1-5: the year-15 €846k repowering in svj_bess_cordoba must be depreciated,
+    # P1-5: the year-15 €846k repowering in hybrid_bess_reference must be depreciated,
     # so total book depreciation ~= total_capex (including the event), not just
     # the original capex.
-    out = InfrastructureModel(load_preset("svj_bess_cordoba")).run()
+    out = InfrastructureModel(load_preset("hybrid_bess_reference")).run()
     total_capex = out.summary["total_capex"]
     book_dep_total = sum(out.pnl["depreciation"])
     # Fully expensed within the 30-year horizon (event depreciated from yr15).

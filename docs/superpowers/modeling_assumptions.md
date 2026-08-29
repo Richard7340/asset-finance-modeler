@@ -23,7 +23,7 @@ reserve movements).
 - **Why:** EBITDA is the standard first-pass CFADS proxy for renewable/infra
   project finance term sheets; for asset-heavy, low-WC projects with deferred
   taxes it is close to true CFADS. It keeps sizing transparent and matches the
-  validated SVJ deal.
+  validated hybrid consolidated deal.
 - **Implication:** DSCR is slightly optimistic versus a full CFADS where cash
   taxes / maintenance capex are material.
 - **Future refinement:** migrate to a true CFADS series.
@@ -138,7 +138,7 @@ so the balance is **not** grossed up.
 - **Where:** `core/drivers.py::AmortizationSchedule` (`deferral_periods` branch),
   `infrastructure/model.py::_compute_debt`, `HybridProject._tranche_debt_service`.
 - **Why:** this `deferral` treatment (no IDC roll-up) is what reconciles with the
-  validated SVJ Excel (sub-DSCR over the operating years). The alternative —
+  validated hybrid consolidated Excel (sub-DSCR over the operating years). The alternative —
   capitalizing interest into the balance (`idc_periods`) — is supported in the
   schedule but is **not** the default path used by the deals.
 - **Implication:** the modeled debt balance equals the face principal at COD;
@@ -149,7 +149,7 @@ so the balance is **not** grossed up.
 The per-tranche debt-service series used for DSCR/MOIC is built on the **annual**
 amortization convention (one amortization row per year, spread evenly across the
 periods of each year) in **both** the standalone infra path and the
-consolidated/SVJ hybrid path.
+consolidated/hybrid consolidated hybrid path.
 
 - **Where:** `infrastructure/model.py::_debt_service_series`,
   `hybrid/model.py::_tranche_debt_service`.

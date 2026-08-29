@@ -1,9 +1,9 @@
-"""P3-1: the standalone infrastructure debt-service series and the hybrid/SVJ
+"""P3-1: the standalone infrastructure debt-service series and the hybrid/hybrid consolidated
 tranche debt-service must use the SAME amortization convention, so the SAME
 loan gives the SAME annual debt service in both paths.
 
 Before P3-1 the standalone infra path amortized MONTHLY (periods_per_year=12,
-term=tenor*12) while the hybrid/SVJ path amortizes ANNUALLY (periods_per_year=1,
+term=tenor*12) while the hybrid/hybrid consolidated path amortizes ANNUALLY (periods_per_year=1,
 term=tenor). For a 5y/8.5% loan that is a ~3% difference in total service for
 the same loan — an inconsistency. We unify on the ANNUAL convention (fine for
 project finance): the infra per-tranche service is built annually and spread
@@ -27,7 +27,7 @@ def _annual_buckets(series: list[float], ppy: int) -> list[float]:
     ("principal", "rate", "tenor", "amort"),
     [
         (1_000_000.0, 0.085, 5, "french"),
-        (2_220_000.0, 0.032, 10, "french"),
+        (2_000_000.0, 0.032, 10, "french"),
         (5_000_000.0, 0.06, 8, "linear"),
         (3_000_000.0, 0.05, 7, "bullet"),
     ],
@@ -51,7 +51,7 @@ def test_standalone_and_hybrid_tranche_service_match(principal, rate, tenor, amo
     )
     infra_annual = _annual_buckets(infra_ds, ppy)
 
-    # Hybrid/SVJ tranche service (annual rows, one per year).
+    # Hybrid/hybrid consolidated tranche service (annual rows, one per year).
     spec = TrancheSpec(
         principal=principal, interest_rate=rate, tenor_years=tenor, amortization=amort
     )

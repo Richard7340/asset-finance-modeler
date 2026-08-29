@@ -130,7 +130,7 @@ class AmortizationSchedule:
         # The construction-phase interest is assumed funded outside the debt
         # balance (equity / a dedicated IDC reserve), so the balance is NOT
         # grossed up. This is the treatment that reconciles with the validated
-        # SVJ Excel (sub-DSCR ~1.14-1.31 over the operating years). Mutually
+        # hybrid consolidated Excel (sub-DSCR ~1.14-1.31 over the operating years). Mutually
         # exclusive with idc_periods. ``deferral_periods == 0`` => legacy.
         for _ in range(self.deferral_periods):
             rows.append({

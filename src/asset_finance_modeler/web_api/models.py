@@ -1,6 +1,6 @@
 """Generic multi-asset web routes: /api/models (list + schema + run).
 
-Exposes every infrastructure preset (and the SVJ hybrid deal) as a uniform
+Exposes every infrastructure preset (and the hybrid consolidated hybrid deal) as a uniform
 model with introspectable input leaves and a run endpoint that returns
 annualized P&L, free-cash-flow and headline KPIs.
 """
@@ -28,7 +28,7 @@ from asset_finance_modeler.assets.saas.loader import load_preset as load_saas_pr
 from asset_finance_modeler.assets.saas.model import ModelResults, SaasModel
 from asset_finance_modeler.assets.saas.schema import SaasModelConfig
 from asset_finance_modeler.core.protocols import FinancialOutput
-from asset_finance_modeler.deals.svj import SvjInputError, run_svj, svj_input_spec
+from asset_finance_modeler.deals.hybrid_consolidated import HybridConsolidatedInputError, run_hybrid_consolidated, hybrid_consolidated_input_spec
 from asset_finance_modeler.web_api.auth import require_token
 from asset_finance_modeler.web_api.introspect import (
     InvalidPathError,
@@ -228,8 +228,8 @@ def list_models() -> dict[str, Any]:
     ]
     models.append(
         {
-            "id": "svj_hybrid",
-            "name": "SVJ 1&2 — FV + BESS (Hibrido)",
+            "id": "hybrid_consolidated",
+            "name": "hybrid consolidated 1&2 — FV + BESS (Hibrido)",
             "asset_type": "hybrid",
         }
     )
@@ -254,8 +254,8 @@ def list_models() -> dict[str, Any]:
 
 @router.get("/{model_id}/schema")
 def model_schema(model_id: str) -> dict[str, Any]:
-    if model_id == "svj_hybrid":
-        return {"inputs": svj_input_spec()}
+    if model_id == "hybrid_consolidated":
+        return {"inputs": hybrid_consolidated_input_spec()}
 
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()
@@ -274,10 +274,10 @@ def model_schema(model_id: str) -> dict[str, Any]:
 @router.post("/{model_id}/run")
 def model_run(model_id: str, body: RunBody) -> dict[str, Any]:
     overrides = body.overrides or {}
-    if model_id == "svj_hybrid":
+    if model_id == "hybrid_consolidated":
         try:
-            return run_svj(overrides)
-        except SvjInputError as exc:  # A1: bad override -> 400, not 500
+            return run_hybrid_consolidated(overrides)
+        except HybridConsolidatedInputError as exc:  # A1: bad override -> 400, not 500
             raise HTTPException(status_code=400, detail=exc.message) from exc
 
     if model_id in _BUSINESS_IDS:

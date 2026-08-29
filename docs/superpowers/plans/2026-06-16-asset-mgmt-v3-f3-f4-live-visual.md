@@ -77,5 +77,5 @@
 
 ## Notas
 - F3 es overlay anual (no motor multi-periodo nativo — v4). Documentar.
-- Tras F3+F4+V-1: actualizar memoria y PASAR AL DEAL SVJ (reconciliación Excel + rentabilidad/estructuración + teaser final con números reales).
+- Tras F3+F4+V-1: actualizar memoria y PASAR AL DEAL hybrid consolidated (reconciliación Excel + rentabilidad/estructuración + teaser final con números reales).
 - Server live con código pre-remediación — rebuild+restart en V-1.

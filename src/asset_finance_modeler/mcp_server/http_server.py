@@ -35,7 +35,7 @@ from asset_finance_modeler.web_api.assets import router as assets_router
 from asset_finance_modeler.web_api.curves import router as curves_router
 from asset_finance_modeler.web_api.live import router as live_router
 from asset_finance_modeler.web_api.models import router as models_router
-from asset_finance_modeler.web_api.routes import router as svj_router
+from asset_finance_modeler.web_api.routes import router as hybrid_consolidated_router
 
 from .server import _build_app
 
@@ -47,7 +47,7 @@ class CallRequest(BaseModel):
 
 app = FastAPI(title="asset-finance-modeler HTTP")
 # SIM_ONLY=1 skips building the full 30+ MCP tool registry (incl. the heavy
-# embeddings/FAISS intelligence stack). The web simulator only needs /api/svj/*
+# embeddings/FAISS intelligence stack). The web simulator only needs /api/hybrid_consolidated/*
 # + the static SPA, so this gives an instant, reliable startup for the dashboard.
 if os.getenv("SIM_ONLY") == "1":
     _registry = {}
@@ -82,10 +82,10 @@ async def call_tool(req: CallRequest) -> dict[str, Any]:
     return json.loads(json.dumps(result, default=str))
 
 
-# /api/svj/* router (model/run/export) with token auth. Mounted before the SPA
+# /api/hybrid_consolidated/* router (model/run/export) with token auth. Mounted before the SPA
 # so /api routes win over the catch-all static mount.
-app.include_router(svj_router)
-# Generic multi-asset router /api/models (list + schema + run). After svj,
+app.include_router(hybrid_consolidated_router)
+# Generic multi-asset router /api/models (list + schema + run). After hybrid_consolidated,
 # before the static mount so /api routes win over the catch-all.
 app.include_router(models_router)
 # Generic asset persistence router /api/assets (save/list/review/delete).

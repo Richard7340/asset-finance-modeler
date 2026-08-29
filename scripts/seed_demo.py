@@ -193,8 +193,8 @@ def main() -> None:
         dict(
             asset_id="scn-demo-solar",
             model_id="solar_pv_50mw_spain",
-            name="Planta solar FV 50 MWp — Córdoba",
-            location="Córdoba, España",
+            name="Planta solar FV 50 MWp — referencia",
+            location="referencia, España",
             lat=37.8882,
             lon=-4.7794,
             tags=["demo", "infraestructura", "solar"],

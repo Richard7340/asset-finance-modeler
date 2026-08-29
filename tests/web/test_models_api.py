@@ -11,7 +11,7 @@ def _client(monkeypatch):
 def test_list_models(monkeypatch):
     c = _client(monkeypatch)
     ids = {m["id"] for m in c.get("/api/models?t=tk").json()["models"]}
-    assert {"bess_20mw_4h", "solar_pv_50mw_spain", "svj_hybrid"} <= ids
+    assert {"bess_20mw_4h", "solar_pv_50mw_spain", "hybrid_consolidated"} <= ids
 
 
 def test_model_schema(monkeypatch):
@@ -31,12 +31,12 @@ def test_model_run_with_override_and_statements(monkeypatch):
     assert up["income_statement"]["rows"]["revenue"][0] != base["income_statement"]["rows"]["revenue"][0]
 
 
-def test_svj_hybrid_run_has_statements(monkeypatch):
-    """P3-2: svj_hybrid /run returns income_statement + cash_flow (consolidated
+def test_hybrid_consolidated_run_has_statements(monkeypatch):
+    """P3-2: hybrid_consolidated /run returns income_statement + cash_flow (consolidated
     P&L/CF of the hybrid) so a generic client consumes it like any other model,
     while keeping the legacy keys (bridge/cashflows/curves/dscr_profile/kpis)."""
     c = _client(monkeypatch)
-    out = c.post("/api/models/svj_hybrid/run?t=tk", json={"overrides": {}}).json()
+    out = c.post("/api/models/hybrid_consolidated/run?t=tk", json={"overrides": {}}).json()
     # legacy keys preserved
     for k in ("bridge", "cashflows", "curves", "dscr_profile", "kpis"):
         assert k in out, f"missing legacy key {k}"

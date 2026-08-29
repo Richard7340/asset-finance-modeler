@@ -2,7 +2,7 @@ from asset_finance_modeler.core.drivers import CurvePhase, build_phased_curve
 
 
 def test_build_phased_curve_three_phases():
-    # SVJ spread: base 82, +2%/yr (y1-7), 0% (y8-15), -2%/yr (y16-30).
+    # hybrid consolidated spread: base 82, +2%/yr (y1-7), 0% (y8-15), -2%/yr (y16-30).
     # FIX 2: a "7y +2%" phase yields 7 compounding steps, so vals[7] == base*1.02**7
     # (previously off-by-one gave only 6 steps; vals[7] wrongly == vals[6]).
     phases = [CurvePhase(7, 0.02), CurvePhase(8, 0.0), CurvePhase(15, -0.02)]

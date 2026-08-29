@@ -19,9 +19,9 @@ export type AssetTech = {
 };
 
 /**
- * Map a model id (e.g. "solar", "bess", "svj_hybrid", "real_estate") to a
+ * Map a model id (e.g. "solar", "bess", "hybrid_consolidated", "real_estate") to a
  * human label + lucide icon. Matches on substrings so model-id variants
- * ("svj_hybrid", "solar_pv", …) still resolve. Falls back to a neutral tag.
+ * ("hybrid_consolidated", "solar_pv", …) still resolve. Falls back to a neutral tag.
  */
 export function assetTech(modelId: string | undefined): AssetTech {
   const id = (modelId ?? "").toLowerCase();
@@ -33,7 +33,7 @@ export function assetTech(modelId: string | undefined): AssetTech {
     return { label: "Eólica", Icon: Wind };
   if (id.includes("data") || id.includes("dc"))
     return { label: "Data center", Icon: Server };
-  if (id.includes("svj") || id.includes("hybrid") || id.includes("hibrido"))
+  if (id.includes("hybrid_consolidated") || id.includes("hybrid") || id.includes("hibrido"))
     return { label: "Híbrido", Icon: Layers };
   if (id.includes("real_estate") || id.includes("inmob") || id.includes("estate"))
     return { label: "Inmobiliario", Icon: Home };

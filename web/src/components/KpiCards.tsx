@@ -95,7 +95,7 @@ function irrTone(v: number): Tone {
   return "bad";
 }
 
-/** Hybrid (svj) KPI set. */
+/** Hybrid (hybrid_consolidated) KPI set. */
 function HybridCards({ k }: { k: Record<string, number> }) {
   return (
     <>

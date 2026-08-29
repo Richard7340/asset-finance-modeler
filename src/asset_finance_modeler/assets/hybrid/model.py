@@ -174,7 +174,7 @@ class HybridProject:
         amortization to COD: no debt service during construction, then the FACE
         principal amortizes over the tenor (construction interest funded by
         equity / an IDC reserve, NOT capitalized — this reconciles with the
-        validated SVJ Excel). Default 0 = legacy (amortize from year 0), so a
+        validated hybrid consolidated Excel). Default 0 = legacy (amortize from year 0), so a
         deal with no timeline is unchanged."""
         if spec.principal <= 0:
             return [0.0] * horizon

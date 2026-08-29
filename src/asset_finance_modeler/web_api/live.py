@@ -27,7 +27,7 @@ from asset_finance_modeler.assets.infrastructure.loader import load_preset
 from asset_finance_modeler.assets.saas.loader import load_preset as load_saas_preset
 from asset_finance_modeler.core.live import compute_live
 from asset_finance_modeler.core.scenario import Scenario, apply_overrides
-from asset_finance_modeler.deals.svj import _WACC
+from asset_finance_modeler.deals.hybrid_consolidated import _WACC
 from asset_finance_modeler.store.actuals import Actual
 from asset_finance_modeler.web_api.actuals import (
     _actuals_store,
@@ -63,8 +63,8 @@ def _resolve_valuation(asset: Scenario) -> tuple[float, float, str, str, float]:
     model_id = (asset.inputs_snapshot or {}).get("model_id") or asset.base_model
     overrides = (asset.inputs_snapshot or {}).get("overrides", asset.overrides) or {}
 
-    # SVJ hybrid: consolidated unlevered NPV at the deal WACC (no terminal).
-    if model_id == "svj_hybrid":
+    # hybrid consolidated hybrid: consolidated unlevered NPV at the deal WACC (no terminal).
+    if model_id == "hybrid_consolidated":
         wacc = float(overrides.get("wacc", _WACC))
         return wacc, 0.0, "none", "sum", 0.0
 
@@ -167,7 +167,7 @@ def get_live(
     by_line = _aggregate_actuals(asset, actuals, snapshot)
 
     # The REAL stored engine NPV (unlevered NOPAT FCF for business/real-estate,
-    # consolidated unlevered for svj_hybrid). The base-vs-live panel anchors to
+    # consolidated unlevered for hybrid_consolidated). The base-vs-live panel anchors to
     # this so ``npv_base`` is the TRUE base for every asset type; live is the
     # stored base shifted by the actuals-driven delta. ``None`` (no stored NPV)
     # falls back to the CFO+CFI recompute inside ``compute_live``.

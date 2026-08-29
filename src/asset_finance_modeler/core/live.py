@@ -12,7 +12,7 @@ aggregated by model year, ``compute_live`` produces a spliced LIVE projection:
     CFO consistently);
   * the spliced annual FCF is revalued with the SAME convention as the base
     (``compute_dcf`` for the generic/infra/business case, or a plain discounted
-    sum for the SVJ-style consolidate convention), and IRR / DSCR are
+    sum for the hybrid consolidated-style consolidate convention), and IRR / DSCR are
     recomputed on the spliced series.
 
 SIMPLIFICATIONS (overlay-by-aggregation, documented per the spec):
@@ -324,7 +324,7 @@ def compute_live(
     actuals-driven delta (computed consistently on the SAME CFO+CFI footing for
     both recomputed base and live, so the delta is valid) added to the TRUE
     stored base. This makes ``npv_base`` == the real engine NPV for EVERY asset
-    type (business/real-estate value on unlevered NOPAT FCF, SVJ on consolidated
+    type (business/real-estate value on unlevered NOPAT FCF, hybrid consolidated on consolidated
     unlevered NPV, neither of which equals the CFO+CFI recompute) — footing
     agnostic and exact. When ``None`` (shouldn't happen for a saved asset, but
     guarded) we fall back to the recomputed base.

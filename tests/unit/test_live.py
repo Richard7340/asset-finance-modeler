@@ -299,7 +299,7 @@ def test_residual_with_gordon_adds_only_its_pv_not_a_perpetuity():
 
 def test_no_residual_default_unchanged():
     """residual_value defaults to 0 -> existing no-terminal behaviour is exact
-    (regression guard for infra/SVJ whose base must stay as-is)."""
+    (regression guard for infra/hybrid consolidated whose base must stay as-is)."""
     base = _base_output()
     out_default = compute_live(
         base, actuals_by_line_by_year={}, elapsed_years=1, discount_rate=0.08
@@ -315,7 +315,7 @@ def test_no_residual_default_unchanged():
 # ---------------------------------------------------------------------------
 # fix(live): anchor the base-vs-live panel to the asset's REAL stored base NPV
 # (the engine NPV, on whatever footing the engine values — unlevered NOPAT FCF
-# for business/real-estate, consolidated unlevered for SVJ), and report the live
+# for business/real-estate, consolidated unlevered for hybrid consolidated), and report the live
 # as stored + the actuals-driven delta (which is computed consistently on the
 # SAME CFO+CFI footing for both recomputed base and live, so the delta is valid).
 # ---------------------------------------------------------------------------

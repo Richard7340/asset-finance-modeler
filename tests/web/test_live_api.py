@@ -116,11 +116,11 @@ def test_live_bess_base_npv_equals_stored(monkeypatch, tmp_path):
     assert abs(r.json()["comparison"]["npv_base"] - stored) <= 1
 
 
-def test_live_svj_base_npv_equals_stored(monkeypatch, tmp_path):
-    """SVJ hybrid base must equal the stored consolidated unlevered NPV
+def test_live_hybrid_consolidated_base_npv_equals_stored(monkeypatch, tmp_path):
+    """hybrid consolidated hybrid base must equal the stored consolidated unlevered NPV
     (``npv_hybrid``) after anchoring."""
     c = _client(monkeypatch, tmp_path)
-    aid = _operational_asset(c, model_id="svj_hybrid")
+    aid = _operational_asset(c, model_id="hybrid_consolidated")
     stored = _stored_npv(c, aid)
     r = c.get(f"/api/assets/{aid}/live?t=tk")
     assert r.status_code == 200

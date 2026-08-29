@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps use `- [ ]`.
 
-**Goal:** Permitir estructuras de capital con varios tramos ordenados por prelación (senior + subordinado) y calcular el **DSCR por tramo en cascada** (el subordinado neto del servicio de deuda senior). Base para deals como SVJ (senior FV + subordinada inversor, DSCR sub 1,14-1,31×).
+**Goal:** Permitir estructuras de capital con varios tramos ordenados por prelación (senior + subordinado) y calcular el **DSCR por tramo en cascada** (el subordinado neto del servicio de deuda senior). Base para deals como hybrid consolidated (senior FV + subordinada inversor, DSCR sub 1,14-1,31×).
 
 **Architecture:** Función pura `compute_waterfall_dscr` en `core/financing.py` (cfads + lista ordenada de series de debt-service por tramo → DSCR por tramo). Nuevo `SubordinatedDebtConfig` + campo en `FinancingConfig`. El modelo `_compute_debt` construye los dos tramos (el subordinado se dimensiona sobre el CFADS neto del senior) y expone `dscr_senior_*`/`dscr_subordinated_*` en los KPIs. Reutiliza `DebtEngine`/`AmortizationSchedule`/`size_debt` existentes. Backward compatible (subordinado opcional, default None).
 
@@ -191,4 +191,4 @@ git commit -m "feat(infra): modelo construye tramo subordinado + DSCR por tramo 
 - **Type consistency:** `compute_waterfall_dscr`, `SubordinatedDebtConfig`, `FinancingConfig.subordinated`, `dscr_senior_min/avg`, `dscr_subordinated_min/avg` coherentes entre tasks.
 - **Backward compat:** subordinado opcional (None); KPIs nuevos con defaults; agregado existente intacto.
 
-## Fases siguientes (no aquí): F3 E4 capex/repowering · F4 E5 outputs valoración (NPV equity@Ke, MOIC, recovery) · F5 E1 híbrido acoplado · F6 modelo SVJ+validación · F7 Excel-foto.
+## Fases siguientes (no aquí): F3 E4 capex/repowering · F4 E5 outputs valoración (NPV equity@Ke, MOIC, recovery) · F5 E1 híbrido acoplado · F6 modelo hybrid consolidated+validación · F7 Excel-foto.

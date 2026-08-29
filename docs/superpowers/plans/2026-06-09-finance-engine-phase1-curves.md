@@ -40,7 +40,7 @@ from asset_finance_modeler.core.drivers import CurvePhase, build_phased_curve
 
 
 def test_build_phased_curve_three_phases():
-    # SVJ spread: base 82, +2%/yr (y1-7), 0% (y8-15), -2%/yr (y16-30)
+    # hybrid consolidated spread: base 82, +2%/yr (y1-7), 0% (y8-15), -2%/yr (y16-30)
     phases = [CurvePhase(7, 0.02), CurvePhase(8, 0.0), CurvePhase(15, -0.02)]
     vals = build_phased_curve(82.0, phases, 30)
     assert len(vals) == 30
@@ -506,4 +506,4 @@ git commit -m "feat(data): curvas seed ancillary_afrr_es + solar_capture_es (cit
 - **Nota de verificación previa al código:** confirmar la firma real de `_arbitrage`/`_ancillary` (`grep -n "def _arbitrage" -A6 revenue.py`) antes de escribir el test de Task 4, y ajustar nombres de args si difieren.
 
 ## Notas para fases siguientes (NO implementar aquí)
-- Fase 2 (E3 deuda multi-tramo + waterfall), Fase 3 (E4 eventos capex/repowering), Fase 4 (E5 outputs valoración), Fase 5 (E1 híbrido acoplado), Fase 6 (modelo SVJ + validación), Fase 7 (Excel-foto). Cada una tendrá su propio plan.
+- Fase 2 (E3 deuda multi-tramo + waterfall), Fase 3 (E4 eventos capex/repowering), Fase 4 (E5 outputs valoración), Fase 5 (E1 híbrido acoplado), Fase 6 (modelo hybrid consolidated + validación), Fase 7 (Excel-foto). Cada una tendrá su propio plan.

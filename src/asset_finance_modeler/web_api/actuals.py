@@ -62,7 +62,7 @@ def _get_asset_or_404(asset_id: str, workspace_id: str | None = None) -> Scenari
 def _trackable_lines(snapshot: dict[str, Any]) -> list[dict[str, str]]:
     """Derive the trackable model lines from a frozen ``results_snapshot``.
 
-    Handles both the generic payload and the svj_hybrid payload (which since
+    Handles both the generic payload and the hybrid_consolidated payload (which since
     P3-2 also carries ``income_statement``/``cash_flow``). A line is only listed
     if its series is actually present in the snapshot.
     """

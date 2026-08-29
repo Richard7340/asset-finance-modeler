@@ -3,7 +3,7 @@
 Persists a configured asset (model + overrides + run results) on top of the
 engine's ScenarioStore, so a user can build a portfolio, review each asset as
 it was run, and delete it. Reuses the run plumbing from web_api.models and the
-SVJ hybrid deal.
+hybrid consolidated hybrid deal.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from asset_finance_modeler.assets.business.loader import load_business_preset
 from asset_finance_modeler.core.scenario import Scenario, new_scenario_id
-from asset_finance_modeler.deals.svj import run_svj
+from asset_finance_modeler.deals.hybrid_consolidated import run_hybrid_consolidated
 from asset_finance_modeler.store.actuals import SQLiteActualsStore
 from asset_finance_modeler.store.scenarios import SQLiteScenarioStore
 from asset_finance_modeler.web_api.auth import TenantContext, require_token, tenant_ctx
@@ -81,8 +81,8 @@ def _last_update_iso(scenario: Scenario, actuals: SQLiteActualsStore) -> str:
 def _run_model(model_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
     """Run a model and return its JSON-serializable result payload (with a
     top-level 'kpis' key). Mirrors web_api.models.model_run dispatch."""
-    if model_id == "svj_hybrid":
-        return run_svj(overrides)
+    if model_id == "hybrid_consolidated":
+        return run_hybrid_consolidated(overrides)
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()
         cfg = _apply_overrides(cfg, overrides)
@@ -254,7 +254,7 @@ portfolio_router = APIRouter(prefix="/api/portfolio", dependencies=[Depends(requ
 
 
 def _normalize_run(result: dict[str, Any]) -> dict[str, float]:
-    """Normalize the two run-result shapes (generic vs svj_hybrid) to a flat
+    """Normalize the two run-result shapes (generic vs hybrid_consolidated) to a flat
     set of portfolio metrics."""
     kpis = result.get("kpis", {}) or {}
     npv = kpis.get("npv", kpis.get("npv_hybrid", 0)) or 0

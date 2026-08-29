@@ -95,7 +95,7 @@ Cada fase produce software funcional y testeable por sí sola.
 - `asset_actuals`: CRUD; agregación por periodo/línea; multi-tenant aislado.
 - LIVE: con actuals que igualan el modelo, LIVE ≈ BASE (varianza ~0); con actuals por encima/por debajo, VAN/TIR live se mueven en la dirección correcta; periodos pasados usan reales, futuros usan supuestos.
 - API: cada endpoint con token; sin token → 401.
-- No rompe los tests existentes (motor + web) ni la v1/v2 (`/api/svj/*`, `/api/models`, curvas, cartera v2).
+- No rompe los tests existentes (motor + web) ni la v1/v2 (`/api/hybrid_consolidated/*`, `/api/models`, curvas, cartera v2).
 
 ## 8. Criterios de aceptación
 

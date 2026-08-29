@@ -21,14 +21,14 @@ def test_portfolio_aggregates_saved_assets(monkeypatch, tmp_path):
     assert {"Resto", "BESS"} == names
 
 
-def test_portfolio_enriched_and_svj_capex_nonzero(monkeypatch, tmp_path):
+def test_portfolio_enriched_and_hybrid_consolidated_capex_nonzero(monkeypatch, tmp_path):
     c = _client(monkeypatch, tmp_path)
-    c.post("/api/assets?t=tk", json={"model_id": "svj_hybrid", "name": "SVJ", "overrides": {}})
+    c.post("/api/assets?t=tk", json={"model_id": "hybrid_consolidated", "name": "hybrid consolidated", "overrides": {}})
     c.post("/api/assets?t=tk", json={"model_id": "bess_20mw_4h", "name": "BESS", "overrides": {}})
     p = c.get("/api/portfolio?t=tk").json()
     by = {a["name"]: a for a in p["assets"]}
-    assert by["SVJ"]["capex"] > 1_000_000  # ya no es 0 (≈6.28M)
-    assert by["SVJ"]["revenue_y1"] > 0
+    assert by["hybrid consolidated"]["capex"] > 1_000_000  # ya no es 0 (≈6.28M)
+    assert by["hybrid consolidated"]["revenue_y1"] > 0
     for a in p["assets"]:
         assert "irr" in a and "yield_pct" in a
 

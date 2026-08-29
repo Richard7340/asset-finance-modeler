@@ -4,14 +4,14 @@
 
 ## 1. Visión
 
-Evolucionar el simulador v1 (dashboard de UN deal, SVJ) a una **plataforma de gestión de activos grado banco de inversión / fondo**: el usuario abre, edita y valora **cualquier activo** (renovable, industrial, inmobiliario, empresa, BESS, datacenter…), con **acceso a TODOS los inputs del modelo** organizados por activo y por sección, y ve la valoración completa (KPIs + **FCF** + **cuenta de resultados** + curvas). Estética profesional, sin emojis, control absoluto. El SVJ queda como un caso más.
+Evolucionar el simulador v1 (dashboard de UN deal, hybrid consolidated) a una **plataforma de gestión de activos grado banco de inversión / fondo**: el usuario abre, edita y valora **cualquier activo** (renovable, industrial, inmobiliario, empresa, BESS, datacenter…), con **acceso a TODOS los inputs del modelo** organizados por activo y por sección, y ve la valoración completa (KPIs + **FCF** + **cuenta de resultados** + curvas). Estética profesional, sin emojis, control absoluto. El hybrid consolidated queda como un caso más.
 
 Pensada para migrar al webOS (cada usuario gestiona su cartera con su agente). Esta v2 cubre el **núcleo genérico**; persistencia de carteras, seguimiento temporal y migración webOS son trozos posteriores.
 
 ### Alcance v2 (esta fase)
 - **Backend genérico:** listar modelos/presets disponibles; devolver el **árbol completo de inputs** de cualquier modelo (introspección del schema); **correr** cualquier modelo con overrides de cualquier input → KPIs + FCF + cuenta de resultados + curvas; exportar Excel.
 - **Frontend genérico:** panel de **activos a la izquierda** (selector), **editor de inputs por secciones plegables** (generado dinámicamente del schema), vistas de **KPIs + FCF + cuenta de resultados + curvas**, restyle **grado banco de inversión (sin emojis)**.
-- El deal SVJ (FV+BESS híbrido) sigue accesible (sus dos presets + la vista híbrida consolidada que ya existe).
+- El deal hybrid consolidated (FV+BESS híbrido) sigue accesible (sus dos presets + la vista híbrida consolidada que ya existe).
 
 ### Incluido en v2 — PERSISTENCIA (Riky: "que se guarde para ir monitorizando el activo y revisar simulados")
 - **Guardar** un activo configurado (modelo + overrides de inputs + resultados) en el store de escenarios del motor (`store/scenarios.py`: `inputs_snapshot` + `results_snapshot` + `created_at` + name/tags/user/workspace — YA existe).
@@ -25,16 +25,16 @@ Pensada para migrar al webOS (cada usuario gestiona su cartera con su agente). E
 ## 2. Arquitectura
 
 Mismo contenedor que v1 (FastAPI sirve API + SPA). Se **generaliza** la capa `/api`:
-- `deals/svj.py` (v1) se mantiene para el caso híbrido SVJ; se añade un módulo genérico `web_api/models.py` que trabaja sobre cualquier `InfrastructureModelConfig`/preset.
+- `deals/hybrid_consolidated.py` (v1) se mantiene para el caso híbrido hybrid consolidated; se añade un módulo genérico `web_api/models.py` que trabaja sobre cualquier `InfrastructureModelConfig`/preset.
 - El motor ya expone todo lo necesario: `load_preset`, `InfrastructureModel(cfg).run()` → `FinancialOutput` con `pnl` (= cuenta de resultados: revenue, cogs, gross_profit, opex, ebitda, depreciation, ebit, interest_expense, ebt, tax, net_income), `cashflow` (cfo/cfi/cff = estado de flujos), `project_kpis`, `summary`, `revenue_breakdown`.
 
 ## 3. Backend genérico (`web_api/models.py` + rutas `/api/models/*`)
 
-- `GET /api/models` → lista de modelos disponibles: presets del motor (`solar_pv_50mw_spain`, `bess_20mw_4h`, `wind_onshore_30mw_spain`, `datacenter_10mw_tier3`, `svj_fv_cordoba`, `svj_bess_cordoba`, …) con `{id, name, asset_type}`. + el deal compuesto `svj_hybrid`.
+- `GET /api/models` → lista de modelos disponibles: presets del motor (`solar_pv_50mw_spain`, `bess_20mw_4h`, `wind_onshore_30mw_spain`, `datacenter_10mw_tier3`, `hybrid_pv_reference`, `hybrid_bess_reference`, …) con `{id, name, asset_type}`. + el deal compuesto `hybrid_consolidated`.
 - `GET /api/models/{id}/schema` → **árbol de inputs** del modelo, por secciones, generado por **introspección del Pydantic `InfrastructureModelConfig`**: para cada sección top-level (meta, production, revenue, capex, opex, degradation, financing, taxes, valuation, capex_events) los campos editables con `{path, label, type (number/select/bool/list), value, unit?, options?}`. (Helper recursivo `schema_tree(config_dict, model_cls)`.)
 - `POST /api/models/{id}/run` → body `{overrides: {<dotted.path>: value}}`. Aplica overrides por ruta sobre el dict del preset, valida, corre, y devuelve `{kpis, income_statement: {years, rows:{revenue, ebitda, ebit, interest, ebt, tax, net_income, …}}, cash_flow: {years, cfo, cfi, cff, fcf}, curves: {…}, summary}`. Series anualizadas (helper `_annual`, ppy del meta).
 - `POST /api/models/{id}/export` → Excel-foto (reusa `build_xlsx`/`to_xlsx`).
-- `GET /api/models/svj_hybrid/run` reusa `deals/svj.run_svj` (el caso híbrido consolidado).
+- `GET /api/models/hybrid_consolidated/run` reusa `deals/hybrid_consolidated.run_hybrid_consolidated` (el caso híbrido consolidado).
 - Auth por token (igual que v1, `require_token`).
 
 **Introspección de inputs:** función pura que, dado el `model_dump()` del config y el modelo Pydantic, recorre los campos y produce el árbol con `path` (p.ej. `production.capacity_mwp`, `revenue[0].price_eur_per_unit`, `financing.senior.interest_rate`), inferring type from the value/annotation. Editar = enviar ese `path` en overrides; un helper `set_by_path(dict, path, value)` lo aplica.
@@ -59,12 +59,12 @@ Mismo contenedor que v1 (FastAPI sirve API + SPA). Se **generaliza** la capa `/a
 - **Frontend:** render del editor dinámico desde un schema mock; cambiar un input llama run; tablas de cuenta de resultados/FCF renderizan.
 
 ## 6. Criterios de aceptación (v2)
-1. `GET /api/models` lista los presets + svj_hybrid.
+1. `GET /api/models` lista los presets + hybrid_consolidated.
 2. `GET /api/models/{id}/schema` devuelve el árbol completo de inputs por secciones para cualquier preset.
 3. `POST /api/models/{id}/run` con override de cualquier `path` recalcula y devuelve KPIs + cuenta de resultados + FCF + curvas.
 4. **Persistencia:** `POST /api/assets` guarda; `GET /api/assets` lista la cartera; `GET /api/assets/{id}` recarga una simulación pasada con su fecha e inputs; `DELETE` borra.
 5. Frontend: panel izquierdo con "Mi cartera" (guardados) + "Nuevo desde modelo" (presets); seleccionar → editor de inputs por secciones + salida; cambiar cualquier input recalcula en vivo; Guardar y Revisar funcionan.
-6. Estética grado banco de inversión, sin emojis. SVJ sigue accesible.
+6. Estética grado banco de inversión, sin emojis. hybrid consolidated sigue accesible.
 7. No rompe la v1 ni los 557 tests existentes; arquitectura webOS-ready intacta.
 
 ## 7. Notas trozos siguientes (no aquí)

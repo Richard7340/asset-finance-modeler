@@ -8,7 +8,7 @@ import type { RunResult } from "../api";
  * Preference order (most decision-relevant first):
  *  1. Generic models — net income per year (income statement). The bottom line.
  *  2. Generic models — operating cash flow (CFO) when there is no P&L.
- *  3. Legacy svj_hybrid — combined FV + BESS cash flows per year.
+ *  3. Legacy hybrid_consolidated — combined FV + BESS cash flows per year.
  *
  * Returns `[]` for a snapshot we cannot read (the card then hides its curve and
  * the asset simply does not contribute to the aggregated portfolio curve).
@@ -24,7 +24,7 @@ export function assetAnnualSeries(snapshot: RunResult | null | undefined): numbe
   const cfo = snapshot.cash_flow?.cfo;
   if (Array.isArray(cfo) && cfo.length > 1) return cfo.map(toNum);
 
-  // 3 — legacy svj_hybrid combined cash flows.
+  // 3 — legacy hybrid_consolidated combined cash flows.
   const hy = snapshot.cashflows;
   if (hy && Array.isArray(hy.years) && hy.years.length > 1) {
     return hy.years.map((_, i) => toNum(hy.fv?.[i]) + toNum(hy.bess?.[i]));

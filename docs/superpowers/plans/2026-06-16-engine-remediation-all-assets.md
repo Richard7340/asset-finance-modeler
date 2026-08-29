@@ -10,7 +10,7 @@
 
 **Comando de regresión (NO usar pytest pelado — cuelga en embeddings):**
 ```
-HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 .venv/bin/python -m pytest -q tests/core tests/golden tests/web tests/unit/test_business_engines.py tests/unit/test_business_model.py tests/unit/test_business_schema.py tests/unit/test_capex_engine.py tests/unit/test_capex_events_model.py tests/unit/test_capex_events_schema.py tests/unit/test_degradation.py tests/unit/test_depreciation.py tests/unit/test_drivers.py tests/unit/test_financing.py tests/unit/test_financing_subordinated.py tests/unit/test_hybrid_consolidated_debt.py tests/unit/test_hybrid_project.py tests/unit/test_infra_capex.py tests/unit/test_infra_model.py tests/unit/test_infra_opex.py tests/unit/test_infra_production.py tests/unit/test_infra_revenue.py tests/unit/test_infra_schema.py tests/unit/test_portfolio.py tests/unit/test_revenue_curves.py tests/unit/test_run_scenario.py tests/unit/test_scenario.py tests/unit/test_scenario_diff.py tests/unit/test_scenario_genealogy.py tests/unit/test_scenario_lifecycle.py tests/unit/test_scenario_protocol.py tests/unit/test_scenario_store.py tests/unit/test_schema_revenue.py tests/unit/test_svj_presets.py tests/unit/test_svj_validation.py tests/unit/test_valuation.py
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 .venv/bin/python -m pytest -q tests/core tests/golden tests/web tests/unit/test_business_engines.py tests/unit/test_business_model.py tests/unit/test_business_schema.py tests/unit/test_capex_engine.py tests/unit/test_capex_events_model.py tests/unit/test_capex_events_schema.py tests/unit/test_degradation.py tests/unit/test_depreciation.py tests/unit/test_drivers.py tests/unit/test_financing.py tests/unit/test_financing_subordinated.py tests/unit/test_hybrid_consolidated_debt.py tests/unit/test_hybrid_project.py tests/unit/test_infra_capex.py tests/unit/test_infra_model.py tests/unit/test_infra_opex.py tests/unit/test_infra_production.py tests/unit/test_infra_revenue.py tests/unit/test_infra_schema.py tests/unit/test_portfolio.py tests/unit/test_revenue_curves.py tests/unit/test_run_scenario.py tests/unit/test_scenario.py tests/unit/test_scenario_diff.py tests/unit/test_scenario_genealogy.py tests/unit/test_scenario_lifecycle.py tests/unit/test_scenario_protocol.py tests/unit/test_scenario_store.py tests/unit/test_schema_revenue.py tests/unit/test_hybrid_consolidated_presets.py tests/unit/test_hybrid_consolidated_validation.py tests/unit/test_valuation.py
 ```
 Baseline actual: **288 passed**. Cada fix añade tests; el total debe subir y mantenerse verde. Firmar cada commit con `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
@@ -41,7 +41,7 @@ Baseline actual: **288 passed**. Cada fix añade tests; el total debe subir y ma
 **Files:** `src/asset_finance_modeler/assets/infrastructure/model.py` (~210-223, donde llama `compute_dcf(..., terminal_method="gordon")`), `core/valuation.py`; tests `tests/unit/test_valuation.py`, `tests/unit/test_infra_model.py`.
 - Bug: perpetuidad Gordon aplicada a solar/eólica/BESS/datacenter (vida finita) → el KPI `npv`/`enterprise_value` está distorsionado (datacenter mete −€10M de terminal).
 - [ ] **Test primero:** para un activo de vida finita, el EV/`npv` NO incluye una perpetuidad (TV=0 por defecto); comparar contra el FCF descontado sin terminal. Verlo fallar (hoy incluye la perpetuidad).
-- [ ] **Fix:** default `terminal_method="none"` (TV=0) para infra de vida finita; mantener Gordon/exit disponibles como opción explícita. Asegurar que el SVJ híbrido (que ya usa `consolidate_npv` sin TV) no cambia.
+- [ ] **Fix:** default `terminal_method="none"` (TV=0) para infra de vida finita; mantener Gordon/exit disponibles como opción explícita. Asegurar que el hybrid consolidated híbrido (que ya usa `consolidate_npv` sin TV) no cambia.
 - [ ] Regresión verde (actualizar goldens que legítimamente cambien, con comentario). Commit `fix(valuation): sin valor terminal por defecto en activos de vida finita (era perpetuidad Gordon)`.
 
 ## Task P0-4: BusinessModel — FCF de valoración mal en deals apalancados
@@ -72,9 +72,9 @@ Baseline actual: **288 passed**. Cada fix añade tests; el total debe subir y ma
 - [ ] **Fix:** añadir un `residual_value`/terminal de venta para activos inmobiliarios.
 - [ ] Regresión verde. Commit `fix(real_estate): valor residual del inmueble al final del horizonte`.
 
-## Task P0-8: Regresión + golden SVJ
+## Task P0-8: Regresión + golden hybrid consolidated
 - [ ] Ejecutar el comando de regresión completo. Todo verde.
-- [ ] Recalcular y reportar el headline SVJ (no debería cambiar por P0 — el SVJ no usa terminal Gordon ni es business; confirmar `run_svj({})` sigue en €956.749). Si cambia, explicar por qué.
+- [ ] Recalcular y reportar el headline hybrid consolidated (no debería cambiar por P0 — el hybrid consolidated no usa terminal Gordon ni es business; confirmar `run_hybrid_consolidated({})` sigue en €956.749). Si cambia, explicar por qué.
 
 ---
 
@@ -83,8 +83,8 @@ Baseline actual: **288 passed**. Cada fix añade tests; el total debe subir y ma
 - **P1-1 Curvas para todas las renovables:** añadir campos `*_curve_name`/`*_points` a PPA, Offtake (H2/biometano), Capacity, Certificate, Rental, SLA en `schema.py` y consumirlos en `revenue.py` (mismo patrón que merchant/arbitrage, sin doble-descuento). Test: curva-driven en cada stream.
 - **P1-2 Exponer campos de curva None en el schema:** `introspect.py:40-41` salta leaves None; surface los campos de curva conocidos (opcionales) aunque sean None, para que solar/eólica standalone puedan adjuntar curva por API. Test: schema de solar expone `price_curve_name`.
 - **P1-3 Curvas de consultor adicionales en librería:** añadir curvas eólica/H2/biometano/PPA (con fuente) a la librería YAML. Test: `/api/curves` las lista.
-- **P1-4 Timeline de construcción/permitting:** consumir `PermitsTimeline` + `construction_drawdown_schedule` en `model.py`/`capex.py` → desplazar inicio de producción y repartir capex; revenue=0 durante construcción. Test: revenue/producción = 0 en meses de construcción. (Afecta IRR/DSCR de todas las tec, incl. SVJ.)
-- **P1-5 Depreciar capex events:** depreciar cada `CapexEvent` desde su año (reusar método/vida). Test: depreciación total ≈ total_capex incluyendo el repowering €846k del SVJ.
+- **P1-4 Timeline de construcción/permitting:** consumir `PermitsTimeline` + `construction_drawdown_schedule` en `model.py`/`capex.py` → desplazar inicio de producción y repartir capex; revenue=0 durante construcción. Test: revenue/producción = 0 en meses de construcción. (Afecta IRR/DSCR de todas las tec, incl. hybrid consolidated.)
+- **P1-5 Depreciar capex events:** depreciar cada `CapexEvent` desde su año (reusar método/vida). Test: depreciación total ≈ total_capex incluyendo el repowering €846k del hybrid consolidated.
 
 ---
 
@@ -100,8 +100,8 @@ Baseline actual: **288 passed**. Cada fix añade tests; el total debe subir y ma
 
 # FASE P3 — Consistencia y robustez
 
-- **P3-1 Amortización mensual vs anual:** unificar convención entre `InfrastructureModel._compute_debt` (mensual) y `HybridProject._tranche_debt_service` (anual). Test de equivalencia. (Afecta SVJ sub-DSCR ~1,2%.)
-- **P3-2 `svj_hybrid` /run shape:** que devuelva también `income_statement`/`cash_flow` como los demás modelos (o adaptador). Test: payload consumible por el mismo cliente.
+- **P3-1 Amortización mensual vs anual:** unificar convención entre `InfrastructureModel._compute_debt` (mensual) y `HybridProject._tranche_debt_service` (anual). Test de equivalencia. (Afecta hybrid consolidated sub-DSCR ~1,2%.)
+- **P3-2 `hybrid_consolidated` /run shape:** que devuelva también `income_statement`/`cash_flow` como los demás modelos (o adaptador). Test: payload consumible por el mismo cliente.
 - **P3-3 Override inválido → 400:** `introspect.set_by_path` KeyError → HTTP 400 claro, no 500. Test.
 - **P3-4 Datacenter opex IT-MW vs facility-MW:** estandarizar y documentar. Test/NOTE.
 - **P3-5 BESS `cycles_per_day` duplicado:** una sola fuente de verdad (production ↔ arbitrage). Test.
@@ -117,4 +117,4 @@ En `docs/superpowers/modeling_assumptions.md`: DSCR usa EBITDA como proxy CFADS 
 
 ## Notas
 - Tras cada fase: actualizar `gestnova_finance_engine.md` y re-correr regresión.
-- Los fixes que tocan el SVJ (P1-4 timeline, P1-5 capex-event deprec, P3-1 amort) moverán el headline; reportar el nuevo número y reconciliar con el Excel en una fase posterior dedicada al deal.
+- Los fixes que tocan el hybrid consolidated (P1-4 timeline, P1-5 capex-event deprec, P3-1 amort) moverán el headline; reportar el nuevo número y reconciliar con el Excel en una fase posterior dedicada al deal.

@@ -1,7 +1,7 @@
 """A5 (HIGH coverage): per-model golden KPIs at default inputs.
 
 Pins the surfaced headline KPIs (npv / irr_project / irr_equity / dscr_min) of
-every non-SVJ model at its default config. Tight tolerances so any silent
+every non-hybrid consolidated model at its default config. Tight tolerances so any silent
 numeric drift in the engine — a changed default, an accidental sign flip, a
 broken aggregation — fails loudly here, model by model.
 
@@ -28,8 +28,8 @@ _GOLDENS: list[tuple[str, int, float | None, float | None, float | None]] = [
     ("bess_20mw_4h", 2_369_756, 0.099, 0.1466, 1.64),
     ("datacenter_10mw_tier3", 13_650_321, 0.1345, 0.0945, 1.25),
     ("solar_pv_50mw_spain", 2_354_276, 0.0825, 0.125, 2.27),
-    ("svj_bess_cordoba", 2_382_001, 0.1832, 0.1198, 0.94),
-    ("svj_fv_cordoba", -146_919, 0.0292, 0.0295, 1.02),
+    ("hybrid_bess_reference", 2_043_500, 0.1832, 0.1198, 0.94),
+    ("hybrid_pv_reference", -283_974, 0.035, 0.0359, 1.11),
     ("wind_onshore_30mw_spain", 611_917, 0.0672, 0.0703, 1.3),
     ("business_generic", 1_102_585, 0.1384, 0.1384, 0.0),
     ("business_industrial", 6_724_877, 0.1547, 0.1547, 2.2),
@@ -39,8 +39,8 @@ _GOLDENS: list[tuple[str, int, float | None, float | None, float | None]] = [
 ]
 
 
-def test_all_eleven_non_svj_models_covered():
-    """The golden table must cover every non-SVJ model the API lists, so a new
+def test_all_eleven_non_hybrid_consolidated_models_covered():
+    """The golden table must cover every non-hybrid consolidated model the API lists, so a new
     model can never slip in without a pinned KPI golden."""
     import os  # noqa: PLC0415
 
@@ -52,7 +52,7 @@ def test_all_eleven_non_svj_models_covered():
     listed = {
         m["id"]
         for m in c.get("/api/models?t=tk").json()["models"]
-        if m["id"] != "svj_hybrid"
+        if m["id"] != "hybrid_consolidated"
     }
     pinned = {g[0] for g in _GOLDENS}
     assert pinned == listed, ("drift in model list", pinned ^ listed)

@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-15-asset-management-platform-v3-design.md` (F1).
 
-**Reglas:** TDD en backend. No romper los 578 tests existentes ni v1/v2 (`/api/svj/*`, `/api/models`, curvas, cartera v2). SIN EMOJIS en UI; iconos lucide; grado fondo/banco. Firmar cada commit con `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
+**Reglas:** TDD en backend. No romper los 578 tests existentes ni v1/v2 (`/api/hybrid_consolidated/*`, `/api/models`, curvas, cartera v2). SIN EMOJIS en UI; iconos lucide; grado fondo/banco. Firmar cada commit con `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
 **Convención de comandos:** los tests Python se ejecutan con `PYTHONPATH=src python -m pytest <ruta> -q`. El front se construye con `cd web && npm run build` y se testea con `cd web && npm test`.
 

@@ -1,20 +1,20 @@
-# Simulador / Centro de Operaciones Financiero — Plan de implementación (v1 SVJ)
+# Simulador / Centro de Operaciones Financiero — Plan de implementación (v1 hybrid consolidated)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps use `- [ ]`.
 
-**Goal:** Dashboard web interactivo del deal SVJ sobre el motor `asset-finance-modeler`, desplegado con link público (torre + Cloudflare Tunnel), con recálculo en vivo y descarga Excel-foto.
+**Goal:** Dashboard web interactivo del deal hybrid consolidated sobre el motor `asset-finance-modeler`, desplegado con link público (torre + Cloudflare Tunnel), con recálculo en vivo y descarga Excel-foto.
 
-**Architecture:** Backend = FastAPI del motor extendida con un router `/api/svj/*` que usa un módulo `deals/svj.py` (fuente de verdad: construye FV+BESS, corre `HybridProject`, devuelve KPIs+series). Frontend = SPA React+Vite+Tailwind+recharts en `web/` que llama esa API y recalcula en vivo. Un contenedor Docker (FastAPI sirve la SPA estática + la API) tras Cloudflare Tunnel con token.
+**Architecture:** Backend = FastAPI del motor extendida con un router `/api/hybrid_consolidated/*` que usa un módulo `deals/hybrid_consolidated.py` (fuente de verdad: construye FV+BESS, corre `HybridProject`, devuelve KPIs+series). Frontend = SPA React+Vite+Tailwind+recharts en `web/` que llama esa API y recalcula en vivo. Un contenedor Docker (FastAPI sirve la SPA estática + la API) tras Cloudflare Tunnel con token.
 
 **Tech Stack:** Python/FastAPI/pytest (backend), React 19 + Vite + Tailwind v4 + @tanstack/react-query + recharts + TypeScript (frontend), Docker + Cloudflare Tunnel (deploy).
 
 **Repo/rama:** `/Users/rikyizquierdo/Documents/New project/asset-finance-modeler`, rama `feat/finance-engine-general-deals`. No romper los 556 tests existentes.
 
 ## File Structure
-- `src/asset_finance_modeler/deals/__init__.py`, `deals/svj.py` — **Create**: lógica del deal (build+run+export) y spec de inputs. ÚNICA fuente de verdad del deal.
-- `src/asset_finance_modeler/web_api/__init__.py`, `web_api/routes.py`, `web_api/auth.py` — **Create**: router `/api/svj/*`, dependencia de token, montaje estático.
+- `src/asset_finance_modeler/deals/__init__.py`, `deals/hybrid_consolidated.py` — **Create**: lógica del deal (build+run+export) y spec de inputs. ÚNICA fuente de verdad del deal.
+- `src/asset_finance_modeler/web_api/__init__.py`, `web_api/routes.py`, `web_api/auth.py` — **Create**: router `/api/hybrid_consolidated/*`, dependencia de token, montaje estático.
 - `src/asset_finance_modeler/mcp_server/http_server.py` — **Modify**: incluir el router web + montar estático.
-- `tests/web/test_svj_deal.py`, `tests/web/test_api.py` — **Create**: tests backend.
+- `tests/web/test_hybrid_consolidated_deal.py`, `tests/web/test_api.py` — **Create**: tests backend.
 - `web/` — **Create**: SPA (package.json, vite, src/api.ts, src/App.tsx, src/components/*, src/hooks/useRun.ts).
 - `Dockerfile`, `web/README.md` — **Create/Modify**: deploy.
 
@@ -22,23 +22,23 @@
 
 ## FASE A — Backend (API del deal)
 
-### Task A1: Módulo del deal `deals/svj.py`
+### Task A1: Módulo del deal `deals/hybrid_consolidated.py`
 
-**Files:** Create `src/asset_finance_modeler/deals/__init__.py` (vacío), `src/asset_finance_modeler/deals/svj.py`. Test `tests/web/test_svj_deal.py` (+ `tests/web/__init__.py`).
+**Files:** Create `src/asset_finance_modeler/deals/__init__.py` (vacío), `src/asset_finance_modeler/deals/hybrid_consolidated.py`. Test `tests/web/test_hybrid_consolidated_deal.py` (+ `tests/web/__init__.py`).
 
 - [ ] **Step 1: Failing test**
 ```python
-# tests/web/test_svj_deal.py
-from asset_finance_modeler.deals.svj import run_svj, svj_input_spec
+# tests/web/test_hybrid_consolidated_deal.py
+from asset_finance_modeler.deals.hybrid_consolidated import run_hybrid_consolidated, hybrid_consolidated_input_spec
 
 
-def test_svj_input_spec_has_key_drivers():
-    keys = {i["key"] for i in svj_input_spec()}
+def test_hybrid_consolidated_input_spec_has_key_drivers():
+    keys = {i["key"] for i in hybrid_consolidated_input_spec()}
     assert {"spread_capture", "ancillary_base", "bess_capex_eur_kwh", "sub_tenor_years", "sub_rate"} <= keys
 
 
-def test_run_svj_reproduces_validated_kpis():
-    r = run_svj({})  # defaults = deal calibrado
+def test_run_hybrid_consolidated_reproduces_validated_kpis():
+    r = run_hybrid_consolidated({})  # defaults = deal calibrado
     k = r["kpis"]
     assert 0.8e6 < k["npv_hybrid"] < 1.3e6        # ~1.032M conservador
     assert 1.25 < k["moic_sub"] < 1.45            # ~1.37
@@ -48,16 +48,16 @@ def test_run_svj_reproduces_validated_kpis():
     assert "bridge" in r and "dscr_profile" in r
 
 
-def test_run_svj_overrides_move_kpis():
-    base = run_svj({})["kpis"]["npv_hybrid"]
-    up = run_svj({"spread_capture": 0.95})["kpis"]["npv_hybrid"]  # más captura → más NPV
+def test_run_hybrid_consolidated_overrides_move_kpis():
+    base = run_hybrid_consolidated({})["kpis"]["npv_hybrid"]
+    up = run_hybrid_consolidated({"spread_capture": 0.95})["kpis"]["npv_hybrid"]  # más captura → más NPV
     assert up > base
 ```
 
-- [ ] **Step 2: Run, verify FAIL** (ModuleNotFoundError deals.svj):
-`PYTHONPATH=src .venv/bin/pytest tests/web/test_svj_deal.py -v`
+- [ ] **Step 2: Run, verify FAIL** (ModuleNotFoundError deals.hybrid_consolidated):
+`PYTHONPATH=src .venv/bin/pytest tests/web/test_hybrid_consolidated_deal.py -v`
 
-- [ ] **Step 3: Implement `deals/svj.py`** — usa los presets calibrados + `HybridProject`. Estructura:
+- [ ] **Step 3: Implement `deals/hybrid_consolidated.py`** — usa los presets calibrados + `HybridProject`. Estructura:
 ```python
 from __future__ import annotations
 from typing import Any
@@ -67,10 +67,10 @@ from asset_finance_modeler.assets.infrastructure.schema import InfrastructureMod
 from asset_finance_modeler.assets.hybrid.model import HybridProject, TrancheSpec
 from asset_finance_modeler.core.portfolio import consolidate_npv
 
-WACC = 0.0537
+WACC = 0.06
 PPY = 12
 
-def svj_input_spec() -> list[dict[str, Any]]:
+def hybrid_consolidated_input_spec() -> list[dict[str, Any]]:
     return [
         {"key": "spread_capture", "label": "Captura de spread BESS", "unit": "x", "default": 0.80, "min": 0.5, "max": 1.0},
         {"key": "ancillary_base", "label": "Ancillary aFRR año 1", "unit": "€/MW", "default": 74000, "min": 30000, "max": 100000},
@@ -102,17 +102,17 @@ def _npv_unlevered(cfgdict: dict) -> float:
     fcf = [_annual(out.cashflow["cfo"])[i] + _annual(out.cashflow["cfi"])[i] for i in range(len(_annual(out.cashflow["cfo"])))]
     return consolidate_npv(fcf, WACC)
 
-def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
-    fv = load_preset("svj_fv_cordoba").model_dump()
-    bess = load_preset("svj_bess_cordoba").model_dump()
+def run_hybrid_consolidated(overrides: dict[str, Any]) -> dict[str, Any]:
+    fv = load_preset("hybrid_pv_reference").model_dump()
+    bess = load_preset("hybrid_bess_reference").model_dump()
     _apply_overrides(fv, bess, overrides)
     fv_cfg = InfrastructureModelConfig.model_validate(fv)
     bess_cfg = InfrastructureModelConfig.model_validate(bess)
     npv_fv = _npv_unlevered(fv); npv_bess = _npv_unlevered(bess)
     sub_tenor = int(overrides.get("sub_tenor_years", 7)); sub_rate = float(overrides.get("sub_rate", 0.085))
     hp = HybridProject([fv_cfg, bess_cfg], WACC,
-                       senior=TrancheSpec(2_220_000, 0.032, 10),
-                       subordinated=TrancheSpec(1_841_000, sub_rate, sub_tenor)).run()
+                       senior=TrancheSpec(2_000_000, 0.032, 10),
+                       subordinated=TrancheSpec(1_500_000, sub_rate, sub_tenor)).run()
     fv_out = InfrastructureModel(fv_cfg).run(); bess_out = InfrastructureModel(bess_cfg).run()
     years = list(range(1, len(_annual(bess_out.pnl["revenue"])) + 1))
     return {
@@ -132,8 +132,8 @@ def run_svj(overrides: dict[str, Any]) -> dict[str, Any]:
 ```
 Para `curves`: extraer la curva de spread y ancillary del BESS (cargar `Curve.from_library("spread_da_es").to_list(30)` y la curva ancillary). Implementar de forma que los tests pasen; ajustar nombres reales (`hp.consolidated_ebitda` puede ser None → usar `[]`).
 
-- [ ] **Step 4: Run, verify PASS.** `tests/web -q` verde. ruff+mypy clean en `deals/svj.py`.
-- [ ] **Step 5: Commit** `git add src/asset_finance_modeler/deals tests/web/test_svj_deal.py tests/web/__init__.py && git commit -m "feat(deals): modulo svj (run+input spec) fuente de verdad del deal"`
+- [ ] **Step 4: Run, verify PASS.** `tests/web -q` verde. ruff+mypy clean en `deals/hybrid_consolidated.py`.
+- [ ] **Step 5: Commit** `git add src/asset_finance_modeler/deals tests/web/test_hybrid_consolidated_deal.py tests/web/__init__.py && git commit -m "feat(deals): modulo hybrid_consolidated (run+input spec) fuente de verdad del deal"`
 
 ### Task A2: Auth por token
 
@@ -154,8 +154,8 @@ def _client(monkeypatch):
 
 def test_run_requires_token(monkeypatch):
     c = _client(monkeypatch)
-    assert c.post("/api/svj/run", json={"overrides": {}}).status_code == 401
-    ok = c.post("/api/svj/run?t=secret123", json={"overrides": {}})
+    assert c.post("/api/hybrid_consolidated/run", json={"overrides": {}}).status_code == 401
+    ok = c.post("/api/hybrid_consolidated/run?t=secret123", json={"overrides": {}})
     assert ok.status_code == 200
     assert "kpis" in ok.json()
 ```
@@ -179,7 +179,7 @@ def require_token(request: Request) -> None:
 - [ ] **Step 4: (continúa en A3 con las rutas) — ejecutar tras A3.**
 - [ ] **Step 5: Commit junto con A3.**
 
-### Task A3: Router `/api/svj/*` + montaje estático
+### Task A3: Router `/api/hybrid_consolidated/*` + montaje estático
 
 **Files:** Create `web_api/routes.py`. Modify `mcp_server/http_server.py`. Test `tests/web/test_api.py`.
 
@@ -187,12 +187,12 @@ def require_token(request: Request) -> None:
 ```python
 def test_model_endpoint(monkeypatch):
     c = _client(monkeypatch)
-    r = c.get("/api/svj/model?t=secret123")
+    r = c.get("/api/hybrid_consolidated/model?t=secret123")
     assert r.status_code == 200 and isinstance(r.json()["inputs"], list)
 
 def test_export_returns_xlsx(monkeypatch):
     c = _client(monkeypatch)
-    r = c.post("/api/svj/export?t=secret123", json={"overrides": {}})
+    r = c.post("/api/hybrid_consolidated/export?t=secret123", json={"overrides": {}})
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("application/")
     assert len(r.content) > 1000
@@ -206,33 +206,33 @@ import io
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from asset_finance_modeler.deals.svj import run_svj, svj_input_spec, build_svj_xlsx
+from asset_finance_modeler.deals.hybrid_consolidated import run_hybrid_consolidated, hybrid_consolidated_input_spec, build_hybrid_consolidated_xlsx
 from asset_finance_modeler.web_api.auth import require_token
 
-router = APIRouter(prefix="/api/svj", dependencies=[Depends(require_token)])
+router = APIRouter(prefix="/api/hybrid_consolidated", dependencies=[Depends(require_token)])
 
 class RunBody(BaseModel):
     overrides: dict = {}
 
 @router.get("/model")
 def model() -> dict:
-    return {"inputs": svj_input_spec(), "name": "SVJ 1&2 — FV + BESS (Córdoba)"}
+    return {"inputs": hybrid_consolidated_input_spec(), "name": "hybrid consolidated 1&2 — FV + BESS (referencia)"}
 
 @router.post("/run")
 def run(body: RunBody) -> dict:
-    return run_svj(body.overrides)
+    return run_hybrid_consolidated(body.overrides)
 
 @router.post("/export")
 def export(body: RunBody) -> StreamingResponse:
-    data = build_svj_xlsx(body.overrides)  # bytes
+    data = build_hybrid_consolidated_xlsx(body.overrides)  # bytes
     return StreamingResponse(io.BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=SVJ_simulacion.xlsx"})
+        headers={"Content-Disposition": "attachment; filename=simulacion_hibrida.xlsx"})
 ```
-Add `build_svj_xlsx(overrides)->bytes` to `deals/svj.py` (run the model, write via `store.exports.to_xlsx` to a temp path or BytesIO, return bytes). In `http_server.py`: `from asset_finance_modeler.web_api.routes import router as svj_router; app.include_router(svj_router)`. Add static mount AFTER routes: if `web/dist` exists, `app.mount("/", StaticFiles(directory=..., html=True), name="spa")`.
+Add `build_hybrid_consolidated_xlsx(overrides)->bytes` to `deals/hybrid_consolidated.py` (run the model, write via `store.exports.to_xlsx` to a temp path or BytesIO, return bytes). In `http_server.py`: `from asset_finance_modeler.web_api.routes import router as hybrid_consolidated_router; app.include_router(hybrid_consolidated_router)`. Add static mount AFTER routes: if `web/dist` exists, `app.mount("/", StaticFiles(directory=..., html=True), name="spa")`.
 
 - [ ] **Step 4: Run, verify PASS** (`tests/web -q`). Full regression `tests/core tests/unit tests/golden tests/web -q` (no rompe los 556). ruff+mypy clean.
-- [ ] **Step 5: Commit** `git add src/asset_finance_modeler/web_api src/asset_finance_modeler/mcp_server/http_server.py src/asset_finance_modeler/deals/svj.py tests/web/test_api.py && git commit -m "feat(web_api): router /api/svj (model/run/export) + token + static mount"`
+- [ ] **Step 5: Commit** `git add src/asset_finance_modeler/web_api src/asset_finance_modeler/mcp_server/http_server.py src/asset_finance_modeler/deals/hybrid_consolidated.py tests/web/test_api.py && git commit -m "feat(web_api): router /api/hybrid_consolidated (model/run/export) + token + static mount"`
 
 ---
 
@@ -246,11 +246,11 @@ Add `build_svj_xlsx(overrides)->bytes` to `deals/svj.py` (run the model, write v
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 const token = new URLSearchParams(location.search).get("t") ?? "";
 const q = token ? `?t=${token}` : "";
-export async function getModel() { return (await fetch(`${BASE}/api/svj/model${q}`)).json(); }
+export async function getModel() { return (await fetch(`${BASE}/api/hybrid_consolidated/model${q}`)).json(); }
 export async function runModel(overrides: Record<string, number>) {
-  return (await fetch(`${BASE}/api/svj/run${q}`, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({overrides})})).json();
+  return (await fetch(`${BASE}/api/hybrid_consolidated/run${q}`, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({overrides})})).json();
 }
-export function exportUrl() { return `${BASE}/api/svj/export${q}`; }
+export function exportUrl() { return `${BASE}/api/hybrid_consolidated/export${q}`; }
 ```
 - [ ] **Step 3:** verificar `npm run build` genera `web/dist`. **Commit** `web/` scaffold.
 
@@ -283,14 +283,14 @@ export function exportUrl() { return `${BASE}/api/svj/export${q}`; }
 **Files:** `Dockerfile`, `web/README.md`.
 - [ ] `Dockerfile`: stage1 node → `cd web && npm ci && npm run build`; stage2 python → instalar el paquete (`pip install .`), copiar `web/dist`, `CMD asset-finance-modeler-http` (PORT=8015, sirve `/api` + estático). 
 - [ ] `web/README.md`: `docker build -t gestnova-sim . && docker run -e SIM_TOKEN=… -e PORT=8015 -p 8015:8015 gestnova-sim`; config Cloudflare Tunnel (`cloudflared tunnel ... → sim.gestnova.eu:8015`); el link al inversor = `https://sim.gestnova.eu/?t=<token>`.
-- [ ] **Verify:** build local del contenedor, `curl /health`, `curl "/api/svj/run?t=…"`. **Commit.**
+- [ ] **Verify:** build local del contenedor, `curl /health`, `curl "/api/hybrid_consolidated/run?t=…"`. **Commit.**
 
 ---
 
 ## Self-Review
-- **Spec coverage:** API (A1-A3 = /model,/run,/export+token+static), deal source-of-truth (A1 deals/svj.py), frontend (B1-B5 = inputs/KPIs/charts/recalc/export/embed), deploy (C1 = Docker+Tunnel+token). ✅
-- **Placeholders:** el código backend está completo; `curves` y `build_svj_xlsx` marcados como "implementar contra estructura real" (verify-and-implement, como en fases anteriores). Frontend con código concreto de cliente/hook; componentes React descritos con su contrato (testing React más ligero por naturaleza).
-- **Type consistency:** `run_svj`/`svj_input_spec`/`build_svj_xlsx`, claves de inputs (`spread_capture`, `ancillary_base`, `bess_capex_eur_kwh`, `sub_tenor_years`, `sub_rate`, `fv_ppa_price`), JSON `{kpis,cashflows,curves,bridge,dscr_profile}` coherentes entre backend y frontend (`api.ts`).
+- **Spec coverage:** API (A1-A3 = /model,/run,/export+token+static), deal source-of-truth (A1 deals/hybrid_consolidated.py), frontend (B1-B5 = inputs/KPIs/charts/recalc/export/embed), deploy (C1 = Docker+Tunnel+token). ✅
+- **Placeholders:** el código backend está completo; `curves` y `build_hybrid_consolidated_xlsx` marcados como "implementar contra estructura real" (verify-and-implement, como en fases anteriores). Frontend con código concreto de cliente/hook; componentes React descritos con su contrato (testing React más ligero por naturaleza).
+- **Type consistency:** `run_hybrid_consolidated`/`hybrid_consolidated_input_spec`/`build_hybrid_consolidated_xlsx`, claves de inputs (`spread_capture`, `ancillary_base`, `bess_capex_eur_kwh`, `sub_tenor_years`, `sub_rate`, `fv_ppa_price`), JSON `{kpis,cashflows,curves,bridge,dscr_profile}` coherentes entre backend y frontend (`api.ts`).
 - **No rompe lo existente:** todo aditivo (nuevos módulos/rutas); regresión completa en A3 Step 4.
 
-## Notas migración webOS (no aquí): la SPA con `VITE_API_BASE` + `?embed=1` se incrusta como app webOS (iframe-kernel-bridge); generalizar `/api/svj/*`→`/api/model/{id}/*` = v2.
+## Notas migración webOS (no aquí): la SPA con `VITE_API_BASE` + `?embed=1` se incrusta como app webOS (iframe-kernel-bridge); generalizar `/api/hybrid_consolidated/*`→`/api/model/{id}/*` = v2.

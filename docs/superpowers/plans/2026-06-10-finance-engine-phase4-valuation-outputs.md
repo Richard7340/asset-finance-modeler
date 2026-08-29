@@ -188,4 +188,4 @@ git commit -m "feat(infra): MOIC subordinado + recovery going-concern en KPIs"
 - **Type consistency:** `compute_moic`, `compute_recovery_multiple`, `cost_of_equity_annual`, `npv_equity`, `moic_subordinated`, `recovery_going_concern` coherentes.
 - **Backward compat:** KPIs nuevos con defaults; Ke default = WACC; sin subordinado → MOIC/recovery 0.
 
-## Fases siguientes: F5 E1 híbrido acoplado · F6 SVJ + validación · F7 Excel-foto.
+## Fases siguientes: F5 E1 híbrido acoplado · F6 hybrid consolidated + validación · F7 Excel-foto.

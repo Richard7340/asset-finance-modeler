@@ -139,7 +139,7 @@ function CashFlowChart({ cf }: { cf: CashFlow }) {
   );
 }
 
-/** Legacy svj_hybrid curves: cashflows, market curves, bridge, DSCR profile. */
+/** Legacy hybrid_consolidated curves: cashflows, market curves, bridge, DSCR profile. */
 function HybridCharts({ data }: { data: RunResult }) {
   const ct = useChartTheme();
   const AXIS = { fontSize: 11, fill: ct.axis };

@@ -73,3 +73,17 @@ reg["finance.context.search"].handler({"tenant_id": "gestnova", "query": "pricin
 - `docs/superpowers/plans/2026-05-14-plan-2-scenarios-store-exports-cli.md` — done
 - `docs/superpowers/plans/2026-05-14-plan-3-mcp-server.md` — done
 - `docs/superpowers/plans/2026-05-15-plan-4-intelligent-toolkit.md` — done
+
+## Qué incluye y qué no
+
+Este repositorio es el **motor**: los modelos, el servidor MCP con sus herramientas y una colección
+de presets de referencia (BESS, solar, eólica, datacenter, negocio, alquiler y la vía híbrida
+consolidada).
+
+Los presets traen **cifras redondas de ejemplo**, no de ningún proyecto real. Sirven para que el
+motor se ejecute de punta a punta nada más instalarlo, y para que los tests comprueben siempre lo
+mismo. Para un caso de verdad se pasan los parámetros propios.
+
+## Licencia
+
+MIT. Úsalo, modifícalo y véndelo si te sirve. Hecho en [Gestnova](https://gestnova.eu).
