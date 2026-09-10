@@ -72,3 +72,12 @@ def test_reconcile_sin_resultados(tmp_path):
     store.save(Scenario(id="s", name="t", base_model="gestnova"))
     assert "run it first" in make_track_reconcile(store)({"scenario_id": "s"})["error"]
     assert "run it first" in make_track_variance(store)({"scenario_id": "s"})["error"]
+
+
+def test_pnl_mensual_se_anualiza(tmp_path):
+    from asset_finance_modeler.web_api.actuals import _base_series, _trackable_lines
+    snap = {"pnl": {"revenue": [10.0] * 24, "ebitda": [1.0] * 24}}
+    paths = [ln["path"] for ln in _trackable_lines(snap)]
+    assert "pnl.revenue" in paths
+    assert _base_series(snap, "pnl.revenue") == [120.0, 120.0]
+    assert _base_series(snap, "no.existe") is None

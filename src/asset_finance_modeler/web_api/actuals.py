@@ -78,6 +78,18 @@ def _trackable_lines(snapshot: dict[str, Any]) -> list[dict[str, str]]:
                     "unit": "",
                 }
             )
+    # Modelo SaaS: el snapshot guarda "pnl" (series MENSUALES) y "cashflow".
+    # Se exponen como pnl.<linea> para importar actuals contra ellas.
+    pnl = snapshot.get("pnl") or {}
+    for key in ("revenue", "cogs", "gross_profit", "opex", "ebitda", "ebit", "tax", "net_income"):
+        if key in pnl:
+            lines.append(
+                {
+                    "path": f"pnl.{key}",
+                    "label": _IS_ROW_LABELS.get(key, key),
+                    "unit": "",
+                }
+            )
     cash_flow = snapshot.get("cash_flow") or {}
     for key in ("cfo", "cfi", "cff"):
         if key in cash_flow:
@@ -91,6 +103,15 @@ def _trackable_lines(snapshot: dict[str, Any]) -> list[dict[str, str]]:
     return lines
 
 
+def _annualize(series: list[float]) -> list[float]:
+    """Agrega a años naturales: las series SaaS son mensuales y el motor de
+    varianza trabaja por año de modelo. Si no es múltiplo de 12 se devuelve
+    tal cual (ya anual u otro grano)."""
+    if len(series) > 12 and len(series) % 12 == 0:
+        return [round(sum(series[y * 12:(y + 1) * 12]), 4) for y in range(len(series) // 12)]
+    return list(series)
+
+
 def _base_series(snapshot: dict[str, Any], line_path: str) -> list[float] | None:
     """Return the annual base series for a trackable line_path, or None."""
     if line_path.startswith("income_statement.rows."):
@@ -102,6 +123,14 @@ def _base_series(snapshot: dict[str, Any], line_path: str) -> list[float] | None
         key = line_path.split("cash_flow.", 1)[1]
         series = (snapshot.get("cash_flow") or {}).get(key)
         return list(series) if series is not None else None
+    if line_path.startswith("pnl."):
+        key = line_path.split("pnl.", 1)[1]
+        series = (snapshot.get("pnl") or {}).get(key)
+        return _annualize(list(series)) if series is not None else None
+    if line_path.startswith("cashflow."):
+        key = line_path.split("cashflow.", 1)[1]
+        series = (snapshot.get("cashflow") or {}).get(key)
+        return _annualize(list(series)) if series is not None else None
     return None
 
 
