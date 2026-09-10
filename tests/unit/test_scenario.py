@@ -71,3 +71,11 @@ def test_scenario_with_snapshots():
     )
     assert s.overrides["revenue.sources[0].pricing.per_unit_per_period"] == 250
     assert "pricing" in s.tags
+
+
+def test_apply_overrides_invalid_path_hints_top_keys():
+    base = {"capital": {"capex_schedule": []}}
+    with pytest.raises(KeyError) as exc:
+        apply_overrides(base, {"capex.items[0].amount_per_unit": 5})
+    assert "capital" in str(exc.value)
+    assert "describe_schema" in str(exc.value)

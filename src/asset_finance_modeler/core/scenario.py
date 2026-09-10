@@ -56,7 +56,11 @@ def _set_by_path(d: dict[str, Any], path: str, value: Any) -> None:
     expr = jsonpath_parse(path)
     matches = expr.find(d)
     if not matches:
-        raise KeyError(f"Override path not found: {path!r}")
+        top = sorted(d.keys()) if isinstance(d, dict) else []
+        raise KeyError(
+            f"Override path not found: {path!r} "
+            f"(top-level keys: {top}; check describe_schema for exact paths)"
+        )
     expr.update(d, value)
 
 

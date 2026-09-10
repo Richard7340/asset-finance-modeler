@@ -19,6 +19,7 @@ Environment:
 """
 from __future__ import annotations
 
+import inspect
 import json
 import os
 from pathlib import Path
@@ -75,10 +76,18 @@ async def call_tool(req: CallRequest) -> dict[str, Any]:
     spec = _registry[req.name]
     try:
         result = spec.handler(req.arguments or {})
+        # Algunos handlers son async (p.ej. el puente VDR): sin esto /call
+        # devolvia el repr de la corrutina y FastAPI tumbaba con 500.
+        if inspect.isawaitable(result):
+            result = await result
     except Exception as exc:  # noqa: BLE001
         # Surface the error as a structured payload (no 500). Caller checks for 'error' key.
         return {"error": str(exc), "tool": req.name}
-    # MCP tool handlers can return any JSON-serializable type; default-stringify Decimals/dates
+    # MCP tool handlers can return any JSON-serializable type; default-stringify Decimals/dates.
+    # Los que devuelven lista (estilo TextContent de stdio) se envuelven para
+    # que la ruta (dict) no valide mal: el stdio no se toca.
+    if isinstance(result, list):
+        return {"result": json.loads(json.dumps(result, default=str))}
     return json.loads(json.dumps(result, default=str))
 
 
