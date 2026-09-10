@@ -33,6 +33,11 @@ from asset_finance_modeler.mcp_server.tools.output import (
     make_set_external,
     make_track_stub,
 )
+from asset_finance_modeler.mcp_server.tools.tracking import (
+    make_track_import,
+    make_track_reconcile,
+    make_track_variance,
+)
 from asset_finance_modeler.mcp_server.tools.vdr_sharing import (
     handle_explain_vdr,
     handle_import_from_vdr,
@@ -397,21 +402,64 @@ def build_registry(
             ),
             ToolSpec(
                 name="finance.track.import_real_data",
-                description="V2 stub: import real accounting data. Not implemented in v1.",
-                input_schema={"type": "object", "additionalProperties": True},
-                handler=make_track_stub("import_real_data"),
+                description=(
+                    "Store real operating data (actuals) for a scenario: "
+                    "[{line_path, period_start (YYYY-MM-DD), value}]. "
+                    "Line must exist in the frozen results (see trackable lines)."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "actuals": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "line_path": {"type": "string"},
+                                    "period_start": {"type": "string"},
+                                    "value": {"type": "number"},
+                                    "unit": {"type": "string"},
+                                    "note": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                    "required": ["scenario_id", "actuals"],
+                    "additionalProperties": False,
+                },
+                handler=make_track_import(store),
             ),
             ToolSpec(
                 name="finance.track.reconcile",
-                description="V2 stub: reconcile model vs actuals. Not implemented in v1.",
-                input_schema={"type": "object", "additionalProperties": True},
-                handler=make_track_stub("reconcile"),
+                description=(
+                    "Base vs actual totals per trackable line for a scenario "
+                    "(needs results — run it first)."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {"scenario_id": {"type": "string"}},
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_track_reconcile(store),
             ),
             ToolSpec(
                 name="finance.track.variance_report",
-                description="V2 stub: variance analysis. Not implemented in v1.",
-                input_schema={"type": "object", "additionalProperties": True},
-                handler=make_track_stub("variance_report"),
+                description=(
+                    "Year-by-year variance (base, actual, deviation, %) per line. "
+                    "Years without data stay null (not invented)."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "scenario_id": {"type": "string"},
+                        "line_path": {"type": "string"},
+                    },
+                    "required": ["scenario_id"],
+                    "additionalProperties": False,
+                },
+                handler=make_track_variance(store),
             ),
             ToolSpec(
                 name="finance.dashboard.generate",
