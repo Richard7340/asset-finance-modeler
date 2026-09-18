@@ -544,6 +544,13 @@ def build_registry(
             embedding_provider=LocalEmbeddingProvider(),
         )
         kb.initialize()
+        # Nace con el conocimiento de serie. seed_default_knowledge existia
+        # pero solo la llamaban los tests: en produccion la base estaba vacia
+        # y cualquier busqueda volvia sin nada. No es idempotente (añade cada
+        # vez), asi que solo se siembra una base vacia.
+        if not kb.list_categories():
+            from asset_finance_modeler.intelligence.knowledge.seed import seed_default_knowledge  # noqa: PLC0415
+            seed_default_knowledge(kb)
 
         specs.extend([
             ToolSpec(
