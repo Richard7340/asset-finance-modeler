@@ -193,11 +193,44 @@ def handle_models(_args: dict[str, Any]) -> dict[str, Any]:
     return list_models()
 
 
+_MAX_ESQUEMA = 3500  # el bucle del agente corta cada resultado a 4.000 caracteres
+
+
 @_seguro
 def handle_schema(args: dict[str, Any]) -> dict[str, Any]:
+    """Las rutas del modelo con su valor de serie, compactas ({ruta: valor}).
+    `seccion` (o varias) filtra por el principio de la ruta ("opex", "losses",
+    "degradation"…). 27-sep: el esquema entero (9.900 caracteres en la solar)
+    llegaba cortado al agente y nunca veia degradation ni losses."""
+    import json as _json
+
     from asset_finance_modeler.web_api.models import model_schema
 
-    return model_schema(str(args["model_id"]))
+    model_id = str(args["model_id"])
+    rutas = {str(x["path"]): x.get("value") for x in model_schema(model_id).get("inputs", [])}
+    pedidas = args.get("seccion") or args.get("secciones") or args.get("section") or args.get("include")
+    if isinstance(pedidas, str):
+        pedidas = [t.strip() for t in re.split(r"[,\s]+", pedidas) if t.strip()]
+    if pedidas:
+        rutas = {r: v for r, v in rutas.items() if any(r == p or r.startswith(p + ".") or r.startswith(p + "[") for p in pedidas)}
+    secciones: dict[str, int] = {}
+    for r in model_schema(model_id).get("inputs", []):
+        cab = re.split(r"[.\[]", str(r["path"]))[0]
+        secciones[cab] = secciones.get(cab, 0) + 1
+    out: dict[str, Any] = {"model_id": model_id, "rutas": rutas}
+    if len(_json.dumps(out, default=str)) > _MAX_ESQUEMA:
+        # No cabe: lo que quepa y el indice, para pedir el resto por seccion.
+        parcial: dict[str, Any] = {}
+        for r, v in rutas.items():
+            parcial[r] = v
+            if len(_json.dumps(parcial, default=str)) > _MAX_ESQUEMA - 600:
+                parcial.pop(r)
+                break
+        out = {"model_id": model_id, "rutas": parcial, "secciones": secciones,
+               "nota": "Faltan rutas: pide las de una seccion con seccion (p.ej. \"opex\", \"losses\", \"degradation\", \"financing\")."}
+    elif not pedidas:
+        out["secciones"] = secciones
+    return out
 
 
 @_seguro

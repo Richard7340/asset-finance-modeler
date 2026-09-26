@@ -37,7 +37,7 @@ def test_modelos_y_su_esquema(db):
 
     ids = {m["id"] for m in a.handle_models({})["models"]}
     assert {"solar_pv_50mw_spain", "business_generic", "real_estate_rental", "svj_hybrid"} <= ids
-    rutas = [x["path"] for x in a.handle_schema({"model_id": "business_generic"})["inputs"]]
+    rutas = list(a.handle_schema({"model_id": "business_generic"})["rutas"])
     assert any(r.startswith("revenue") for r in rutas)
 
 
@@ -169,3 +169,17 @@ def test_encuentra_el_activo_por_parte_del_nombre(db):
         a.handle_save({"model_id": "business_generic", "name": "Clínica Veterinaria"})
         assert a.handle_get({"asset_id": "clinica-dental"})["id"] == aid
         assert a.handle_get({"asset_id": "clinica"})["error"] == "not_found"  # dos encajan: no elige
+
+
+def test_el_esquema_cabe_en_lo_que_ve_el_agente(db):
+    """El bucle del agente corta cada resultado a 4.000 caracteres (27-sep)."""
+    import json
+
+    from asset_finance_modeler.mcp_server.tools import assets as a
+
+    for m in ("solar_pv_50mw_spain", "wind_onshore_30mw_spain", "bess_20mw_4h", "svj_hybrid", "saas_gestnova", "business_industrial"):
+        assert len(json.dumps(a.handle_schema({"model_id": m}), default=str)) < 4000, m
+    r = a.handle_schema({"model_id": "solar_pv_50mw_spain", "seccion": "losses,degradation"})["rutas"]
+    assert r == {"degradation.type": "time_based", "degradation.annual_rate": 0.005, "losses.curtailment_pct": 0.0}
+    h = a.handle_schema({"model_id": "svj_hybrid"})
+    assert "secciones" in h and "nota" in h

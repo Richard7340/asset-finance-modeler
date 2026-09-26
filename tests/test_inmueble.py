@@ -46,5 +46,5 @@ def test_como_activo_y_seguimiento_por_lineas(tmp_path, monkeypatch):
     with en_espacio("esp"):
         s = a.handle_save({"model_id": "inmueble_alquiler", "name": "Piso Mayor 3B", "overrides": {"compra.precio": 180000, "alquiler.renta_mensual": 900}})
         assert s["kpis"]["total_capex"] == round(180000 * 1.06 + 2500)
-        esquema = [x["path"] for x in a.handle_schema({"model_id": "inmueble_alquiler"})["inputs"]]
+        esquema = list(a.handle_schema({"model_id": "inmueble_alquiler"})["rutas"])
         assert "hipoteca.ltv" in esquema and "impuestos.regimen" in esquema
