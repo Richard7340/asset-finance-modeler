@@ -18,6 +18,7 @@ from asset_finance_modeler.mcp_server.tools.discover import (
     handle_describe_schema,
     handle_list_models,
     handle_list_presets,
+    handle_run_model,
     make_handle_load_baseline,
 )
 from asset_finance_modeler.mcp_server.tools.execute import (
@@ -98,6 +99,26 @@ def build_registry(
                 "additionalProperties": False,
             },
             handler=handle_list_presets,
+        ),
+        ToolSpec(
+            name="finance.simulate.run_model",
+            description=(
+                "Run a model preset with overrides WITHOUT saving a scenario: business_generic, "
+                "business_restaurant, business_industrial, real_estate_rental, the infrastructure "
+                "presets or saas_<preset>. Overrides are dotted paths ('cogs.pct_of_revenue') or "
+                "whole blocks ('revenue': [{name, year1_amount, growth_pct_yr}]). Returns kpis "
+                "(npv, irr), the annual income statement and cash flow."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string"},
+                    "overrides": {"type": "object"},
+                },
+                "required": ["model_id"],
+                "additionalProperties": False,
+            },
+            handler=handle_run_model,
         ),
     ]
 

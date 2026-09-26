@@ -52,8 +52,52 @@ def handle_list_models(_args: dict[str, Any]) -> dict[str, Any]:
                 "asset_type": "infrastructure",
                 "description": "10 MW IT Tier 3 data center — SLA colocation, N+1 redundancy.",
             },
+            # Negocios (pymes y autonomos): lineas de ingresos y costes a medida.
+            # Se ejecutan con finance.simulate.run_model (sin guardar escenario).
+            {
+                "name": "business_generic",
+                "asset_type": "business",
+                "description": "Negocio generico (pyme o autonomo): ingresos, coste de ventas, gastos fijos y variables, inversion, impuestos, DCF. Punto de partida para modelar SU empresa con SUS cifras.",
+            },
+            {
+                "name": "business_restaurant",
+                "asset_type": "business",
+                "description": "Restaurante / hosteleria.",
+            },
+            {
+                "name": "business_industrial",
+                "asset_type": "business",
+                "description": "Planta industrial / fabricacion.",
+            },
+            {
+                "name": "real_estate_rental",
+                "asset_type": "real_estate",
+                "description": "Inmueble en alquiler.",
+            },
         ],
+        "nota": "Para una empresa concreta, pregunta antes sus cifras: no uses un preset tal cual.",
     }
+
+
+def handle_run_model(args: dict[str, Any]) -> dict[str, Any]:
+    """Run any model preset with overrides WITHOUT saving a scenario (the
+    same engine as the web /api/models/{id}/run): KPIs, annual income
+    statement and cash flow. Bad paths or values come back as an error, not
+    an exception."""
+    from fastapi import HTTPException
+
+    from asset_finance_modeler.web_api.models import RunBody, model_run
+
+    model_id = str(args.get("model_id") or "").strip()
+    if not model_id:
+        return {"error": "model_id_required"}
+    overrides = args.get("overrides") or {}
+    if not isinstance(overrides, dict):
+        return {"error": "overrides_must_be_object"}
+    try:
+        return model_run(model_id, RunBody(overrides=overrides))
+    except HTTPException as exc:
+        return {"error": "invalid_input", "detail": exc.detail, "status": exc.status_code}
 
 
 def handle_describe_schema(args: dict[str, Any]) -> dict[str, Any]:
