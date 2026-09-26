@@ -129,7 +129,7 @@ def _location_of(snapshot: dict[str, Any]) -> dict[str, Any]:
 def _gestion_of(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Como lo lleva su agente (26-sep): la carpeta del activo en el VDR y las
     reglas para asignarle solo lo que llega (proveedor/NIF -> linea)."""
-    return {"carpeta": snapshot.get("carpeta"), "reglas": snapshot.get("reglas") or []}
+    return {"carpeta": snapshot.get("carpeta"), "reglas": snapshot.get("reglas") or [], "fuentes": snapshot.get("fuentes") or {}}
 
 
 @router.post("")

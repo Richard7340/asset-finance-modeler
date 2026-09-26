@@ -57,3 +57,17 @@ def test_carpeta_y_reglas_del_activo(db):
         assert lst["carpeta"] == "Activos/Clinica" and lst["reglas"][0]["nif"] == "B12345678"
         g = a.handle_get({"asset_id": r["id"]})
         assert g["lifecycle"] == "operational" and g["kpis"]["npv"] == r["kpis"]["npv"]
+
+
+def test_fuentes_de_las_hipotesis(db):
+    """De donde sale cada valor (web y fecha): se suman y se quitan con vacio."""
+    from asset_finance_modeler.mcp_server.tools import assets as a
+
+    with en_espacio("esp"):
+        r = a.handle_save({"model_id": "inmueble_alquiler", "name": "Piso", "overrides": {"alquiler.renta_mensual": 950},
+                           "fuentes": {"alquiler.renta_mensual": {"fuente": "https://www.idealista.com/informes", "fecha": "2026-09"}}})
+        a.handle_update({"asset_id": r["id"], "fuentes": {"compra.precio": "lo dice el usuario"}})
+        f = a.handle_get({"asset_id": r["id"]})["fuentes"]
+        assert f["alquiler.renta_mensual"]["fecha"] == "2026-09" and f["compra.precio"] == {"fuente": "lo dice el usuario"}
+        f = a.handle_update({"asset_id": r["id"], "fuentes": {"compra.precio": None}})["fuentes"]
+        assert list(f) == ["alquiler.renta_mensual"]
