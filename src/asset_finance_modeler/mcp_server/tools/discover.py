@@ -70,9 +70,14 @@ def handle_list_models(_args: dict[str, Any]) -> dict[str, Any]:
                 "description": "Planta industrial / fabricacion.",
             },
             {
+                "name": "inmueble_alquiler",
+                "asset_type": "real_estate",
+                "description": "Inmueble en alquiler PROFESIONAL: compra (ITP o IVA+AJD, notaria, agencia, reforma), hipoteca por LTV, rentas con vacancia e IPC, IBI/comunidad/seguro/mantenimiento por separado, IRPF con reduccion por vivienda o Sociedades, amortizacion de la construccion y venta con plusvalia. Usalo para una casa o piso.",
+            },
+            {
                 "name": "real_estate_rental",
                 "asset_type": "real_estate",
-                "description": "Inmueble en alquiler.",
+                "description": "Inmueble en alquiler simplificado (una linea de rentas y gastos). Mejor inmueble_alquiler.",
             },
         ],
         "nota": "Para una empresa concreta, pregunta antes sus cifras: no uses un preset tal cual.",

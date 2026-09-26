@@ -40,6 +40,16 @@ _FREQ_PPY = {"M": 12, "Q": 4, "Y": 1}
 
 _BUSINESS_IDS: set[str] = set(business_preset_ids())
 
+from asset_finance_modeler.assets.inmobiliario.cargador import cargar_inmueble, ids_inmobiliario  # noqa: E402
+from asset_finance_modeler.assets.inmobiliario.modelo import InmuebleConfig, ejecutar as _ejecutar_inmueble  # noqa: E402
+
+# Inmobiliario profesional (compra, hipoteca, alquiler, fiscalidad, venta).
+_INMUEBLE_IDS: set[str] = set(ids_inmobiliario())
+
+
+def _run_inmueble_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
+    return _ejecutar_inmueble(_validate(InmuebleConfig, cfg_dict))
+
 _BUSINESS_NAMES: dict[str, str] = {
     "business_generic": "Negocio genérico",
     "business_restaurant": "Restaurante",
@@ -256,6 +266,8 @@ def list_models() -> dict[str, Any]:
                 "asset_type": "real_estate" if bid.startswith("real_estate") else "business",
             }
         )
+    for iid in sorted(_INMUEBLE_IDS):
+        models.append({"id": iid, "name": "Inmueble en alquiler (compra, hipoteca, fiscalidad y venta)", "asset_type": "real_estate"})
     for sid in _saas_preset_ids():
         models.append(
             {
@@ -271,6 +283,9 @@ def list_models() -> dict[str, Any]:
 def model_schema(model_id: str) -> dict[str, Any]:
     if model_id == "svj_hybrid":
         return {"inputs": svj_input_spec()}
+
+    if model_id in _INMUEBLE_IDS:
+        return {"inputs": schema_tree(cargar_inmueble(model_id).model_dump())}
 
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()
@@ -294,6 +309,9 @@ def model_run(model_id: str, body: RunBody) -> dict[str, Any]:
             return run_svj(overrides)
         except SvjInputError as exc:  # A1: bad override -> 400, not 500
             raise HTTPException(status_code=400, detail=exc.message) from exc
+
+    if model_id in _INMUEBLE_IDS:
+        return _run_inmueble_config(_apply_overrides(cargar_inmueble(model_id).model_dump(), overrides))
 
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()

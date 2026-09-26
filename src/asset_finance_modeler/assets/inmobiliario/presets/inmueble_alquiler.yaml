@@ -1,0 +1,11 @@
+# Piso de segunda mano para alquilar, comprado con hipoteca (valores de
+# ejemplo: el agente pregunta los de verdad antes de guardarlo).
+nombre: "Piso en alquiler"
+horizonte_anios: 10
+compra: {precio: 250000, obra_nueva: false, itp_pct: 0.06, notaria_registro_gestoria: 2500, comision_agencia: 0, reforma: 0, valor_suelo_pct: 0.35}
+hipoteca: {ltv: 0.70, tipo_interes: 0.03, plazo_anios: 25, comision_apertura_pct: 0.0}
+alquiler: {renta_mensual: 1100, meses_vacios_anio: 0.5, subida_anual: 0.02, impagos_pct: 0.0, otros_ingresos_anuales: 0}
+gastos: {ibi_anual: 600, comunidad_mensual: 80, seguro_hogar_anual: 250, seguro_impago_pct_renta: 0.0, mantenimiento_pct_renta: 0.05, gestion_pct_renta: 0.0, otros_anuales: 0, subida_anual: 0.02}
+impuestos: {regimen: particular, tipo_marginal_irpf: 0.30, reduccion_vivienda_pct: 0.50, tipo_sociedades: 0.25, amortizacion_pct: 0.03}
+venta: {vender: true, revalorizacion_anual: 0.02, costes_venta_pct: 0.03, plusvalia_municipal: 0}
+valoracion: {tasa_descuento: 0.06}

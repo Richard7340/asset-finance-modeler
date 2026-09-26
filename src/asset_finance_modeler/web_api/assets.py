@@ -83,6 +83,10 @@ def _run_model(model_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
     top-level 'kpis' key). Mirrors web_api.models.model_run dispatch."""
     if model_id == "svj_hybrid":
         return run_svj(overrides)
+    from asset_finance_modeler.web_api.models import _INMUEBLE_IDS, _run_inmueble_config
+    if model_id in _INMUEBLE_IDS:
+        from asset_finance_modeler.assets.inmobiliario.cargador import cargar_inmueble
+        return _run_inmueble_config(_apply_overrides(cargar_inmueble(model_id).model_dump(), overrides))
     if model_id in _BUSINESS_IDS:
         cfg = load_business_preset(model_id).model_dump()
         cfg = _apply_overrides(cfg, overrides)
