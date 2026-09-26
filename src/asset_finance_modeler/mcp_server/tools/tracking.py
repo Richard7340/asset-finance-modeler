@@ -35,6 +35,20 @@ def _stores(
 
 def _get(store: SQLiteScenarioStore, args: dict[str, Any]) -> Any:
     s = store.get(args["scenario_id"], workspace_id=args.get("workspace_id"))
+    if (s is None or s.is_deleted) and not str(args["scenario_id"]).startswith("scn-"):
+        # Por su nombre (27-sep: los agentes lo piden asi), si encaja uno solo.
+        import re
+        import unicodedata
+
+        def plano(x: Any) -> str:
+            t = unicodedata.normalize("NFD", str(x or "").lower())
+            t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+            return " ".join(re.sub(r"[^a-z0-9]+", " ", t).split())
+
+        pedido = plano(args["scenario_id"])
+        todos = [x for x in store.list(workspace_id=args.get("workspace_id")) if not x.is_deleted]
+        iguales = [x for x in todos if plano(x.name) == pedido] or [x for x in todos if pedido and pedido in plano(x.name)]
+        s = iguales[0] if len(iguales) == 1 else None
     if s is None or s.is_deleted:
         return None
     return s
