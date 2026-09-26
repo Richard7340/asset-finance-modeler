@@ -195,6 +195,39 @@ def handle_models(_args: dict[str, Any]) -> dict[str, Any]:
 
 _MAX_ESQUEMA = 3500  # el bucle del agente corta cada resultado a 4.000 caracteres
 
+# Listas y bloques que por defecto estan vacios y por eso no salen en las rutas
+# (27-sep: un agente pidio el esquema 35 veces buscando como meter un prestamo).
+_EST_EMPRESA = {
+    "financing.prestamos": [{"nombre": "ICO", "tipo": "prestamo|hipoteca|leasing|poliza", "importe": 120000, "tipo_interes": 0.045,
+                             "plazo_anios": 5, "carencia_meses": 0, "amortizacion": "french|linear|bullet", "anio_inicio": 0,
+                             "comision_apertura_pct": 0.0, "valor_residual": 0, "ya_dispuesto": True}],
+    "inflacion": {"curva": [0.03, 0.025, 0.02], "aplicar_a": "todo|ingresos|gastos"},
+    "revenue": [{"name": "Ventas", "year1_amount": 600000, "growth_pct_yr": 0.05}],
+    "opex.fixed_lines": [{"name": "Alquiler", "year1_amount": 36000, "growth_pct_yr": None}],
+    "capex.items": [{"name": "Equipos", "amount": 30000, "period": 0, "depreciation_years": 8}],
+}
+_EST_RENOVABLES = {
+    "degradation": {"type": "custom", "curve": [1.0, 0.99, 0.986]},
+    "losses.curtailment_curve": [0.0, 0.02, 0.03],
+    "losses.equipment_events": [{"year": 8, "loss_pct": 0.05, "years": 1, "label": "Inversores"}],
+    "opex.other_lines": [{"name": "Representacion de mercado", "eur_yr": 0, "eur_per_mw_yr": 0, "eur_per_mwh": 0.8, "escalation_pct_yr": None}],
+    "opex.decommissioning": {"cost_eur": 1500000, "accrue_years": 5},
+    "capex_events": [{"year": 18, "amount": 4000000, "resets_degradation": True, "capacity_uplift_pct": 0.15, "label": "Repowering"}],
+    "financing.equity.lockup_dscr": 1.2,
+    "sin deuda (100 % fondos propios)": {"financing.max_leverage": 0, "financing.senior.tenor_years": 0},
+}
+_EST_INMUEBLE = {"inflacion": {"curva": [0.03, 0.025, 0.02], "aplicar_a": "todo|ingresos|gastos"}}
+
+
+def _estructuras(model_id: str) -> dict[str, Any]:
+    if model_id.startswith("business_") or model_id == "real_estate_rental":
+        return _EST_EMPRESA
+    if model_id.startswith("inmueble"):
+        return _EST_INMUEBLE
+    if model_id.startswith(("solar", "wind", "bess", "svj_fv", "svj_bess")):
+        return _EST_RENOVABLES
+    return {}
+
 
 @_seguro
 def handle_schema(args: dict[str, Any]) -> dict[str, Any]:
@@ -217,7 +250,16 @@ def handle_schema(args: dict[str, Any]) -> dict[str, Any]:
     for r in model_schema(model_id).get("inputs", []):
         cab = re.split(r"[.\[]", str(r["path"]))[0]
         secciones[cab] = secciones.get(cab, 0) + 1
+    est = _estructuras(model_id)
+    if pedidas:
+        est = {k: v for k, v in est.items() if any(k == p or k.startswith(p + ".") or p.startswith(k) or p == "estructuras" for p in pedidas)}
     out: dict[str, Any] = {"model_id": model_id, "rutas": rutas}
+    if est:
+        out["estructuras"] = est
+        out["como"] = "Las estructuras (listas y bloques) se pasan enteras en overrides con esa clave, p.ej. {\"financing.prestamos\": [...]}."
+        if len(_json.dumps(out, default=str)) > _MAX_ESQUEMA and not pedidas:
+            out.pop("estructuras")
+            out["como"] = "Hay listas y bloques que no salen aqui (prestamos, curvas, averias, repowering…): pidelos con seccion \"estructuras\"."
     if len(_json.dumps(out, default=str)) > _MAX_ESQUEMA:
         # No cabe: lo que quepa y el indice, para pedir el resto por seccion.
         parcial: dict[str, Any] = {}
@@ -227,7 +269,8 @@ def handle_schema(args: dict[str, Any]) -> dict[str, Any]:
                 parcial.pop(r)
                 break
         out = {"model_id": model_id, "rutas": parcial, "secciones": secciones,
-               "nota": "Faltan rutas: pide las de una seccion con seccion (p.ej. \"opex\", \"losses\", \"degradation\", \"financing\")."}
+               "nota": "Faltan rutas: pide las de una seccion con seccion (p.ej. \"opex\", \"losses\", \"degradation\", \"financing\")"
+               + (" o las listas y bloques con seccion \"estructuras\"." if est else ".")}
     elif not pedidas:
         out["secciones"] = secciones
     return out

@@ -183,3 +183,24 @@ def test_el_esquema_cabe_en_lo_que_ve_el_agente(db):
     assert r == {"degradation.type": "time_based", "degradation.annual_rate": 0.005, "losses.curtailment_pct": 0.0}
     h = a.handle_schema({"model_id": "svj_hybrid"})
     assert "secciones" in h and "nota" in h
+
+
+def test_el_esquema_ensena_las_listas_vacias(db):
+    """27-sep: financing.prestamos no salia (lista vacia) y el agente pidio el
+    esquema 35 veces."""
+    import json
+
+    from asset_finance_modeler.mcp_server.tools import assets as a
+
+    e = a.handle_schema({"model_id": "business_generic"})
+    assert e["estructuras"]["financing.prestamos"][0]["ya_dispuesto"] is True
+    assert "financing.prestamos" in a.handle_schema({"model_id": "business_generic", "seccion": "financing"})["estructuras"]
+    s = a.handle_schema({"model_id": "solar_pv_50mw_spain"})
+    assert "estructuras" in s["como"] and len(json.dumps(s, default=str)) < 4000
+    assert "losses.equipment_events" in a.handle_schema({"model_id": "solar_pv_50mw_spain", "seccion": "estructuras"})["estructuras"]
+    # Los ejemplos de verdad funcionan en el modelo.
+    from asset_finance_modeler.web_api.assets import _run_model
+    ej = a._EST_EMPRESA["financing.prestamos"][0]
+    _run_model("business_generic", {"financing.prestamos": [{**ej, "tipo": "prestamo", "amortizacion": "french"}]})
+    r = a._EST_RENOVABLES
+    _run_model("solar_pv_50mw_spain", {k: v for k, v in r.items() if not k.startswith("sin deuda")})
