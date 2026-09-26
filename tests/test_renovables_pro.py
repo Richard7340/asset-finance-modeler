@@ -74,3 +74,11 @@ def test_repowering_con_mas_potencia():
     solo = _prod({"capex_events": [ev]})
     mas = _prod({"capex_events": [{**ev, "capacity_uplift_pct": 0.2}]})
     assert abs(mas[16] / solo[16] - 1.2) < 0.01 and abs(mas[10] - solo[10]) <= 1
+
+
+def test_tramo_con_plazo_cero_es_que_no_hay_deuda():
+    """27-sep: "100 % equity" llego como mezzanine.tenor_years 0 y max_leverage 0."""
+    k = _k({"financing.max_leverage": 0, "financing.senior.auto_size": False, "financing.mezzanine.tenor_years": 0,
+            "financing.reserves.dsra_months": 0})
+    assert k["irr_equity"] == k["irr_project"]
+    assert _k({"financing.senior.tenor_years": 0})["npv"] == _k({})["npv"]

@@ -140,6 +140,16 @@ class InfrastructureModel:
     # ------------------------------------------------------------------
 
     def run(self) -> FinancialOutput:
+        # Un tramo de deuda con plazo 0 es que no hay tal tramo (27-sep: para
+        # "100 % equity" un agente puso mezzanine.tenor_years: 0 y el motor
+        # fallaba con "grace_periods >= term_periods").
+        fin = self.config.financing
+        vacios = {
+            k: None for k in ("senior", "mezzanine", "subordinated")
+            if getattr(fin, k) is not None and getattr(getattr(fin, k), "tenor_years", 1) <= 0
+        }
+        if vacios:
+            self.config = self.config.model_copy(update={"financing": fin.model_copy(update=vacios)})
         cfg = self.config
         n = cfg.meta.horizon.periods
         ppy = _PPY[cfg.meta.horizon.frequency]
