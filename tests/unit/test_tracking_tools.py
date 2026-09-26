@@ -49,7 +49,12 @@ def test_import_invalido():
     })["error"]
 
 
-def test_reconcile_y_variance(tmp_path):
+def test_reconcile_y_variance(monkeypatch, tmp_path):
+    # Año 0 (2026) ya terminado: se compara con el año entero (el año EN CURSO
+    # se compara hasta hoy, ver test_variance_anio_en_curso_hasta_hoy).
+    import asset_finance_modeler.web_api.actuals as _act
+    from datetime import datetime as _dt
+    monkeypatch.setattr(_act, '_hoy', lambda: _dt(2027, 6, 1))
     store = _tienda(tmp_path)
     make_track_import(store)({
         "scenario_id": "scn-t1",

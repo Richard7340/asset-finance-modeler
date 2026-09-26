@@ -105,3 +105,29 @@ def pnl_rows(
         ):
             rows[k].append(v)
     return rows
+
+
+def line_series(cfg: dict[str, Any], years: int) -> dict[str, dict[str, list[float]]]:
+    """Cada ingreso y cada gasto por separado, por año (las mismas fórmulas que
+    revenue_series / opex_series): para anotar lo real de cada línea (IBI,
+    comunidad, mantenimiento…) y compararlo con su previsión (26-sep)."""
+    revenue = cfg.get("revenue") or []
+    ingresos: dict[str, list[float]] = {}
+    for ln in revenue:
+        g = float(ln.get("growth_pct_yr", 0.0))
+        ingresos[str(ln["name"])] = [float(ln["year1_amount"]) * (1.0 + g) ** y for y in range(years)]
+    total = revenue_series(revenue, years)
+    opex = cfg.get("opex") or {}
+    esc = float(opex.get("escalation_pct_yr", 0.0))
+    gastos: dict[str, list[float]] = {}
+    cogs_pct = float((cfg.get("cogs") or {}).get("pct_of_revenue", 0.0))
+    if cogs_pct:
+        gastos["Coste de ventas"] = [cogs_pct * r for r in total]
+    for ln in opex.get("fixed_lines") or []:
+        g = ln.get("growth_pct_yr")
+        rate = esc if g is None else float(g)
+        gastos[str(ln["name"])] = [float(ln["year1_amount"]) * (1.0 + rate) ** y for y in range(years)]
+    var_pct = float(opex.get("variable_pct_of_revenue", 0.0))
+    if var_pct:
+        gastos["Gastos variables"] = [var_pct * r for r in total]
+    return {"ingresos": ingresos, "gastos": gastos}

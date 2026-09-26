@@ -90,6 +90,10 @@ def _trackable_lines(snapshot: dict[str, Any]) -> list[dict[str, str]]:
                     "unit": "",
                 }
             )
+    # Cada ingreso y gasto por separado (IBI, comunidad, O&M, PPA…).
+    for grupo, prefijo in (("ingresos", "Ingreso"), ("gastos", "Gasto")):
+        for nombre in ((snapshot.get("lineas") or {}).get(grupo) or {}):
+            lines.append({"path": f"lineas.{grupo}.{nombre}", "label": f"{prefijo}: {nombre}", "unit": ""})
     cash_flow = snapshot.get("cash_flow") or {}
     for key in ("cfo", "cfi", "cff"):
         if key in cash_flow:
@@ -127,11 +131,20 @@ def _base_series(snapshot: dict[str, Any], line_path: str) -> list[float] | None
         key = line_path.split("pnl.", 1)[1]
         series = (snapshot.get("pnl") or {}).get(key)
         return _annualize(list(series)) if series is not None else None
+    if line_path.startswith("lineas."):
+        _, grupo, nombre = line_path.split(".", 2)
+        series = ((snapshot.get("lineas") or {}).get(grupo) or {}).get(nombre)
+        return list(series) if series is not None else None
     if line_path.startswith("cashflow."):
         key = line_path.split("cashflow.", 1)[1]
         series = (snapshot.get("cashflow") or {}).get(key)
         return _annualize(list(series)) if series is not None else None
     return None
+
+
+def _hoy() -> datetime:
+    """Hoy (aparte, para poder fijarlo en las pruebas)."""
+    return datetime.now()
 
 
 def _model_start_year(asset: Scenario) -> int:
@@ -283,6 +296,12 @@ def _variance_for_line(
             agg[idx] = agg.get(idx, 0.0) + a.value
 
     actual: list[float | None] = [agg.get(y) for y in range(n)]
+    # El año EN CURSO se compara con su previsión HASTA HOY (lineal), no con el
+    # año entero: con tres meses de datos no hay "un 75 % por debajo" (26-sep).
+    hoy = _hoy()
+    en_curso = hoy.year - start_year
+    fraccion = round(((hoy - datetime(hoy.year, 1, 1)).days + 1) / (366 if hoy.year % 4 == 0 else 365), 4)
+    comparada: list[float | None] = [None] * n
     deviation: list[float | None] = []
     deviation_pct: list[float | None] = []
     for y in range(n):
@@ -291,15 +310,30 @@ def _variance_for_line(
             deviation.append(None)
             deviation_pct.append(None)
         else:
-            bv = base[y]
+            bv = base[y] * fraccion if y == en_curso else base[y]
+            comparada[y] = round(bv, 4)
             deviation.append(round(av - bv, 4))
             deviation_pct.append(round((av - bv) / bv, 4) if bv else None)
+    # Mes a mes del año en curso: lo real frente a la previsión mensual (lineal).
+    mensual: list[dict[str, Any]] | None = None
+    if 0 <= en_curso < n:
+        por_mes: dict[int, float] = {}
+        for a in actuals:
+            if a.line_path != line_path:
+                continue
+            try:
+                dt = datetime.fromisoformat(a.period_start)
+            except (ValueError, TypeError):
+                continue
+            if dt.year == hoy.year:
+                por_mes[dt.month] = por_mes.get(dt.month, 0.0) + a.value
+        mensual = [{"mes": m, "real": round(por_mes[m], 4) if m in por_mes else None, "prevision": round(base[en_curso] / 12, 4)} for m in range(1, 13)]
 
     # Cumulative + fulfillment use only the years that actually have data, so a
     # partially-filled series is not penalised against the full base horizon.
     years_with_data = [y for y in range(n) if actual[y] is not None]
     cumulative_actual = round(sum(actual[y] for y in years_with_data), 4)  # type: ignore[misc]
-    cumulative_base = round(sum(base[y] for y in years_with_data), 4)
+    cumulative_base = round(sum(comparada[y] or 0.0 for y in years_with_data), 4)
     fulfillment_pct: float | None = (
         round(cumulative_actual / cumulative_base, 4)
         if years_with_data and cumulative_base
@@ -317,6 +351,11 @@ def _variance_for_line(
         "cumulative_actual": cumulative_actual,
         "cumulative_base": cumulative_base,
         "fulfillment_pct": fulfillment_pct,
+        # La previsión con la que se compara cada año (el en curso, hasta hoy).
+        "base_comparada": comparada,
+        "anio_en_curso": en_curso if 0 <= en_curso < n else None,
+        "fraccion_del_anio": fraccion,
+        "mensual": mensual,
     }
 
 

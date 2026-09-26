@@ -31,6 +31,11 @@ def _base_revenue(c, aid) -> list[float]:
 
 
 def test_variance_revenue_year1(monkeypatch, tmp_path):
+    # Año 0 (2026) ya terminado: se compara con el año entero (el año EN CURSO
+    # se compara hasta hoy, ver test_variance_anio_en_curso_hasta_hoy).
+    import asset_finance_modeler.web_api.actuals as _act
+    from datetime import datetime as _dt
+    monkeypatch.setattr(_act, '_hoy', lambda: _dt(2027, 6, 1))
     c = _client(monkeypatch, tmp_path)
     aid = _operational_asset(c)
     base = _base_revenue(c, aid)
@@ -107,3 +112,26 @@ def test_variance_year_offset_by_commissioning(monkeypatch, tmp_path):
     ln = r.json()["lines"][0]
     assert ln["actual"][0] is None
     assert ln["actual"][1] == 500.0
+
+
+def test_variance_anio_en_curso_hasta_hoy(monkeypatch, tmp_path):
+    """26-sep: con datos hasta marzo, el año en curso se compara con su
+    previsión hasta hoy, no con el año entero; y sale el detalle mes a mes."""
+    import asset_finance_modeler.web_api.actuals as act
+    from datetime import datetime as dt
+    monkeypatch.setattr(act, "_hoy", lambda: dt(2026, 4, 1))
+    c = _client(monkeypatch, tmp_path)
+    aid = _operational_asset(c)
+    base = _base_revenue(c, aid)
+    c.post(f"/api/assets/{aid}/actuals?t=tk", json={"actuals": [
+        {"period_start": "2026-01-15", "line_path": "income_statement.rows.revenue", "value": 100.0},
+        {"period_start": "2026-03-10", "line_path": "income_statement.rows.revenue", "value": 50.0},
+    ]})
+    ln = c.get(f"/api/assets/{aid}/variance?t=tk&line_path=income_statement.rows.revenue").json()["lines"][0]
+    frac = ln["fraccion_del_anio"]
+    assert 0.24 < frac < 0.26
+    assert ln["anio_en_curso"] == 0
+    assert abs(ln["base_comparada"][0] - base[0] * frac) < 1
+    assert abs(ln["deviation"][0] - (150.0 - base[0] * frac)) < 1
+    assert ln["mensual"][0] == {"mes": 1, "real": 100.0, "prevision": round(base[0] / 12, 4)}
+    assert ln["mensual"][1]["real"] is None

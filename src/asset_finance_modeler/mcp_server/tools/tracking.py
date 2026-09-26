@@ -49,10 +49,29 @@ def make_track_import(store: SQLiteScenarioStore) -> Any:
         if not isinstance(brutos, list) or not brutos:
             return {"error": "actuals-required: [{line_path, period_start, value}]"}
         _, actuals = _stores(store)
+        # Solo lineas que existen en el activo (26-sep: un "IBI" mal escrito se
+        # guardaba y no se comparaba con nada). Por nombre tambien vale:
+        # "IBI" -> lineas.gastos.IBI si es la unica que encaja.
+        validas = [ln["path"] for ln in _trackable_lines(s.results_snapshot or {})]
+
+        def resolver(lp: str) -> str | None:
+            if not validas or lp in validas:
+                return lp
+            k = lp.strip().lower()
+            cand = [v for v in validas if v.lower().endswith("." + k) or v.split(".")[-1].lower() == k]
+            if not cand:
+                # "IBI" -> "lineas.gastos.Comunidad+IBI+seguros" si es la unica que lo contiene.
+                cand = [v for v in validas if v.startswith("lineas.") and k in v.split(".", 2)[-1].lower()]
+            return cand[0] if len(cand) == 1 else None
+
         nuevos: list[Actual] = []
         for i, b in enumerate(brutos):
             if not isinstance(b, dict) or not b.get("line_path") or not b.get("period_start"):
                 return {"error": f"actuals[{i}] needs line_path + period_start"}
+            lp = resolver(str(b["line_path"]))
+            if lp is None:
+                return {"error": "unknown-line", "detail": f"actuals[{i}].line_path {b['line_path']!r} no es una linea de este activo", "lineas": validas}
+            b = {**b, "line_path": lp}
             try:
                 value = float(b.get("value"))
             except (TypeError, ValueError):
@@ -123,3 +142,14 @@ def make_track_variance(store: SQLiteScenarioStore) -> Any:
 
 
 __all__ = ["make_track_import", "make_track_reconcile", "make_track_variance"]
+
+
+def make_track_lines(store: SQLiteScenarioStore) -> Any:
+    """Las lineas de un activo contra las que se anota lo real (ingresos y
+    gastos por separado, EBITDA, caja…)."""
+    def _handle(args: dict[str, Any]) -> dict[str, Any]:
+        s = _get(store, args)
+        if s is None:
+            return {"error": f"scenario_id {args.get('scenario_id')!r} not found"}
+        return {"scenario_id": s.id, "lineas": _trackable_lines(s.results_snapshot or {})}
+    return _handle

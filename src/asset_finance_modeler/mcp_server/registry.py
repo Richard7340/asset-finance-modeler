@@ -37,6 +37,7 @@ from asset_finance_modeler.mcp_server.tools.output import (
 )
 from asset_finance_modeler.mcp_server.tools.tracking import (
     make_track_import,
+    make_track_lines,
     make_track_reconcile,
     make_track_variance,
 )
@@ -430,6 +431,12 @@ def build_registry(
                     "additionalProperties": False,
                 },
                 handler=make_set_external(store),
+            ),
+            ToolSpec(
+                name="finance.track.lines",
+                description="Lines of an asset you can record actuals against (each revenue and cost line separately, EBITDA, cash flow...).",
+                input_schema={"type": "object", "properties": {"scenario_id": {"type": "string"}}, "required": ["scenario_id"], "additionalProperties": True},
+                handler=make_track_lines(store),
             ),
             ToolSpec(
                 name="finance.track.import_real_data",

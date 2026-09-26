@@ -97,7 +97,15 @@ def _run_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     serializable payload with annualized statements + KPIs."""
     cfg = _validate(InfrastructureModelConfig, cfg_dict)
     out = InfrastructureModel(cfg).run()
-    return _run_financial_output(out, _ppy_of(cfg_dict))
+    ppy = _ppy_of(cfg_dict)
+    payload = _run_financial_output(out, ppy)
+    # Ingresos por contrato (PPA, mercado…) y gastos de explotación, por año.
+    streams = ((getattr(out, "revenue_breakdown", None) or {}).get("streams") or {})
+    ingresos = {str(k): [round(x) for x in _annual(list(v), ppy)] for k, v in streams.items() if isinstance(v, list)}
+    gastos = {"Gastos de explotación": [round(x) for x in _annual(list(out.pnl.get("opex", [])), ppy)]} if "opex" in out.pnl else {}
+    if ingresos or gastos:
+        payload["lineas"] = {"ingresos": ingresos, "gastos": gastos}
+    return payload
 
 
 def _run_financial_output(out: FinancialOutput, ppy: int) -> dict[str, Any]:
@@ -146,7 +154,14 @@ def _run_business_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     """Validate, run, and shape a business config dict (same payload shape)."""
     cfg = _validate(BusinessModelConfig, cfg_dict)
     out = BusinessModel(cfg).run()
-    return _run_financial_output(out, _ppy_of(cfg_dict))
+    payload = _run_financial_output(out, _ppy_of(cfg_dict))
+    # Cada ingreso y gasto por separado (para anotar y comparar lo real).
+    from asset_finance_modeler.assets.business.engines import line_series
+
+    years = len(payload["income_statement"]["years"])
+    lineas = line_series(cfg.model_dump(), years)
+    payload["lineas"] = {g: {k: [round(x) for x in v] for k, v in d.items()} for g, d in lineas.items()}
+    return payload
 
 
 def _run_saas_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
