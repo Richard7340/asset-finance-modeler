@@ -3,10 +3,23 @@ from __future__ import annotations
 from typing import Any
 
 
-def revenue_series(lines: list[dict[str, Any]], years: int) -> list[float]:
+def indice_ipc(curva: list[float] | None, years: int) -> list[float] | None:
+    """Indice de precios acumulado por anio (anio 1 = 1.0) a partir de la
+    inflacion de cada anio; el ultimo valor de la curva sigue."""
+    if not curva:
+        return None
+    idx, acum = [], 1.0
+    for y in range(years):
+        idx.append(acum)
+        acum *= 1.0 + float(curva[min(y, len(curva) - 1)])
+    return idx
+
+
+def revenue_series(lines: list[dict[str, Any]], years: int, indice: list[float] | None = None) -> list[float]:
     """Annual total revenue = sum over lines of year1_amount * (1+growth)^(y).
 
-    Year index ``y=0`` is year 1 (no growth applied yet).
+    Year index ``y=0`` is year 1 (no growth applied yet). Con ``indice`` (curva
+    de IPC), el crecimiento de la linea es REAL y encima va el IPC de cada anio.
     """
     out: list[float] = []
     for y in range(years):
@@ -14,7 +27,7 @@ def revenue_series(lines: list[dict[str, Any]], years: int) -> list[float]:
         for ln in lines:
             base = float(ln["year1_amount"])
             g = float(ln.get("growth_pct_yr", 0.0))
-            total += base * (1.0 + g) ** y
+            total += base * (1.0 + g) ** y * (indice[y] if indice else 1.0)
         out.append(total)
     return out
 
@@ -25,6 +38,7 @@ def opex_series(
     revenue: list[float],
     escalation_pct_yr: float,
     years: int,
+    indice: list[float] | None = None,
 ) -> list[float]:
     """Annual opex = sum(fixed_lines escalated) + variable_pct * revenue[y].
 
@@ -37,6 +51,11 @@ def opex_series(
         fixed = 0.0
         for ln in fixed_lines:
             g = ln.get("growth_pct_yr")
+            if indice:
+                # Con curva de IPC: el IPC del anio y, si la linea tiene su
+                # propio crecimiento, ese crecimiento real encima.
+                fixed += float(ln["year1_amount"]) * (1.0 + float(g or 0.0)) ** y * indice[y]
+                continue
             rate = escalation_pct_yr if g is None else float(g)
             fixed += float(ln["year1_amount"]) * (1.0 + rate) ** y
         var = variable_pct * (revenue[y] if y < len(revenue) else 0.0)
@@ -112,11 +131,15 @@ def line_series(cfg: dict[str, Any], years: int) -> dict[str, dict[str, list[flo
     revenue_series / opex_series): para anotar lo real de cada línea (IBI,
     comunidad, mantenimiento…) y compararlo con su previsión (26-sep)."""
     revenue = cfg.get("revenue") or []
+    inf = cfg.get("inflacion") or {}
+    idx = indice_ipc(inf.get("curva"), years) if inf else None
+    idx_i = idx if idx and inf.get("aplicar_a", "todo") in ("todo", "ingresos") else None
+    idx_g = idx if idx and inf.get("aplicar_a", "todo") in ("todo", "gastos") else None
     ingresos: dict[str, list[float]] = {}
     for ln in revenue:
         g = float(ln.get("growth_pct_yr", 0.0))
-        ingresos[str(ln["name"])] = [float(ln["year1_amount"]) * (1.0 + g) ** y for y in range(years)]
-    total = revenue_series(revenue, years)
+        ingresos[str(ln["name"])] = [float(ln["year1_amount"]) * (1.0 + g) ** y * (idx_i[y] if idx_i else 1.0) for y in range(years)]
+    total = revenue_series(revenue, years, idx_i)
     opex = cfg.get("opex") or {}
     esc = float(opex.get("escalation_pct_yr", 0.0))
     gastos: dict[str, list[float]] = {}
@@ -125,6 +148,9 @@ def line_series(cfg: dict[str, Any], years: int) -> dict[str, dict[str, list[flo
         gastos["Coste de ventas"] = [cogs_pct * r for r in total]
     for ln in opex.get("fixed_lines") or []:
         g = ln.get("growth_pct_yr")
+        if idx_g:
+            gastos[str(ln["name"])] = [float(ln["year1_amount"]) * (1.0 + float(g or 0.0)) ** y * idx_g[y] for y in range(years)]
+            continue
         rate = esc if g is None else float(g)
         gastos[str(ln["name"])] = [float(ln["year1_amount"]) * (1.0 + rate) ** y for y in range(years)]
     var_pct = float(opex.get("variable_pct_of_revenue", 0.0))

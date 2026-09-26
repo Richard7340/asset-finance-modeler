@@ -68,8 +68,20 @@ def aplicar_ipc(model_id: str, overrides: dict[str, Any], ipc: Any) -> tuple[dic
     `ipc`: 0.03, o {"valor": 0.03, "a": "todo"|"ingresos"|"gastos"}."""
     if ipc in (None, "", {}):
         return overrides, []
-    valor, a = (ipc.get("valor"), str(ipc.get("a") or "todo")) if isinstance(ipc, dict) else (ipc, "todo")
-    valor = float(valor)
+    curva = ipc.get("curva") if isinstance(ipc, dict) else (ipc if isinstance(ipc, list) else None)
+    a = str(ipc.get("a") or "todo") if isinstance(ipc, dict) else "todo"
+    if curva:
+        # Curva anio a anio: la llevan las empresas y el piso (en renovables,
+        # la curva va en el precio de cada linea: price_points).
+        if not (model_id.startswith("business_") or model_id == "real_estate_rental" or model_id.startswith("inmueble")):
+            raise ValueError("curva-no-soportada: la curva de IPC va en empresas y en inmueble_alquiler; en renovables usa price_points de cada linea")
+        valores = [float(x) for x in curva][:60]
+        if any(not -0.2 <= x <= 0.5 for x in valores):
+            raise ValueError("ipc-fuera-de-rango: cada anio en tanto por uno (0.03 = 3 %)")
+        out = dict(overrides or {})
+        out["inflacion"] = {"curva": valores, "aplicar_a": a if a in ("todo", "ingresos", "gastos") else "todo"}
+        return out, ["inflacion"]
+    valor = float(ipc.get("valor") if isinstance(ipc, dict) else ipc)
     if not -0.2 <= valor <= 0.5:
         raise ValueError("ipc-fuera-de-rango: el IPC va en tanto por uno (0.03 = 3 %)")
     from asset_finance_modeler.web_api.models import model_schema

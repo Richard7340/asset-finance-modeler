@@ -109,3 +109,20 @@ def test_anios_de_proyeccion_en_cualquier_modelo(db):
         assert len(g["income_statement"]["rows"]["revenue"]) == 8
         assert a.handle_value({"asset_id": r["id"]})["anios"] == 8
     assert "sin-flujos" in a.handle_value({"model_id": "business_restaurant", "overrides": {"meta.horizon.periods": 8}})["error"]
+
+
+def test_ipc_como_curva_anio_a_anio(db):
+    from asset_finance_modeler.mcp_server.tools import assets as a
+    from asset_finance_modeler.web_api.assets import _run_model
+
+    ov, rutas = a.aplicar_ipc("business_generic", {}, {"curva": [0.04, 0.03, 0.02], "a": "gastos"})
+    assert rutas == ["inflacion"] and ov["inflacion"] == {"curva": [0.04, 0.03, 0.02], "aplicar_a": "gastos"}
+    assert "curva-no-soportada" in str(pytest.raises(ValueError, a.aplicar_ipc, "solar_pv_50mw_spain", {}, [0.03]).value)
+    # Piso: la renta sube 4 %, 3 % y luego 2 % cada anio.
+    r = _run_model("inmueble_alquiler", {"inflacion": {"curva": [0.04, 0.03, 0.02], "aplicar_a": "ingresos"}, "alquiler.meses_vacios_anio": 0, "alquiler.impagos_pct": 0})
+    rentas = r["lineas"]["ingresos"]["Rentas"]
+    assert abs(rentas[1] / rentas[0] - 1.04) < 0.001 and abs(rentas[3] / rentas[2] - 1.02) < 0.001 and abs(rentas[5] / rentas[4] - 1.02) < 0.001
+    # Empresa: gastos fijos con la curva; las lineas para anotar lo real, igual.
+    e = _run_model("business_generic", {"inflacion": {"curva": [0.05], "aplicar_a": "gastos"}})
+    g = next(iter(e["lineas"]["gastos"].values()))
+    assert abs(g[1] / g[0] - 1.05) < 0.001

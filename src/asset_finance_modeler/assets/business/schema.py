@@ -64,6 +64,15 @@ class WorkingCapitalB(BaseModel):
     inventory_days: float = 0.0
 
 
+class Inflacion(BaseModel):
+    """IPC anio a anio (26-sep): [0.03, 0.025, 0.02] = 3 % el anio 2, 2,5 % el 3…
+    (el ultimo sigue). Sustituye a la subida comun; el crecimiento propio de
+    cada linea pasa a ser real, encima del IPC."""
+
+    curva: list[float] = Field(min_length=1)
+    aplicar_a: Literal["todo", "ingresos", "gastos"] = "todo"
+
+
 class Prestamo(BaseModel):
     """Una deuda concreta del negocio (26-sep): prestamo, hipoteca, leasing o
     poliza, cada una con su tipo y plazo. `ya_dispuesto` = deuda que ya existe
@@ -130,3 +139,4 @@ class BusinessModelConfig(BaseModel):
     financing: FinancingB = Field(default_factory=FinancingB)
     taxes: TaxesB = Field(default_factory=TaxesB)
     valuation: ValuationB = Field(default_factory=ValuationB)
+    inflacion: Inflacion | None = None

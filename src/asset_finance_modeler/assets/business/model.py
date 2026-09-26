@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from asset_finance_modeler.assets.business.engines import (
+    indice_ipc,
     opex_series,
     revenue_series,
 )
@@ -52,13 +53,17 @@ class BusinessModel:
         years = n // ppy
 
         # 1. Annual revenue and OPEX
-        rev_y = revenue_series([line.model_dump() for line in cfg.revenue], years)
+        inf = cfg.inflacion
+        idx = indice_ipc(inf.curva, years) if inf else None
+        rev_y = revenue_series([line.model_dump() for line in cfg.revenue], years,
+                               idx if inf and inf.aplicar_a in ("todo", "ingresos") else None)
         opex_y = opex_series(
             [line.model_dump() for line in cfg.opex.fixed_lines],
             cfg.opex.variable_pct_of_revenue,
             rev_y,
             cfg.opex.escalation_pct_yr,
             years,
+            idx if inf and inf.aplicar_a in ("todo", "gastos") else None,
         )
 
         # 2. Annual straight-line depreciation across all capex items

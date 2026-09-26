@@ -25,7 +25,7 @@ lineas por separado) y ademas el detalle de compra, hipoteca y venta.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -88,6 +88,15 @@ class Venta(BaseModel):
     plusvalia_municipal: float = 0
 
 
+class Inflacion(BaseModel):
+    """IPC anio a anio (26-sep): sustituye a la subida anual de la renta y/o de
+    los gastos (la renta de vivienda se actualiza por el indice que diga el
+    contrato; aqui, la curva que ponga el usuario)."""
+
+    curva: list[float] = Field(min_length=1)
+    aplicar_a: Literal["todo", "ingresos", "gastos"] = "todo"
+
+
 class Valoracion(BaseModel):
     tasa_descuento: float = 0.06
 
@@ -102,6 +111,7 @@ class InmuebleConfig(BaseModel):
     impuestos: Impuestos = Field(default_factory=Impuestos)
     venta: Venta = Field(default_factory=Venta)
     valoracion: Valoracion = Field(default_factory=Valoracion)
+    inflacion: Inflacion | None = None
 
 
 # Base del ahorro del IRPF 2026 (estatal + autonomica): la ganancia al vender.
@@ -195,16 +205,22 @@ def ejecutar(cfg: InmuebleConfig) -> dict[str, Any]:
         lineas_gastos["Gestión"] = []
     if g.otros_anuales:
         lineas_gastos["Otros gastos"] = []
+    from asset_finance_modeler.assets.business.engines import indice_ipc
+
+    inf = cfg.inflacion
+    idx = indice_ipc(inf.curva, n) if inf else None
+    sube_renta = (lambda y: idx[y]) if idx and inf.aplicar_a in ("todo", "ingresos") else (lambda y: (1 + a.subida_anual) ** y)
+    sube_gasto = (lambda y: idx[y]) if idx and inf.aplicar_a in ("todo", "gastos") else (lambda y: (1 + g.subida_anual) ** y)
     for y in range(n):
-        bruta = a.renta_mensual * 12 * (1 + a.subida_anual) ** y
+        bruta = a.renta_mensual * 12 * sube_renta(y)
         vac = bruta * min(a.meses_vacios_anio, 12) / 12
         cobrada = bruta - vac
         imp = cobrada * a.impagos_pct
         rentas.append(cobrada - imp)
         vacancia.append(vac)
         impagos.append(imp)
-        otros_ing.append(a.otros_ingresos_anuales * (1 + a.subida_anual) ** y)
-        f = (1 + g.subida_anual) ** y
+        otros_ing.append(a.otros_ingresos_anuales * sube_renta(y))
+        f = sube_gasto(y)
         lineas_gastos["IBI"].append(g.ibi_anual * f)
         lineas_gastos["Comunidad"].append(g.comunidad_mensual * 12 * f)
         lineas_gastos["Seguro del hogar"].append(g.seguro_hogar_anual * f)
