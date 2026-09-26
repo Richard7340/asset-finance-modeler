@@ -321,6 +321,14 @@ export type VarianceLine = {
   cumulative_base: number;
   /** cumulative_actual / cumulative_base (decimal); null if no data. */
   fulfillment_pct: number | null;
+  /** La previsión con la que se compara cada año (el año en curso, solo hasta hoy). */
+  base_comparada?: (number | null)[];
+  /** Índice del año en curso (0 = primer año del modelo), o null si está fuera. */
+  anio_en_curso?: number | null;
+  /** Parte del año en curso ya transcurrida (0-1). */
+  fraccion_del_anio?: number | null;
+  /** Mes a mes del año en curso: lo real frente a la previsión mensual. */
+  mensual?: { mes: number; real: number | null; prevision: number }[] | null;
 };
 
 export type Variance = { lines: VarianceLine[] };

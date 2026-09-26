@@ -60,3 +60,36 @@ describe("VariancePanel", () => {
     expect(screen.getAllByText("95%").length).toBeGreaterThan(0);
   });
 });
+
+describe("VariancePanel: el año en curso y mes a mes (27-sep)", () => {
+  it("compara el año en curso con lo previsto hasta hoy y enseña los meses", async () => {
+    vi.mocked(getVariance).mockResolvedValue({
+      lines: [
+        {
+          line_path: "lineas.gastos.IBI", label: "IBI", unit: "EUR",
+          base: [1200, 1236], actual: [700, null], deviation: [-200, null], deviation_pct: [-0.2222, null],
+          cumulative_actual: 700, cumulative_base: 900, fulfillment_pct: 0.7778,
+          base_comparada: [900, null], anio_en_curso: 0, fraccion_del_anio: 0.75,
+          mensual: [
+            { mes: 1, real: 300, prevision: 100 }, { mes: 2, real: 400, prevision: 100 },
+            ...Array.from({ length: 10 }, (_, i) => ({ mes: i + 3, real: null, prevision: 100 })),
+          ],
+        },
+      ],
+    });
+    wrap(<VariancePanel assetId="a1" />);
+    await waitFor(() => expect(screen.getByText("Este año, mes a mes")).toBeTruthy());
+    expect(screen.getByText(/en curso/)).toBeTruthy();
+    // Lo previsto hasta hoy (900), con el año entero (1.200) a mano.
+    expect(screen.getByTitle(/Año entero: 1\.?200/).textContent).toBe("900");
+    expect(screen.getAllByText("Feb").length).toBeGreaterThan(0);
+  });
+});
+
+import { esLineaDeGasto } from "./VariancePanel";
+describe("colores de un gasto (27-sep)", () => {
+  it("un gasto se reconoce por su ruta o nombre", () => {
+    expect(esLineaDeGasto({ line_path: "lineas.gastos.IBI", label: "IBI" })).toBe(true);
+    expect(esLineaDeGasto({ line_path: "lineas.ingresos.Rentas", label: "Rentas" })).toBe(false);
+  });
+});
