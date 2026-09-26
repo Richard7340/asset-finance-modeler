@@ -81,15 +81,15 @@ def test_ipc_de_una_vez(db):
     ov, rutas = a.aplicar_ipc("solar_pv_50mw_spain", {"revenue[1].escalation_pct_yr": 0.0}, 0.03)
     assert set(rutas) == {"revenue[0].escalation_pct_yr", "opex.opex_escalation_pct_yr"}
     assert ov["revenue[1].escalation_pct_yr"] == 0.0 and "valuation.terminal_growth_rate" not in ov
-    assert a.aplicar_ipc("inmueble_alquiler", {}, {"valor": 0.025, "a": "gastos"})[1] == ["gastos.subida_anual"]
+    assert a.aplicar_ipc("inmueble_alquiler", {}, {"valor": 0.025, "a": "gastos"})[0]["inflacion"] == {"curva": [0.025], "aplicar_a": "gastos"}
     assert set(a.aplicar_ipc("saas_gestnova", {}, 0.02)[1]) == {"meta.inflation_annual", "revenue.sources[0].pricing.price_escalation_annual"}
     assert "ipc-fuera-de-rango" in a.handle_save({"model_id": "business_generic", "name": "x", "ipc": 3, "workspace_id": "w"})["error"]
     with en_espacio("esp"):
         r = a.handle_save({"model_id": "inmueble_alquiler", "name": "Piso", "ipc": 0.03})
-        assert set(r["ipc_aplicado_a"]) == {"alquiler.subida_anual", "gastos.subida_anual"}
+        assert r["ipc_aplicado_a"] == ["inflacion"] and r["supuestos_clave"]["inflacion"]["curva"] == [0.03]
         u = a.handle_update({"asset_id": r["id"], "ipc": {"valor": 0.02, "a": "gastos"}})
         ov = a.handle_get({"asset_id": r["id"]})["overrides"]
-        assert u["ipc_aplicado_a"] == ["gastos.subida_anual"] and ov == {"gastos.subida_anual": 0.02}
+        assert u["ipc_aplicado_a"] == ["inflacion"] and ov == {"inflacion": {"curva": [0.02], "aplicar_a": "gastos"}}
         a.handle_lifecycle({"asset_id": r["id"], "lifecycle": "operational"})
         assert a.handle_update({"asset_id": r["id"], "ipc": 0.04})["error"] == "base_locked"
 
@@ -141,3 +141,21 @@ def test_no_duplica_y_entiende_el_nombre(db):
         a.handle_delete({"asset_id": [x for x in a.handle_list({})["assets"] if x["id"] != aid][0]["id"]})
         assert a.handle_value({"asset_id": "Clínica Dental Centro"})["activo"] == "Clínica Dental Centro"
         assert a.handle_update({"asset_id": "Clínica Dental Centro", "reglas": [{"proveedor": "Iberdrola", "linea": "Suministros"}]})["id"] == aid
+
+
+def test_ipc_se_suma_al_crecimiento_real_y_supuestos_a_la_vista(db):
+    """27-sep: "5 % real + IPC" se quedaba en el IPC; y el agente dijo que no
+    habia impuesto de sociedades porque no lo veia."""
+    from asset_finance_modeler.mcp_server.tools import assets as a
+    from asset_finance_modeler.web_api.assets import _run_model
+
+    lineas = [{"name": "Facturacion", "year1_amount": 600000, "growth_pct_yr": 0.05}]
+    ov, _ = a.aplicar_ipc("business_generic", {"revenue": lineas}, 0.043)
+    ing = _run_model("business_generic", ov)["income_statement"]["rows"]["revenue"]
+    assert abs(ing[1] / ing[0] - 1.05 * 1.043) < 0.001
+    with en_espacio("esp"):
+        r = a.handle_save({"model_id": "business_generic", "name": "Clinica", "overrides": {"revenue": lineas, "capex.items": []},
+                           "reglas": [{"proveedor": "Iberdrola", "lineaActivo": "suministros"}]})
+        assert r["reglas"] == [{"proveedor": "Iberdrola", "linea": "suministros"}]
+        sc = r["supuestos_clave"]
+        assert sc["taxes.corporate_income_tax_rate"] == 0.25 and sc["valuation.discount_rate_annual"] == 0.1 and sc["inversion_total"] == 0

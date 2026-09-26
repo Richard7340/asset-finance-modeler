@@ -31,6 +31,9 @@ def _reglas(v: Any) -> list[dict[str, str]]:
     for r in list(v or [])[:50]:
         if not isinstance(r, dict):
             continue
+        # Los modelos a veces usan otros nombres (lineaActivo, vendor...).
+        r = {**r, "linea": r.get("linea") or r.get("lineaActivo") or r.get("linea_activo") or r.get("line"),
+             "proveedor": r.get("proveedor") or r.get("vendor") or r.get("supplier"), "nif": r.get("nif") or r.get("cif")}
         x = {k: str(r[k]).strip()[:120] for k in ("proveedor", "nif", "linea") if r.get(k) not in (None, "")}
         if x.get("proveedor") or x.get("nif"):
             out.append(x)
@@ -70,10 +73,16 @@ def aplicar_ipc(model_id: str, overrides: dict[str, Any], ipc: Any) -> tuple[dic
         return overrides, []
     curva = ipc.get("curva") if isinstance(ipc, dict) else (ipc if isinstance(ipc, list) else None)
     a = str(ipc.get("a") or "todo") if isinstance(ipc, dict) else "todo"
+    con_bloque = model_id.startswith("business_") or model_id == "real_estate_rental" or model_id.startswith("inmueble")
+    if not curva and con_bloque:
+        # Empresas y pisos (27-sep): el IPC va a su bloque de inflacion, que lo
+        # SUMA al crecimiento real de cada linea. Antes sustituia el crecimiento
+        # (un "5 % real + IPC" se quedaba en el IPC) y se acumulaba al rehacerlo.
+        curva = [ipc.get("valor") if isinstance(ipc, dict) else ipc]
     if curva:
         # Curva anio a anio: la llevan las empresas y el piso (en renovables,
         # la curva va en el precio de cada linea: price_points).
-        if not (model_id.startswith("business_") or model_id == "real_estate_rental" or model_id.startswith("inmueble")):
+        if not con_bloque:
             raise ValueError("curva-no-soportada: la curva de IPC va en empresas y en inmueble_alquiler; en renovables usa price_points de cada linea")
         valores = [float(x) for x in curva][:60]
         if any(not -0.2 <= x <= 0.5 for x in valores):
@@ -95,6 +104,27 @@ def aplicar_ipc(model_id: str, overrides: dict[str, Any], ipc: Any) -> tuple[dic
             out[ruta] = valor
             aplicadas.append(ruta)
     return out, aplicadas
+
+
+_CLAVE = re.compile(r"(corporate_income_tax_rate|tipo_sociedades|tipo_marginal_irpf|regimen|discount_rate_annual|tasa_descuento|terminal_growth_rate|horizon\.periods|horizon\.frequency|horizonte_anios|receivable_days|payable_days|inventory_days|tax_loss_carryforward)$")
+
+
+def supuestos_clave(model_id: str, overrides: dict[str, Any], result: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Lo que el modelo supone aunque el usuario no lo haya dicho (impuestos,
+    tasa, duracion, cobros y pagos, inversion), para no explicarlo mal: el
+    27-sep un agente dijo "no he incluido el impuesto de sociedades" y si iba."""
+    from asset_finance_modeler.web_api.models import model_schema
+
+    out: dict[str, Any] = {}
+    for x in model_schema(model_id).get("inputs", []):
+        ruta = str(x.get("path", ""))
+        if _CLAVE.search(ruta):
+            out[ruta] = overrides.get(ruta, x.get("value"))
+    if "inflacion" in (overrides or {}):
+        out["inflacion"] = overrides["inflacion"]
+    if result is not None:
+        out["inversion_total"] = (result.get("kpis") or {}).get("total_capex")
+    return out
 
 
 _POR_ANIO = {"M": 12, "Q": 4, "Y": 1}
@@ -195,6 +225,7 @@ def handle_save(args: dict[str, Any]) -> dict[str, Any]:
         "id": r["id"], "name": a["name"], "model_id": a["model_id"], "kpis": (a.get("results_snapshot") or {}).get("kpis", {}),
         "carpeta": a.get("carpeta"), "reglas": a.get("reglas"),
         **({"ipc_aplicado_a": con_ipc} if con_ipc else {}),
+        "supuestos_clave": supuestos_clave(a["model_id"], a.get("overrides") or {}, a.get("results_snapshot") or {}),
     }
 
 
@@ -217,6 +248,7 @@ def handle_get(args: dict[str, Any]) -> dict[str, Any]:
         "kpis": rs.get("kpis", {}), "income_statement": rs.get("income_statement"), "cash_flow": rs.get("cash_flow"),
         "location": a.get("location"), "carpeta": a.get("carpeta"), "reglas": a.get("reglas"),
         "fuentes": a.get("fuentes") or {}, "lifecycle": a.get("lifecycle"),
+        "supuestos_clave": supuestos_clave(a["model_id"], a.get("overrides") or {}, rs),
     }
 
 
@@ -264,7 +296,8 @@ def handle_update(args: dict[str, Any]) -> dict[str, Any]:
     if args.get("name"):
         s.name = str(args["name"])
     store.save(s)
-    return {"id": s.id, "name": s.name, "kpis": results.get("kpis", {}), **({"ipc_aplicado_a": con_ipc} if con_ipc else {})}
+    return {"id": s.id, "name": s.name, "kpis": results.get("kpis", {}), **({"ipc_aplicado_a": con_ipc} if con_ipc else {}),
+            "supuestos_clave": supuestos_clave(s.base_model, overrides, results)}
 
 
 @_seguro
