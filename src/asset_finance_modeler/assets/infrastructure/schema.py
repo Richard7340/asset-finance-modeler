@@ -247,8 +247,16 @@ class NoDegradation(BaseModel):
     type: Literal["none"] = "none"
 
 
+class CustomDegradation(BaseModel):
+    """Rendimiento propio anio a anio desde la puesta en marcha (1.0 = el de
+    placa), p.ej. la curva garantizada del fabricante. El ultimo valor sigue."""
+
+    type: Literal["custom"] = "custom"
+    curve: list[float] = Field(min_length=1)
+
+
 DegradationCurve = Annotated[
-    TimeDegradation | CycleDegradation | UsageDegradation | NoDegradation,
+    TimeDegradation | CycleDegradation | UsageDegradation | NoDegradation | CustomDegradation,
     Field(discriminator="type"),
 ]
 
@@ -397,12 +405,24 @@ class CashSweepConfig(BaseModel):
     sweep_pct: float = 0.50
 
 
+class EquipmentEvent(BaseModel):
+    """Caida de rendimiento por equipos (averia de inversores, un aerogenerador
+    parado…): `loss_pct` de la produccion durante `years` anios desde el anio
+    `year` de operacion (1 = el primero)."""
+
+    year: int = Field(ge=1)
+    loss_pct: float = Field(ge=0, le=1)
+    years: int = Field(1, ge=1)
+    label: str = ""
+
+
 class LossesConfig(BaseModel):
     """Recortes de produccion (curtailment: la red o el precio obligan a parar).
     `curtailment_pct` fijo, o `curtailment_curve` por anio (manda si existe)."""
 
     curtailment_pct: float = Field(0.0, ge=0, le=1)
     curtailment_curve: list[float] | None = None
+    equipment_events: list[EquipmentEvent] = Field(default_factory=list)
 
 
 class ProjectFinanceConfig(BaseModel):
@@ -444,6 +464,8 @@ class CapexEvent(BaseModel):
     year: int  # 0-based model year of the event
     amount: float  # capex injection, same units as CAPEX
     resets_degradation: bool = False  # if True, capacity returns to nameplate
+    # Repowering con mas potencia (26-sep): +20 % = 0.2 desde ese anio.
+    capacity_uplift_pct: float = 0.0
     label: str = ""
 
 

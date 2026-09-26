@@ -172,6 +172,15 @@ class InfrastructureModel:
         if reset_periods:
             deg = apply_degradation_resets(deg, reset_periods)
 
+        # 1e. Repowering con mas potencia: desde su periodo, la produccion sube.
+        uplifts = [(e.year * ppy, e.capacity_uplift_pct) for e in cfg.capex_events if e.capacity_uplift_pct]
+        if uplifts:
+            factor = [1.0] * n
+            for start, pct in uplifts:
+                for t in range(max(start, 0), n):
+                    factor[t] *= 1.0 + pct
+            deg = [deg[t] * factor[t] for t in range(n)]
+
         # 2. Production (degradation already deferred to COD)
         prod = compute_production(cfg.production, deg, n, ppy)
         # 2b. Zero production before COD (development/permitting/construction/
@@ -584,7 +593,7 @@ class InfrastructureModel:
         """Quita a la produccion el recorte del anio (fijo o por curva, contada
         desde la puesta en marcha). Sin recorte, la produccion no cambia."""
         curva = losses.curtailment_curve
-        if not curva and not losses.curtailment_pct:
+        if not curva and not losses.curtailment_pct and not losses.equipment_events:
             return prod
         out = dict(prod)
         serie = list(prod.get("production_mwh") or [])
@@ -592,6 +601,11 @@ class InfrastructureModel:
             anio = max(0, (t - cod) // ppy)
             pct = (curva[min(anio, len(curva) - 1)] if curva else losses.curtailment_pct) or 0.0
             serie[t] *= max(0.0, 1.0 - min(pct, 1.0))
+            # Caidas por equipos en esos anios de operacion (1 = el primero).
+            if t >= cod:
+                for e in losses.equipment_events:
+                    if e.year - 1 <= anio < e.year - 1 + e.years:
+                        serie[t] *= max(0.0, 1.0 - e.loss_pct)
         out["production_mwh"] = serie
         return out
 
@@ -1090,6 +1104,9 @@ class InfrastructureModel:
             availability = getattr(prod, "availability", 1.0)
             hours = 8760.0 / ppy * availability
             return degradation_usage_based(periods, hours, deg.efficiency_loss_per_1000h)
+
+        if deg.type == "custom":
+            return [float(deg.curve[min(t // ppy, len(deg.curve) - 1)]) for t in range(periods)]
 
         # deg.type == "none" (or anything unrecognised)
         return degradation_none(periods)

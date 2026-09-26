@@ -44,3 +44,33 @@ def test_lockup_retrasa_el_reparto():
     for ov in ({"financing.equity.lockup_dscr": 2.5}, {"financing.equity.distribution_lock_years": 6}):
         k = _k(ov)
         assert k["npv"] == b["npv"] and k["irr_equity"] < b["irr_equity"], ov
+
+
+def _prod(ov):
+    return _run_model(M, ov)["income_statement"]["rows"]["revenue"]
+
+
+def test_curva_de_rendimiento_propia():
+    base = _run_model(M, {"degradation": {"type": "none"}})["income_statement"]["rows"]["revenue"]
+    r = _run_model(M, {"degradation": {"type": "custom", "curve": [1.0, 0.97, 0.96]}})["income_statement"]["rows"]["revenue"]
+    anio = next(i for i, x in enumerate(base) if x > 0)
+    assert abs(r[anio] - base[anio]) <= 1
+    assert abs(r[anio + 1] / base[anio + 1] - 0.97) < 0.005 and abs(r[anio + 5] / base[anio + 5] - 0.96) < 0.005
+
+
+def test_caida_por_equipos_solo_esos_anios():
+    base = _prod({})
+    r = _prod({"losses.equipment_events": [{"year": 3, "loss_pct": 0.10, "years": 2, "label": "Inversores"}]})
+    anio = next(i for i, x in enumerate(base) if x > 0)
+    # Cuenta anios de OPERACION (desde la puesta en marcha, que puede caer a
+    # mitad de anio natural): se pierde un 10 % de unos dos anios de ingresos.
+    assert abs(r[anio] - base[anio]) <= 1 and abs(r[-1] - base[-1]) <= 1
+    perdido = sum(base) - sum(r)
+    assert abs(perdido / (0.10 * (base[anio + 2] + base[anio + 3])) - 1) < 0.05
+
+
+def test_repowering_con_mas_potencia():
+    ev = {"year": 15, "amount": 5_000_000, "resets_degradation": True, "label": "Repowering"}
+    solo = _prod({"capex_events": [ev]})
+    mas = _prod({"capex_events": [{**ev, "capacity_uplift_pct": 0.2}]})
+    assert abs(mas[16] / solo[16] - 1.2) < 0.01 and abs(mas[10] - solo[10]) <= 1
