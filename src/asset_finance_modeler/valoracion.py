@@ -91,6 +91,8 @@ def valorar(
         raise ValueError("tasa-invalida: la tasa de descuento tiene que ser un numero (0.08 = 8 %)")
     perpetuo = perpetuidad if perpetuidad is not None else model_id.startswith(_PERPETUOS)
     f = flujos_libres(result)
+    if not f["fcff"]:
+        raise ValueError("sin-flujos: el modelo no da ningun anio completo; revisa la duracion (anios)")
     ebitda = f["ebitda"]
     capex_total = float((result.get("kpis") or {}).get("total_capex") or 0)
     inv_anios, inv_cero = inversion_inicial(f["cfi"], capex_total)

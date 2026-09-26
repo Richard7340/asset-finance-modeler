@@ -85,6 +85,30 @@ def aplicar_ipc(model_id: str, overrides: dict[str, Any], ipc: Any) -> tuple[dic
     return out, aplicadas
 
 
+_POR_ANIO = {"M": 12, "Q": 4, "Y": 1}
+
+
+def aplicar_anios(model_id: str, overrides: dict[str, Any], anios: Any) -> dict[str, Any]:
+    """Los anios de proyeccion (26-sep), sea cual sea la unidad del modelo: los
+    modelos van por meses (periods=120 son 10 anios), el del piso por anios."""
+    if anios in (None, ""):
+        return overrides
+    n = int(anios)
+    if not 1 <= n <= 60:
+        raise ValueError("anios-fuera-de-rango: entre 1 y 60 anios")
+    from asset_finance_modeler.web_api.models import model_schema
+
+    out = dict(overrides or {})
+    valores = {x["path"]: x.get("value") for x in model_schema(model_id).get("inputs", [])}
+    for ruta in valores:
+        if ruta == "horizonte_anios":
+            out[ruta] = n
+        elif ruta.endswith("meta.horizon.periods"):
+            f = str(out.get(ruta[: -len("periods")] + "frequency") or valores.get(ruta[: -len("periods")] + "frequency") or "Y")
+            out[ruta] = n * _POR_ANIO.get(f, 1)
+    return out
+
+
 def _seguro(fn):
     """Los errores de la API (404, 400) como {error}, nunca una excepcion."""
     def envuelto(args: dict[str, Any]) -> dict[str, Any]:
@@ -117,6 +141,7 @@ def handle_save(args: dict[str, Any]) -> dict[str, Any]:
 
     t = _tenant(args)
     overrides, con_ipc = aplicar_ipc(str(args["model_id"]), args.get("overrides") or {}, args.get("ipc"))
+    overrides = aplicar_anios(str(args["model_id"]), overrides, args.get("anios"))
     body = SaveAssetBody(
         model_id=str(args["model_id"]), name=str(args["name"]), overrides=overrides,
         tags=args.get("tags") or [], location=args.get("location"), lat=args.get("lat"), lon=args.get("lon"),
@@ -179,7 +204,7 @@ def handle_update(args: dict[str, Any]) -> dict[str, Any]:
         store.save(s)
         snap = s.inputs_snapshot or {}
         return {"id": s.id, "name": s.name, "carpeta": snap.get("carpeta"), "reglas": snap.get("reglas") or [], "fuentes": snap.get("fuentes") or {}}
-    if s.base_locked and (args.get("overrides") or args.get("ipc") not in (None, "", {})):
+    if s.base_locked and (args.get("overrides") or args.get("ipc") not in (None, "", {}) or args.get("anios")):
         return {"error": "base_locked", "detail": "Activo en operacion: su base no se cambia (se compara con los reales). Para cambiarla, finance.asset.set_lifecycle a opportunity."}
     snap = dict(s.inputs_snapshot or {})
     overrides = {**(snap.get("overrides") or s.overrides or {}), **(args.get("overrides") or {})}
@@ -191,6 +216,7 @@ def handle_update(args: dict[str, Any]) -> dict[str, Any]:
         previas = {r for r in (snap.get("ipc_aplicado_a") or []) if r not in (args.get("overrides") or {})}
         overrides, con_ipc = aplicar_ipc(s.base_model, {k: v for k, v in overrides.items() if k not in previas}, args["ipc"])
         snap["ipc_aplicado_a"] = con_ipc
+    overrides = aplicar_anios(s.base_model, overrides, args.get("anios"))
     results = _run_model(s.base_model, overrides)
     s.overrides = overrides
     snap["overrides"] = overrides
@@ -253,6 +279,7 @@ def handle_value(args: dict[str, Any]) -> dict[str, Any]:
     elif args.get("model_id"):
         model_id = str(args["model_id"])
         overrides, _ = aplicar_ipc(model_id, dict(args.get("overrides") or {}), args.get("ipc"))
+        overrides = aplicar_anios(model_id, overrides, args.get("anios"))
         result, nombre = _run_model(model_id, overrides), model_id
     else:
         return {"error": "asset_id-o-model_id-required"}

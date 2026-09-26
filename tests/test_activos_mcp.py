@@ -92,3 +92,20 @@ def test_ipc_de_una_vez(db):
         assert u["ipc_aplicado_a"] == ["gastos.subida_anual"] and ov == {"gastos.subida_anual": 0.02}
         a.handle_lifecycle({"asset_id": r["id"], "lifecycle": "operational"})
         assert a.handle_update({"asset_id": r["id"], "ipc": 0.04})["error"] == "base_locked"
+
+
+def test_anios_de_proyeccion_en_cualquier_modelo(db):
+    """8 anios son 96 meses en los modelos mensuales y 8 en el del piso; antes
+    'periods: 8' en uno mensual dejaba la proyeccion vacia."""
+    from asset_finance_modeler.mcp_server.tools import assets as a
+
+    assert a.aplicar_anios("business_restaurant", {}, 8) == {"meta.horizon.periods": 96}
+    assert a.aplicar_anios("inmueble_alquiler", {}, 8) == {"horizonte_anios": 8}
+    assert a.aplicar_anios("svj_hybrid", {}, 20) == {"fv.meta.horizon.periods": 240, "bess.meta.horizon.periods": 240}
+    assert a.aplicar_anios("business_generic", {"meta.horizon.frequency": "Q"}, 5)["meta.horizon.periods"] == 20
+    with en_espacio("esp"):
+        r = a.handle_save({"model_id": "business_restaurant", "name": "Bar", "anios": 8})
+        g = a.handle_get({"asset_id": r["id"]})
+        assert len(g["income_statement"]["rows"]["revenue"]) == 8
+        assert a.handle_value({"asset_id": r["id"]})["anios"] == 8
+    assert "sin-flujos" in a.handle_value({"model_id": "business_restaurant", "overrides": {"meta.horizon.periods": 8}})["error"]
