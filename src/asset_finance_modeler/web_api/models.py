@@ -148,6 +148,8 @@ def _run_financial_output(out: FinancialOutput, ppy: int) -> dict[str, Any]:
         "dscr_min": round(getattr(kp, "dscr_min", 0), 2),
         "total_capex": round(out.summary.get("total_capex", 0)),
     }
+    if getattr(kp, "npv_equity", 0):
+        kpis["npv_equity"] = round(kp.npv_equity)
 
     payload = {
         "kpis": kpis,

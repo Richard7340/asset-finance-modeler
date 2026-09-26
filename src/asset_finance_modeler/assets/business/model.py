@@ -141,8 +141,18 @@ class BusinessModel:
                 "enterprise_value": 0.0,
             }
 
-        # 8. KPIs
-        kpis = self._compute_kpis(fcf_annual, dscr_series, val)
+        # 8. KPIs. Con deuda, la rentabilidad del SOCIO sale de su caja (lo que
+        # pone, lo que le queda tras pagar la deuda), no es la del proyecto.
+        fcfe = [cfo_y[y] + cfi_y[y] + cff_y[y] for y in range(years)]
+        hay_deuda = any(int_y) or any(principal_y) or any(drawdown_total)
+        # Deuda viva al final: lo dispuesto (y lo que ya se debia) menos lo devuelto.
+        ya_debido = sum(p.importe for p in cfg.financing.prestamos if p.ya_dispuesto)
+        self._deuda_final = max(sum(drawdown_total) + ya_debido - sum(principal_y), 0.0)
+        # Si el activo se vende al final (valor residual), el socio cobra la
+        # venta y devuelve lo que quede de deuda.
+        if cfg.valuation.residual_value and years > 0:
+            fcfe[-1] += cfg.valuation.residual_value - self._deuda_final
+        kpis = self._compute_kpis(fcf_annual, dscr_series, val, fcfe if hay_deuda else None)
 
         total_capex = sum(item.amount for item in cfg.capex.items)
         summary: dict[str, float | int] = {
@@ -151,6 +161,8 @@ class BusinessModel:
             "enterprise_value": val["enterprise_value"],
             "irr_project": kpis.irr_project,
         }
+        if getattr(self, "_prestamos", None):
+            summary["prestamos"] = self._prestamos  # type: ignore[assignment]
 
         return FinancialOutput(
             pnl=pnl,
@@ -306,6 +318,34 @@ class BusinessModel:
                 debt_service_y=debt_service_y,
             )
 
+        # Prestamos concretos (26-sep): cada uno con su tipo, plazo y carencia.
+        self._prestamos = []
+        for p in cfg.financing.prestamos:
+            inicio = p.anio_inicio
+            tramos = [(p.importe - p.valor_residual, p.amortizacion)]
+            if p.valor_residual > 0:
+                tramos.append((p.valor_residual, "bullet"))
+            filas: list[list[dict[str, float]]] = []
+            for importe, amort in tramos:
+                if importe <= 0:
+                    continue
+                filas.append(self._apply_tranche(
+                    principal=importe, annual_rate=p.tipo_interes, tenor_years=p.plazo_anios,
+                    grace_years=p.carencia_meses // 12, amortization=amort, start_year=inicio,
+                    years=years, int_y=int_y, principal_y=principal_y, drawdown_y=drawdown_y,
+                    debt_service_y=debt_service_y, con_disposicion=not p.ya_dispuesto,
+                ))
+            comision = p.importe * p.comision_apertura_pct
+            if comision and 0 <= inicio < years and not p.ya_dispuesto:
+                int_y[inicio] += comision
+            primer = [sum(f[0][k] for f in filas if f) for k in ("total_payment", "interest")]
+            self._prestamos.append({
+                "nombre": p.nombre, "tipo": p.tipo, "importe": round(p.importe),
+                "cuota_anual_inicial": round(primer[0]), "cuota_mensual_aprox": round(primer[0] / 12, 2),
+                "intereses_totales": round(sum(r["interest"] for f in filas for r in f) + comision),
+                "anio_ultimo_pago": inicio + p.plazo_anios, "ya_dispuesto": p.ya_dispuesto,
+            })
+
         dscr_series = [
             ebitda_y[y] / debt_service_y[y]
             for y in range(years)
@@ -326,8 +366,9 @@ class BusinessModel:
         principal_y: list[float],
         drawdown_y: list[float],
         debt_service_y: list[float],
-    ) -> None:
-        if 0 <= start_year < years:
+        con_disposicion: bool = True,
+    ) -> list[dict[str, float]]:
+        if con_disposicion and 0 <= start_year < years:
             drawdown_y[start_year] += principal
         rows = AmortizationSchedule(
             principal=principal,
@@ -344,15 +385,26 @@ class BusinessModel:
             int_y[y] += row["interest"]
             principal_y[y] += row["principal_payment"]
             debt_service_y[y] += row["total_payment"]
+        return rows
 
     def _compute_kpis(
         self,
         fcf_annual: list[float],
         dscr_series: list[float],
         val: dict[str, float],
+        fcfe: list[float] | None = None,
     ) -> ProjectKPIs:
         cfg = self.config
         irr_project = compute_irr(fcf_annual, 1)
+        ke = cfg.valuation.cost_of_equity_annual or cfg.valuation.discount_rate_annual
+        if fcfe is not None:
+            irr_equity = compute_irr(fcfe, 1)
+            npv_equity = sum(f / (1 + ke) ** (y + 1) for y, f in enumerate(fcfe))
+            # Como el VAN del proyecto: con su valor final, menos la deuda que quede.
+            if val.get("terminal_value") and fcfe and not cfg.valuation.residual_value:
+                npv_equity += (val["terminal_value"] - getattr(self, "_deuda_final", 0.0)) / (1 + ke) ** len(fcfe)
+        else:
+            irr_equity, npv_equity = irr_project, val["enterprise_value"]
         payback = compute_discounted_payback(
             fcf_annual, cfg.valuation.discount_rate_annual, 1
         )
@@ -362,8 +414,9 @@ class BusinessModel:
 
         return ProjectKPIs(
             irr_project=irr_project,
-            irr_equity=irr_project,
+            irr_equity=irr_equity,
             npv=val["enterprise_value"],
+            npv_equity=npv_equity,
             lcoe=None,
             lcos=None,
             payback_years=payback,

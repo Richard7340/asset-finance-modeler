@@ -289,10 +289,20 @@ def handle_value(args: dict[str, Any]) -> dict[str, Any]:
     g = args.get("crecimiento")
     if g is None:
         g = _por_defecto(model_id, overrides, ("terminal_growth_rate",))
+    # Sin deuda neta dicha: la de los prestamos que ya tiene el negocio.
+    deuda_de_prestamos = None
+    if args.get("deuda_neta") is None:
+        ya = [p for p in (overrides.get("financing.prestamos") or []) if isinstance(p, dict) and p.get("ya_dispuesto")]
+        if ya:
+            deuda_de_prestamos = sum(float(p.get("importe") or 0) for p in ya)
+    deuda_neta = float(args.get("deuda_neta") if args.get("deuda_neta") is not None else (deuda_de_prestamos or 0))
     v = valorar(
         result, model_id=model_id, tasa=float(tasa if tasa is not None else 0.08),
         crecimiento=float(g if g is not None else 0.02),
         perpetuidad=args.get("perpetuidad"), multiplo_ebitda=args.get("multiplo_ebitda"),
-        deuda_neta=float(args.get("deuda_neta") or 0), ebitda_referencia=args.get("ebitda_referencia"),
+        deuda_neta=deuda_neta, ebitda_referencia=args.get("ebitda_referencia"),
     )
+    if deuda_de_prestamos is not None:
+        v["notas"] = ["Deuda neta tomada de los préstamos que ya tiene (sin descontar su caja; pásala si tiene)."] + [
+            n for n in v.get("notas", []) if not n.startswith("Sin deuda neta")]
     return {"activo": nombre, "model_id": model_id, **v}

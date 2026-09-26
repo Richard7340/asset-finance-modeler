@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from asset_finance_modeler.assets.infrastructure.schema import (
@@ -62,10 +64,30 @@ class WorkingCapitalB(BaseModel):
     inventory_days: float = 0.0
 
 
+class Prestamo(BaseModel):
+    """Una deuda concreta del negocio (26-sep): prestamo, hipoteca, leasing o
+    poliza, cada una con su tipo y plazo. `ya_dispuesto` = deuda que ya existe
+    (su saldo pendiente): se paga, pero no entra dinero en la proyeccion."""
+
+    nombre: str = "Prestamo"
+    tipo: Literal["prestamo", "hipoteca", "leasing", "poliza"] = "prestamo"
+    importe: float = Field(gt=0)
+    tipo_interes: float = Field(0.05, ge=0, le=0.5)
+    plazo_anios: int = Field(5, ge=1, le=40)
+    carencia_meses: int = Field(0, ge=0, le=120)
+    amortizacion: Literal["french", "linear", "bullet"] = "french"
+    anio_inicio: int = Field(0, ge=0)
+    comision_apertura_pct: float = Field(0.0, ge=0, le=0.1)
+    # Leasing: la opcion de compra se paga al final (el resto se amortiza).
+    valor_residual: float = Field(0.0, ge=0)
+    ya_dispuesto: bool = False
+
+
 class FinancingB(BaseModel):
     senior: SeniorDebtConfig | None = None
     subordinated: SubordinatedDebtConfig | None = None
     max_leverage: float = 0.0
+    prestamos: list[Prestamo] = Field(default_factory=list)
 
 
 class TaxesB(BaseModel):
