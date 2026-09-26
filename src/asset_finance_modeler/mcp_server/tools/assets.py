@@ -24,6 +24,28 @@ def _tenant(args: dict[str, Any]):
     return TenantContext(workspace_id=str(ws), user_id=str(args.get("user_id") or "default"))
 
 
+def _reglas(v: Any) -> list[dict[str, str]]:
+    """Reglas de asignacion: [{proveedor?, nif?, linea?}], sin basura."""
+    out: list[dict[str, str]] = []
+    for r in list(v or [])[:50]:
+        if not isinstance(r, dict):
+            continue
+        x = {k: str(r[k]).strip()[:120] for k in ("proveedor", "nif", "linea") if r.get(k) not in (None, "")}
+        if x.get("proveedor") or x.get("nif"):
+            out.append(x)
+    return out
+
+
+def _gestion(s: Any, args: dict[str, Any]) -> None:
+    """Carpeta y reglas del activo (se guardan con sus datos, no en el modelo)."""
+    snap = dict(s.inputs_snapshot or {})
+    if args.get("carpeta"):
+        snap["carpeta"] = str(args["carpeta"]).strip().strip("/")[:300]
+    if "reglas" in args:
+        snap["reglas"] = _reglas(args.get("reglas"))
+    s.inputs_snapshot = snap
+
+
 def _seguro(fn):
     """Los errores de la API (404, 400) como {error}, nunca una excepcion."""
     def envuelto(args: dict[str, Any]) -> dict[str, Any]:
@@ -60,8 +82,17 @@ def handle_save(args: dict[str, Any]) -> dict[str, Any]:
         tags=args.get("tags") or [], location=args.get("location"), lat=args.get("lat"), lon=args.get("lon"),
     )
     r = save_asset(body, t)
+    if args.get("carpeta") or args.get("reglas"):
+        from asset_finance_modeler.web_api.assets import _store
+
+        s = _store().get(r["id"], workspace_id=t.workspace_id)
+        _gestion(s, args)
+        _store().save(s)
     a = get_asset(r["id"], t)
-    return {"id": r["id"], "name": a["name"], "model_id": a["model_id"], "kpis": (a.get("results_snapshot") or {}).get("kpis", {})}
+    return {
+        "id": r["id"], "name": a["name"], "model_id": a["model_id"], "kpis": (a.get("results_snapshot") or {}).get("kpis", {}),
+        "carpeta": a.get("carpeta"), "reglas": a.get("reglas"),
+    }
 
 
 @_seguro
@@ -81,7 +112,8 @@ def handle_get(args: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": a["id"], "name": a["name"], "model_id": a["model_id"], "overrides": a.get("overrides", {}),
         "kpis": rs.get("kpis", {}), "income_statement": rs.get("income_statement"), "cash_flow": rs.get("cash_flow"),
-        "location": a.get("location"),
+        "location": a.get("location"), "carpeta": a.get("carpeta"), "reglas": a.get("reglas"),
+        "lifecycle": a.get("lifecycle"),
     }
 
 
@@ -98,6 +130,12 @@ def handle_update(args: dict[str, Any]) -> dict[str, Any]:
     s = store.get(str(args["asset_id"]), workspace_id=t.workspace_id)
     if s is None or s.is_deleted:
         return {"error": "not_found"}
+    if not args.get("overrides") and not args.get("quitar") and not args.get("name") and ("carpeta" in args or "reglas" in args):
+        # Solo como lo gestiona el agente: vale tambien en operacion.
+        _gestion(s, args)
+        store.save(s)
+        snap = s.inputs_snapshot or {}
+        return {"id": s.id, "name": s.name, "carpeta": snap.get("carpeta"), "reglas": snap.get("reglas") or []}
     if s.base_locked and args.get("overrides"):
         return {"error": "base_locked", "detail": "Activo en operacion: su base no se cambia (se compara con los reales). Para cambiarla, finance.asset.set_lifecycle a opportunity."}
     snap = dict(s.inputs_snapshot or {})
@@ -111,6 +149,7 @@ def handle_update(args: dict[str, Any]) -> dict[str, Any]:
         if k in args:
             snap[k] = args[k]
     s.inputs_snapshot = snap
+    _gestion(s, args)
     s.results_snapshot = results
     if args.get("name"):
         s.name = str(args["name"])

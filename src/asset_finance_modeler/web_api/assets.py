@@ -126,6 +126,12 @@ def _location_of(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _gestion_of(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Como lo lleva su agente (26-sep): la carpeta del activo en el VDR y las
+    reglas para asignarle solo lo que llega (proveedor/NIF -> linea)."""
+    return {"carpeta": snapshot.get("carpeta"), "reglas": snapshot.get("reglas") or []}
+
+
 @router.post("")
 def save_asset(
     body: SaveAssetBody, tenant: TenantContext = Depends(tenant_ctx)
@@ -176,6 +182,7 @@ def list_assets(
                 ),
                 "tracking_frequency": s.tracking_frequency,
                 **_location_of(s.inputs_snapshot or {}),
+                **_gestion_of(s.inputs_snapshot or {}),
             }
             for s in scenarios
         ]
@@ -193,11 +200,13 @@ def get_asset(
         "id": s.id,
         "name": s.name,
         "model_id": s.base_model,
+        "lifecycle": s.lifecycle,
         "overrides": s.inputs_snapshot.get("overrides", s.overrides),
         "results_snapshot": s.results_snapshot,
         "created_at": s.created_at.isoformat(),
         "last_update": _last_update_iso(s, _actuals_store()),
         **_location_of(s.inputs_snapshot or {}),
+        **_gestion_of(s.inputs_snapshot or {}),
     }
 
 

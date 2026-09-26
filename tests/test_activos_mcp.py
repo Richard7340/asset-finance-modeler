@@ -39,3 +39,21 @@ def test_modelos_y_su_esquema(db):
     assert {"solar_pv_50mw_spain", "business_generic", "real_estate_rental", "svj_hybrid"} <= ids
     rutas = [x["path"] for x in a.handle_schema({"model_id": "business_generic"})["inputs"]]
     assert any(r.startswith("revenue") for r in rutas)
+
+
+def test_carpeta_y_reglas_del_activo(db):
+    """Como lo gestiona su agente: carpeta del VDR y reglas proveedor -> linea,
+    que se cambian tambien con el activo en operacion (no tocan la base)."""
+    from asset_finance_modeler.mcp_server.tools import assets as a
+
+    with en_espacio("esp"):
+        r = a.handle_save({"model_id": "inmueble_alquiler", "name": "Clinica", "carpeta": "/Activos/Clinica/",
+                           "reglas": [{"proveedor": "Iberdrola", "linea": "Suministros"}, {"linea": "sin proveedor"}, "basura"]})
+        assert r["carpeta"] == "Activos/Clinica" and r["reglas"] == [{"proveedor": "Iberdrola", "linea": "Suministros"}]
+        a.handle_lifecycle({"asset_id": r["id"], "lifecycle": "operational"})
+        u = a.handle_update({"asset_id": r["id"], "reglas": [{"nif": "B12345678", "linea": "IBI"}]})
+        assert u["reglas"] == [{"nif": "B12345678", "linea": "IBI"}]
+        lst = a.handle_list({})["assets"][0]
+        assert lst["carpeta"] == "Activos/Clinica" and lst["reglas"][0]["nif"] == "B12345678"
+        g = a.handle_get({"asset_id": r["id"]})
+        assert g["lifecycle"] == "operational" and g["kpis"]["npv"] == r["kpis"]["npv"]
