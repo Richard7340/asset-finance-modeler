@@ -30,7 +30,6 @@ _INERT_LEAF_FIELDS = frozenset(
         "mra_eur",  # financing.reserves.* — never consumed
         "working_capital_eur",  # financing.reserves.* — never consumed
         "target_irr",  # financing.equity.* — no hurdle/waterfall consumer
-        "distribution_lock_years",  # financing.equity.* — no distribution gate
         "r_and_d_deduction_pct",  # taxes.* — declared but never applied
         "uptime_target",  # SLA stream — cosmetic, no KPI impact
     }

@@ -49,7 +49,7 @@ def test_inert_infra_inputs_hidden_from_schema_tree():
         "financing.reserves.mra_eur",
         "financing.reserves.working_capital_eur",
         "financing.equity.target_irr",
-        "financing.equity.distribution_lock_years",
+        # distribution_lock_years ya no es inerte (26-sep): retrasa el reparto al socio.
         "taxes.r_and_d_deduction_pct",
         "meta.inflation_annual",  # SaaS-only field, inert on infra
     ):

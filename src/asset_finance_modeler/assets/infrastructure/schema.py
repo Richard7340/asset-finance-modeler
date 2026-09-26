@@ -288,6 +288,26 @@ class MaintenanceEvent(BaseModel):
     recurring_interval: int | None = None
 
 
+class OpexLine(BaseModel):
+    """Una linea de coste propia (26-sep): representacion de mercado, seguridad,
+    IBI/IAE, vigilancia… fija al anio, por MW o por MWh, con su propia subida
+    (None = la subida comun de la OPEX)."""
+
+    name: str
+    eur_yr: float = 0.0
+    eur_per_mw_yr: float = 0.0
+    eur_per_mwh: float = 0.0
+    escalation_pct_yr: float | None = None
+
+
+class Decommissioning(BaseModel):
+    """Desmantelamiento al final de la vida: se dota a partes iguales en los
+    ultimos `accrue_years` anios del horizonte (gasto y salida de caja)."""
+
+    cost_eur: float = 0.0
+    accrue_years: int = Field(5, ge=1, le=30)
+
+
 class InfraOPEXConfig(BaseModel):
     om_fixed_eur_per_mw_yr: float = 0
     om_variable_eur_per_mwh: float = 0
@@ -297,6 +317,11 @@ class InfraOPEXConfig(BaseModel):
     other_fixed_eur_yr: float = 0
     major_maintenance: list[MaintenanceEvent] = Field(default_factory=list)
     opex_escalation_pct_yr: float = 0.02
+    other_lines: list[OpexLine] = Field(default_factory=list)
+    # Impuesto sobre el valor de la produccion de energia electrica (IVPEE, 7 %
+    # en Espana) sobre los ingresos por venta de energia. 0 = no se aplica.
+    generation_tax_pct: float = Field(0.0, ge=0, le=0.5)
+    decommissioning: Decommissioning | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +378,11 @@ class SubordinatedDebtConfig(BaseModel):
 
 class EquityConfig(BaseModel):
     target_irr: float = 0.12
+    # Sin reparto al socio los primeros N anios (la caja queda en el proyecto).
     distribution_lock_years: int = 0
+    # Covenant de lock-up: el anio en que el DSCR baja de este nivel no se
+    # reparte; lo retenido se paga el primer anio que se cumpla (o al final).
+    lockup_dscr: float | None = None
 
 
 class ReservesConfig(BaseModel):
@@ -368,6 +397,14 @@ class CashSweepConfig(BaseModel):
     sweep_pct: float = 0.50
 
 
+class LossesConfig(BaseModel):
+    """Recortes de produccion (curtailment: la red o el precio obligan a parar).
+    `curtailment_pct` fijo, o `curtailment_curve` por anio (manda si existe)."""
+
+    curtailment_pct: float = Field(0.0, ge=0, le=1)
+    curtailment_curve: list[float] | None = None
+
+
 class ProjectFinanceConfig(BaseModel):
     senior: SeniorDebtConfig | None = None
     mezzanine: MezzanineDebtConfig | None = None
@@ -377,6 +414,8 @@ class ProjectFinanceConfig(BaseModel):
     cash_sweep: CashSweepConfig = Field(default_factory=CashSweepConfig)
     construction_facility: bool = True
     max_leverage: float = 0.80
+    # Comision de apertura sobre toda la deuda dispuesta (gasto y caja al disponer).
+    upfront_fee_pct: float = Field(0.0, ge=0, le=0.1)
 
 
 # ---------------------------------------------------------------------------
@@ -427,3 +466,4 @@ class InfrastructureModelConfig(BaseModel):
     valuation: ValuationConfig
     external_data: ExternalDataConfig = Field(default_factory=ExternalDataConfig)
     capex_events: list[CapexEvent] = Field(default_factory=list)
+    losses: LossesConfig = Field(default_factory=LossesConfig)

@@ -179,6 +179,9 @@ class InfrastructureModel:
         if cod > 0:
             prod = self._zero_production_before(prod, cod, n)
 
+        # 2c. Recortes (curtailment, 26-sep): energia que no se puede verter.
+        prod = self._apply_curtailment(prod, cfg.losses, n, ppy, cod)
+
         # 3. Revenue (zero during construction because production is zero there)
         rev = compute_revenue(cfg.revenue, prod, n, ppy)
 
@@ -226,6 +229,9 @@ class InfrastructureModel:
             ppy,
             production_config=cfg.production,
         )
+
+        # 5b. Costes propios, IVPEE y desmantelamiento (26-sep).
+        opx = self._extra_opex(opx, cfg, prod, rev["total_revenue"], n, ppy, cod)
 
         # 6. Incentives
         inc = compute_incentives(
@@ -283,6 +289,12 @@ class InfrastructureModel:
                     else 0.0
                 ),
             )
+
+        # 8b-ter. Comision de apertura sobre la deuda dispuesta: gasto financiero
+        #         (y caja) en el periodo de cada disposicion.
+        fee = cfg.financing.upfront_fee_pct
+        if fee > 0:
+            debt_interest = [debt_interest[t] + debt_drawdowns[t] * fee for t in range(n)]
 
         # 8c. Rebuild P&L with actual interest
         pnl = self._build_pnl(
@@ -565,6 +577,52 @@ class InfrastructureModel:
                 for t in range(min(cod, n)):
                     blanked[t] = 0.0
                 out[key] = blanked
+        return out
+
+    @staticmethod
+    def _apply_curtailment(prod: dict, losses, n: int, ppy: int, cod: int) -> dict:
+        """Quita a la produccion el recorte del anio (fijo o por curva, contada
+        desde la puesta en marcha). Sin recorte, la produccion no cambia."""
+        curva = losses.curtailment_curve
+        if not curva and not losses.curtailment_pct:
+            return prod
+        out = dict(prod)
+        serie = list(prod.get("production_mwh") or [])
+        for t in range(min(n, len(serie))):
+            anio = max(0, (t - cod) // ppy)
+            pct = (curva[min(anio, len(curva) - 1)] if curva else losses.curtailment_pct) or 0.0
+            serie[t] *= max(0.0, 1.0 - min(pct, 1.0))
+        out["production_mwh"] = serie
+        return out
+
+    @staticmethod
+    def _extra_opex(opx: dict, cfg, prod: dict, energy_revenue: list[float], n: int, ppy: int, cod: int) -> dict:
+        """Lineas de coste propias, IVPEE sobre la venta de energia y dotacion al
+        desmantelamiento, sumadas a la OPEX (con su detalle por linea)."""
+        o = cfg.opex
+        extra: dict[str, list[float]] = {}
+        cap_mw = prod.get("capacity_mw") or 0.0
+        cap_mw = float(cap_mw[0] if isinstance(cap_mw, list) and cap_mw else cap_mw or 0.0)
+        mwh = prod.get("production_mwh") or [0.0] * n
+        for linea in o.other_lines:
+            esc = o.opex_escalation_pct_yr if linea.escalation_pct_yr is None else linea.escalation_pct_yr
+            serie = [0.0] * n
+            for t in range(cod, n):
+                factor = (1 + esc) ** ((t - cod) // ppy)
+                fijo = (linea.eur_yr + linea.eur_per_mw_yr * cap_mw) / ppy
+                serie[t] = (fijo + linea.eur_per_mwh * mwh[t]) * factor
+            extra[linea.name] = serie
+        if o.generation_tax_pct:
+            extra["IVPEE"] = [max(energy_revenue[t], 0.0) * o.generation_tax_pct for t in range(n)]
+        d = o.decommissioning
+        if d is not None and d.cost_eur > 0:
+            periodos = min(d.accrue_years * ppy, n)
+            extra["Desmantelamiento"] = [0.0] * (n - periodos) + [d.cost_eur / periodos] * periodos
+        if not extra:
+            return opx
+        out = dict(opx)
+        out["total_opex"] = [opx["total_opex"][t] + sum(v[t] for v in extra.values()) for t in range(n)]
+        out["lineas_extra"] = extra
         return out
 
     def _build_pnl(
@@ -878,6 +936,29 @@ class InfrastructureModel:
             equity_cf.append(ni_yr + dep_yr - rep_yr + dsra_yr)
 
         has_debt = sum(debt_balance) > 0
+
+        # Reparto al socio (26-sep): sin dividendos los primeros anios pactados
+        # ni el anio en que el DSCR incumple el lock-up; lo retenido se paga el
+        # primer anio que se pueda (o al final).
+        eq = cfg.financing.equity
+        if has_debt and (eq.distribution_lock_years > 0 or eq.lockup_dscr):
+            ds_total = [senior_ds[t] + mezz_ds[t] + sub_ds[t] for t in range(len(senior_ds))]
+            retenido = 0.0
+            for y in range(years):
+                cfads_y = sum(pnl["ebitda"][y * ppy:(y + 1) * ppy])
+                ds_y = sum(ds_total[y * ppy:(y + 1) * ppy])
+                bloqueado = y < eq.distribution_lock_years or bool(
+                    eq.lockup_dscr and ds_y > 0 and cfads_y / ds_y < eq.lockup_dscr)
+                caja = equity_cf[y + 1]
+                if bloqueado and caja > 0:
+                    retenido += caja
+                    equity_cf[y + 1] = 0.0
+                elif not bloqueado and retenido:
+                    equity_cf[y + 1] = caja + retenido
+                    retenido = 0.0
+            if retenido and years:
+                equity_cf[-1] += retenido
+            self._reparto_retenido = True
 
         irr_project = compute_irr(project_cf, 1)
         irr_equity = compute_irr(equity_cf, 1) if has_debt else irr_project
