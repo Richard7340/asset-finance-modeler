@@ -121,6 +121,19 @@ def aplicar_anios(model_id: str, overrides: dict[str, Any], anios: Any) -> dict[
     return out
 
 
+def _id_de(args: dict[str, Any]) -> str:
+    """El id del activo; si le pasan su NOMBRE (lo hacen los modelos), el del
+    activo del espacio que se llama asi (27-sep)."""
+    pedido = str(args.get("asset_id") or "").strip()
+    if not pedido or pedido.startswith("scn-"):
+        return pedido
+    from asset_finance_modeler.web_api.assets import list_assets
+
+    plano = lambda x: " ".join(str(x or "").lower().split())  # noqa: E731
+    iguales = [a["id"] for a in list_assets(None, _tenant(args))["assets"] if plano(a["name"]) == plano(pedido)]
+    return iguales[0] if len(iguales) == 1 else pedido
+
+
 def _seguro(fn):
     """Los errores de la API (404, 400) como {error}, nunca una excepcion."""
     def envuelto(args: dict[str, Any]) -> dict[str, Any]:
@@ -152,6 +165,16 @@ def handle_save(args: dict[str, Any]) -> dict[str, Any]:
     from asset_finance_modeler.web_api.assets import SaveAssetBody, get_asset, save_asset
 
     t = _tenant(args)
+    # Guardar otro con el mismo nombre suele ser un error (se queria cambiar el
+    # que ya hay: reglas, hipotesis…). El 27-sep el agente duplico una clinica.
+    if not args.get("duplicar"):
+        from asset_finance_modeler.web_api.assets import list_assets
+
+        plano = lambda x: " ".join(str(x or "").lower().split())  # noqa: E731
+        ya = [a for a in list_assets(None, t)["assets"] if plano(a["name"]) == plano(args["name"])]
+        if ya:
+            return {"error": "ya-existe", "asset_id": ya[0]["id"],
+                    "detail": f"Ya hay un activo \"{ya[0]['name']}\" ({ya[0]['id']}). Para cambiarlo (hipotesis, reglas, carpeta, fuentes) usa finance.asset.update con ese asset_id; para crear otro igual, duplicar: true o otro nombre."}
     overrides, con_ipc = aplicar_ipc(str(args["model_id"]), args.get("overrides") or {}, args.get("ipc"))
     overrides = aplicar_anios(str(args["model_id"]), overrides, args.get("anios"))
     body = SaveAssetBody(
@@ -186,7 +209,7 @@ def handle_list(args: dict[str, Any]) -> dict[str, Any]:
 def handle_get(args: dict[str, Any]) -> dict[str, Any]:
     from asset_finance_modeler.web_api.assets import get_asset
 
-    a = get_asset(str(args["asset_id"]), _tenant(args))
+    a = get_asset(_id_de(args), _tenant(args))
     rs = a.get("results_snapshot") or {}
     # Lo esencial: sus datos, KPIs y las series anuales (no el volcado entero).
     return {
@@ -207,7 +230,7 @@ def handle_update(args: dict[str, Any]) -> dict[str, Any]:
 
     t = _tenant(args)
     store = _store()
-    s = store.get(str(args["asset_id"]), workspace_id=t.workspace_id)
+    s = store.get(_id_de(args), workspace_id=t.workspace_id)
     if s is None or s.is_deleted:
         return {"error": "not_found"}
     if not args.get("overrides") and not args.get("quitar") and not args.get("name") and ("carpeta" in args or "reglas" in args or "fuentes" in args):
@@ -252,14 +275,14 @@ def handle_lifecycle(args: dict[str, Any]) -> dict[str, Any]:
         lifecycle=args["lifecycle"], tracking_frequency=args.get("tracking_frequency"),
         commissioning_date=args.get("commissioning_date"),
     )
-    return set_lifecycle(str(args["asset_id"]), body, _tenant(args))
+    return set_lifecycle(_id_de(args), body, _tenant(args))
 
 
 @_seguro
 def handle_delete(args: dict[str, Any]) -> dict[str, Any]:
     from asset_finance_modeler.web_api.assets import delete_asset
 
-    return delete_asset(str(args["asset_id"]), _tenant(args))
+    return delete_asset(_id_de(args), _tenant(args))
 
 
 def _por_defecto(model_id: str, overrides: dict[str, Any], fin: tuple[str, ...]) -> float | None:
@@ -285,7 +308,7 @@ def handle_value(args: dict[str, Any]) -> dict[str, Any]:
     from asset_finance_modeler.web_api.assets import _run_model, get_asset
 
     if args.get("asset_id"):
-        a = get_asset(str(args["asset_id"]), _tenant(args))
+        a = get_asset(_id_de(args), _tenant(args))
         model_id, overrides, result = a["model_id"], a.get("overrides") or {}, a.get("results_snapshot") or {}
         nombre = a["name"]
     elif args.get("model_id"):

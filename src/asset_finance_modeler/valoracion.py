@@ -152,6 +152,19 @@ def valorar(
             )
     if not deuda_neta:
         notas.append("Sin deuda neta indicada: el valor para el dueño es el de la empresa (pásala si tiene préstamos o caja).")
+    # Lo que explica el valor, para que nadie lo explique mal (27-sep: un
+    # agente dijo "no descuenta impuestos", y si los descuenta).
+    salida["impuestos_incluidos"] = True
+    positivos = [x for x in fcff if x > 0]
+    if len(positivos) >= 2 and positivos[0] > 0:
+        crec = (positivos[-1] / positivos[0]) ** (1 / (len(positivos) - 1)) - 1
+        salida["crecimiento_medio_flujos"] = round(crec, 4)
+        if salida.get("ev_ebitda_implicito") and salida["ev_ebitda_implicito"] > 10 and crec > 0.05:
+            notas.append(
+                f"El valor sale alto frente a múltiplos de mercado sobre todo porque los flujos crecen un {crec * 100:.1f} % al año "
+                f"(el último año es {positivos[-1] / positivos[0]:.1f} veces el primero) y el valor final parte del último año. "
+                "Los impuestos ya están descontados."
+            )
     if salida["peso_valor_terminal"] and salida["peso_valor_terminal"] > 0.75:
         notas.append("Más del 75 % del valor está en el valor final: depende mucho del crecimiento y de la tasa.")
     salida["notas"] = notas

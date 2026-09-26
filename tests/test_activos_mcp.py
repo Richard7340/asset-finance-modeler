@@ -126,3 +126,18 @@ def test_ipc_como_curva_anio_a_anio(db):
     e = _run_model("business_generic", {"inflacion": {"curva": [0.05], "aplicar_a": "gastos"}})
     g = next(iter(e["lineas"]["gastos"].values()))
     assert abs(g[1] / g[0] - 1.05) < 0.001
+
+
+def test_no_duplica_y_entiende_el_nombre(db):
+    """27-sep: el agente guardo otra vez la clinica para ponerle una regla, y
+    pidio la valoracion por su nombre."""
+    from asset_finance_modeler.mcp_server.tools import assets as a
+
+    with en_espacio("esp"):
+        aid = a.handle_save({"model_id": "business_generic", "name": "Clínica Dental Centro"})["id"]
+        r = a.handle_save({"model_id": "business_generic", "name": "clínica  dental centro", "reglas": [{"proveedor": "Iberdrola"}]})
+        assert r["error"] == "ya-existe" and r["asset_id"] == aid and len(a.handle_list({})["assets"]) == 1
+        assert a.handle_save({"model_id": "business_generic", "name": "Clínica Dental Centro", "duplicar": True})["id"] != aid
+        a.handle_delete({"asset_id": [x for x in a.handle_list({})["assets"] if x["id"] != aid][0]["id"]})
+        assert a.handle_value({"asset_id": "Clínica Dental Centro"})["activo"] == "Clínica Dental Centro"
+        assert a.handle_update({"asset_id": "Clínica Dental Centro", "reglas": [{"proveedor": "Iberdrola", "linea": "Suministros"}]})["id"] == aid
