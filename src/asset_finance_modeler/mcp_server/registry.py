@@ -14,6 +14,7 @@ from asset_finance_modeler.mcp_server.tools.crud import (
     make_list_scenarios,
     make_set_canonical,
 )
+from asset_finance_modeler.mcp_server.tools import assets as _activos
 from asset_finance_modeler.mcp_server.tools.discover import (
     handle_describe_schema,
     handle_list_models,
@@ -120,6 +121,15 @@ def build_registry(
             },
             handler=handle_run_model,
         ),
+        # Activos del Portfolio (cualquier tipo), en el espacio de la llamada.
+        ToolSpec(name="finance.asset.models", description="Model ids you can save as an asset: infrastructure presets (solar, wind, BESS, datacenter…), business_* (generic, restaurant, industrial), real_estate_rental, saas_*, svj_hybrid.", input_schema={"type": "object", "properties": {}, "additionalProperties": True}, handler=_activos.handle_models),
+        ToolSpec(name="finance.asset.schema", description="Every input (dotted path + current value) of a model, to know which overrides to pass.", input_schema={"type": "object", "properties": {"model_id": {"type": "string"}}, "required": ["model_id"], "additionalProperties": True}, handler=_activos.handle_schema),
+        ToolSpec(name="finance.asset.save", description="Save a model with overrides as a named ASSET of the caller's workspace (shows in the Portfolio). Returns id and KPIs.", input_schema={"type": "object", "properties": {"model_id": {"type": "string"}, "name": {"type": "string"}, "overrides": {"type": "object"}, "tags": {"type": "array"}, "location": {"type": "string"}, "lat": {"type": "number"}, "lon": {"type": "number"}}, "required": ["model_id", "name"], "additionalProperties": True}, handler=_activos.handle_save),
+        ToolSpec(name="finance.asset.list", description="The workspace's assets (optionally by lifecycle) with KPIs.", input_schema={"type": "object", "properties": {"lifecycle": {"type": "string"}}, "additionalProperties": True}, handler=_activos.handle_list),
+        ToolSpec(name="finance.asset.get", description="One asset: inputs, KPIs, annual income statement and cash flow.", input_schema={"type": "object", "properties": {"asset_id": {"type": "string"}}, "required": ["asset_id"], "additionalProperties": True}, handler=_activos.handle_get),
+        ToolSpec(name="finance.asset.update", description="Change an asset's inputs (merged) or name and re-run. Not allowed on the base of an operational asset.", input_schema={"type": "object", "properties": {"asset_id": {"type": "string"}, "overrides": {"type": "object"}, "quitar": {"type": "array"}, "name": {"type": "string"}}, "required": ["asset_id"], "additionalProperties": True}, handler=_activos.handle_update),
+        ToolSpec(name="finance.asset.set_lifecycle", description="Promote to operational (base locked, tracked against actuals) or back to opportunity.", input_schema={"type": "object", "properties": {"asset_id": {"type": "string"}, "lifecycle": {"type": "string"}, "tracking_frequency": {"type": "string"}, "commissioning_date": {"type": "string"}}, "required": ["asset_id", "lifecycle"], "additionalProperties": True}, handler=_activos.handle_lifecycle),
+        ToolSpec(name="finance.asset.delete", description="Delete an asset of the workspace.", input_schema={"type": "object", "properties": {"asset_id": {"type": "string"}}, "required": ["asset_id"], "additionalProperties": True}, handler=_activos.handle_delete),
     ]
 
     if store is not None:
