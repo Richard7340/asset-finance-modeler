@@ -20,6 +20,7 @@ Environment:
 from __future__ import annotations
 
 import inspect
+from asset_finance_modeler.store.scenarios import en_espacio
 import json
 import os
 from pathlib import Path
@@ -74,12 +75,17 @@ async def call_tool(req: CallRequest) -> dict[str, Any]:
     if req.name not in _registry:
         raise HTTPException(status_code=404, detail=f"unknown tool: {req.name}")
     spec = _registry[req.name]
+    args = req.arguments or {}
+    # El espacio de quien llama (la plataforma manda tenant_id = el id del
+    # espacio): todo lo que se guarda, lista o lee queda dentro de el.
+    espacio = args.get("tenant_id") or args.get("workspace_id")
     try:
-        result = spec.handler(req.arguments or {})
-        # Algunos handlers son async (p.ej. el puente VDR): sin esto /call
-        # devolvia el repr de la corrutina y FastAPI tumbaba con 500.
-        if inspect.isawaitable(result):
-            result = await result
+        with en_espacio(espacio):
+            result = spec.handler(args)
+            # Algunos handlers son async (p.ej. el puente VDR): sin esto /call
+            # devolvia el repr de la corrutina y FastAPI tumbaba con 500.
+            if inspect.isawaitable(result):
+                result = await result
     except Exception as exc:  # noqa: BLE001
         # Surface the error as a structured payload (no 500). Caller checks for 'error' key.
         return {"error": str(exc), "tool": req.name}

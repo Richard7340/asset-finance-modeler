@@ -4,9 +4,30 @@ import builtins
 import json
 import sqlite3
 from datetime import datetime
-from typing import Protocol
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Iterator, Protocol
 
 from asset_finance_modeler.core.scenario import Scenario
+
+# El espacio (tenant) de la llamada en curso. Lo fija la entrada /call con el
+# tenant_id que manda la plataforma: asi ninguna herramienta puede olvidarse
+# de filtrar (26-sep: list_scenarios devolvia los escenarios de TODOS los
+# espacios). Las rutas REST siguen pasando su workspace_id explicito.
+_espacio_actual: ContextVar[str | None] = ContextVar("espacio_actual", default=None)
+
+
+def espacio_actual() -> str | None:
+    return _espacio_actual.get()
+
+
+@contextmanager
+def en_espacio(workspace_id: str | None) -> Iterator[None]:
+    token = _espacio_actual.set(str(workspace_id) if workspace_id else None)
+    try:
+        yield
+    finally:
+        _espacio_actual.reset(token)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS scenarios (
@@ -159,6 +180,9 @@ class SQLiteScenarioStore:
         )
 
     def save(self, scenario: Scenario) -> None:
+        ws = espacio_actual()
+        if ws and not scenario.workspace_id:
+            scenario = scenario.model_copy(update={"workspace_id": ws})
         row = self._to_row(scenario)
         with self._conn() as conn:
             conn.execute(
@@ -199,6 +223,8 @@ class SQLiteScenarioStore:
         only returned if it belongs to that workspace — so a tenant can never
         read another tenant's asset by guessing its id. When ``workspace_id`` is
         ``None`` (admin/internal/cross-tenant tooling) the scoping is skipped."""
+        if workspace_id is None:
+            workspace_id = espacio_actual()
         with self._conn() as conn:
             if workspace_id is not None:
                 row = conn.execute(
@@ -221,6 +247,8 @@ class SQLiteScenarioStore:
         workspace_id: str | None = None,
         lifecycle: str | None = None,
     ) -> list[Scenario]:
+        if workspace_id is None:
+            workspace_id = espacio_actual()
         clauses = []
         params: list[object] = []
         if base_model is not None:
