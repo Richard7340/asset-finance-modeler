@@ -8,6 +8,7 @@ Antes lo que se modelaba por chat no aparecia en el Portfolio.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import HTTPException
@@ -57,6 +58,33 @@ def _gestion(s: Any, args: dict[str, Any]) -> None:
     s.inputs_snapshot = snap
 
 
+_IPC_INGRESOS = re.compile(r"(^|\.)(revenue[^.]*\.(escalation_pct_yr|growth_pct_yr)|revenue\.sources\[\d+\]\.pricing\.price_escalation_annual|alquiler\.subida_anual)$")
+_IPC_GASTOS = re.compile(r"(^|\.)(opex\.(opex_)?escalation_pct_yr|gastos\.subida_anual|meta\.inflation_annual)$")
+
+
+def aplicar_ipc(model_id: str, overrides: dict[str, Any], ipc: Any) -> tuple[dict[str, Any], list[str]]:
+    """El IPC de una vez (26-sep): a las subidas anuales de ingresos, de gastos
+    o de todo. Lo que el usuario haya fijado en una ruta manda sobre el IPC.
+    `ipc`: 0.03, o {"valor": 0.03, "a": "todo"|"ingresos"|"gastos"}."""
+    if ipc in (None, "", {}):
+        return overrides, []
+    valor, a = (ipc.get("valor"), str(ipc.get("a") or "todo")) if isinstance(ipc, dict) else (ipc, "todo")
+    valor = float(valor)
+    if not -0.2 <= valor <= 0.5:
+        raise ValueError("ipc-fuera-de-rango: el IPC va en tanto por uno (0.03 = 3 %)")
+    from asset_finance_modeler.web_api.models import model_schema
+
+    out, aplicadas = dict(overrides or {}), []
+    for x in model_schema(model_id).get("inputs", []):
+        ruta = str(x.get("path", ""))
+        if not isinstance(x.get("value"), (int, float)) or isinstance(x.get("value"), bool) or ruta in out:
+            continue
+        if (a in ("todo", "ingresos") and _IPC_INGRESOS.search(ruta)) or (a in ("todo", "gastos") and _IPC_GASTOS.search(ruta)):
+            out[ruta] = valor
+            aplicadas.append(ruta)
+    return out, aplicadas
+
+
 def _seguro(fn):
     """Los errores de la API (404, 400) como {error}, nunca una excepcion."""
     def envuelto(args: dict[str, Any]) -> dict[str, Any]:
@@ -88,21 +116,25 @@ def handle_save(args: dict[str, Any]) -> dict[str, Any]:
     from asset_finance_modeler.web_api.assets import SaveAssetBody, get_asset, save_asset
 
     t = _tenant(args)
+    overrides, con_ipc = aplicar_ipc(str(args["model_id"]), args.get("overrides") or {}, args.get("ipc"))
     body = SaveAssetBody(
-        model_id=str(args["model_id"]), name=str(args["name"]), overrides=args.get("overrides") or {},
+        model_id=str(args["model_id"]), name=str(args["name"]), overrides=overrides,
         tags=args.get("tags") or [], location=args.get("location"), lat=args.get("lat"), lon=args.get("lon"),
     )
     r = save_asset(body, t)
-    if args.get("carpeta") or args.get("reglas") or args.get("fuentes"):
+    if args.get("carpeta") or args.get("reglas") or args.get("fuentes") or con_ipc:
         from asset_finance_modeler.web_api.assets import _store
 
         s = _store().get(r["id"], workspace_id=t.workspace_id)
         _gestion(s, args)
+        if con_ipc:
+            s.inputs_snapshot = {**(s.inputs_snapshot or {}), "ipc_aplicado_a": con_ipc}
         _store().save(s)
     a = get_asset(r["id"], t)
     return {
         "id": r["id"], "name": a["name"], "model_id": a["model_id"], "kpis": (a.get("results_snapshot") or {}).get("kpis", {}),
         "carpeta": a.get("carpeta"), "reglas": a.get("reglas"),
+        **({"ipc_aplicado_a": con_ipc} if con_ipc else {}),
     }
 
 
@@ -147,12 +179,18 @@ def handle_update(args: dict[str, Any]) -> dict[str, Any]:
         store.save(s)
         snap = s.inputs_snapshot or {}
         return {"id": s.id, "name": s.name, "carpeta": snap.get("carpeta"), "reglas": snap.get("reglas") or [], "fuentes": snap.get("fuentes") or {}}
-    if s.base_locked and args.get("overrides"):
+    if s.base_locked and (args.get("overrides") or args.get("ipc") not in (None, "", {})):
         return {"error": "base_locked", "detail": "Activo en operacion: su base no se cambia (se compara con los reales). Para cambiarla, finance.asset.set_lifecycle a opportunity."}
     snap = dict(s.inputs_snapshot or {})
     overrides = {**(snap.get("overrides") or s.overrides or {}), **(args.get("overrides") or {})}
     for k in list(args.get("quitar") or []):
         overrides.pop(k, None)
+    con_ipc: list[str] = []
+    if args.get("ipc") not in (None, "", {}):
+        # El nuevo IPC sustituye al anterior, salvo en lo que se fije ahora a mano.
+        previas = {r for r in (snap.get("ipc_aplicado_a") or []) if r not in (args.get("overrides") or {})}
+        overrides, con_ipc = aplicar_ipc(s.base_model, {k: v for k, v in overrides.items() if k not in previas}, args["ipc"])
+        snap["ipc_aplicado_a"] = con_ipc
     results = _run_model(s.base_model, overrides)
     s.overrides = overrides
     snap["overrides"] = overrides
@@ -165,7 +203,7 @@ def handle_update(args: dict[str, Any]) -> dict[str, Any]:
     if args.get("name"):
         s.name = str(args["name"])
     store.save(s)
-    return {"id": s.id, "name": s.name, "kpis": results.get("kpis", {})}
+    return {"id": s.id, "name": s.name, "kpis": results.get("kpis", {}), **({"ipc_aplicado_a": con_ipc} if con_ipc else {})}
 
 
 @_seguro
@@ -184,3 +222,50 @@ def handle_delete(args: dict[str, Any]) -> dict[str, Any]:
     from asset_finance_modeler.web_api.assets import delete_asset
 
     return delete_asset(str(args["asset_id"]), _tenant(args))
+
+
+def _por_defecto(model_id: str, overrides: dict[str, Any], fin: tuple[str, ...]) -> float | None:
+    """El valor de una hipotesis (la del activo, o la de serie del modelo)."""
+    for k, v in (overrides or {}).items():
+        if k.endswith(fin) and isinstance(v, (int, float)):
+            return float(v)
+    from asset_finance_modeler.web_api.models import model_schema
+
+    for x in model_schema(model_id).get("inputs", []):
+        if str(x.get("path", "")).endswith(fin) and isinstance(x.get("value"), (int, float)):
+            return float(x["value"])
+    return None
+
+
+@_seguro
+def handle_value(args: dict[str, Any]) -> dict[str, Any]:
+    """Cuanto vale hoy un activo guardado (asset_id) o un modelo con hipotesis
+    (model_id + overrides): flujos descontados, multiplo opcional, deuda neta y
+    sensibilidad. `tasa`, `crecimiento`, `multiplo_ebitda`, `deuda_neta`,
+    `perpetuidad` y `ebitda_referencia` mandan sobre lo del modelo."""
+    from asset_finance_modeler.valoracion import valorar
+    from asset_finance_modeler.web_api.assets import _run_model, get_asset
+
+    if args.get("asset_id"):
+        a = get_asset(str(args["asset_id"]), _tenant(args))
+        model_id, overrides, result = a["model_id"], a.get("overrides") or {}, a.get("results_snapshot") or {}
+        nombre = a["name"]
+    elif args.get("model_id"):
+        model_id = str(args["model_id"])
+        overrides, _ = aplicar_ipc(model_id, dict(args.get("overrides") or {}), args.get("ipc"))
+        result, nombre = _run_model(model_id, overrides), model_id
+    else:
+        return {"error": "asset_id-o-model_id-required"}
+    tasa = args.get("tasa")
+    if tasa is None:
+        tasa = _por_defecto(model_id, overrides, ("discount_rate_annual", "tasa_descuento"))
+    g = args.get("crecimiento")
+    if g is None:
+        g = _por_defecto(model_id, overrides, ("terminal_growth_rate",))
+    v = valorar(
+        result, model_id=model_id, tasa=float(tasa if tasa is not None else 0.08),
+        crecimiento=float(g if g is not None else 0.02),
+        perpetuidad=args.get("perpetuidad"), multiplo_ebitda=args.get("multiplo_ebitda"),
+        deuda_neta=float(args.get("deuda_neta") or 0), ebitda_referencia=args.get("ebitda_referencia"),
+    )
+    return {"activo": nombre, "model_id": model_id, **v}

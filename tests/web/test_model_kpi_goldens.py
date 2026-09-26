@@ -35,7 +35,7 @@ _GOLDENS: list[tuple[str, int, float | None, float | None, float | None]] = [
     ("business_industrial", 6_724_877, 0.1547, 0.1547, 2.2),
     ("business_restaurant", 747_365, 0.209, 0.209, 0.0),
     ("real_estate_rental", 286_320, 0.0754, 0.0754, 1.59),
-    ("inmueble_alquiler", 2_316, 0.043916, 0.062689, 1.02),
+    ("inmueble_alquiler", -32_287, 0.043916, 0.062689, 1.02),
     ("saas_gestnova", 4_549_591, None, None, None),
 ]
 

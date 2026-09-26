@@ -257,7 +257,10 @@ def ejecutar(cfg: InmuebleConfig) -> dict[str, Any]:
         proyecto[-1] += precio_venta - costes_venta - imp_venta
     accionista = [-fondos_propios] + [cfo[y] + cfi[y] + cff[y] for y in range(n)]
     tasa = cfg.valoracion.tasa_descuento
-    van = sum(f / (1 + tasa) ** i for i, f in enumerate(accionista))
+    # Como en el resto de modelos: el VAN es el del PROYECTO (sin hipoteca); el
+    # del accionista, aparte (npv_equity).
+    van = sum(f / (1 + tasa) ** i for i, f in enumerate(proyecto))
+    van_accionista = sum(f / (1 + tasa) ** i for i, f in enumerate(accionista))
     servicio_deuda = [intereses[y] + capital[y] for y in range(n)]
     dscr = [noi[y] / servicio_deuda[y] for y in range(n) if servicio_deuda[y] > 0]
     acumulado, payback = -fondos_propios, None
@@ -270,6 +273,7 @@ def ejecutar(cfg: InmuebleConfig) -> dict[str, Any]:
     return {
         "kpis": {
             "npv": round(van),
+            "npv_equity": round(van_accionista),
             "irr_project": tir(proyecto),
             "irr_equity": tir(accionista),
             "dscr_min": round(min(dscr), 2) if dscr else None,

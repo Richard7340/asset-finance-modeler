@@ -71,3 +71,24 @@ def test_fuentes_de_las_hipotesis(db):
         assert f["alquiler.renta_mensual"]["fecha"] == "2026-09" and f["compra.precio"] == {"fuente": "lo dice el usuario"}
         f = a.handle_update({"asset_id": r["id"], "fuentes": {"compra.precio": None}})["fuentes"]
         assert list(f) == ["alquiler.renta_mensual"]
+
+
+def test_ipc_de_una_vez(db):
+    """El IPC a todas las subidas (o solo ingresos/gastos); lo fijado a mano manda
+    y un IPC nuevo sustituye al anterior."""
+    from asset_finance_modeler.mcp_server.tools import assets as a
+
+    ov, rutas = a.aplicar_ipc("solar_pv_50mw_spain", {"revenue[1].escalation_pct_yr": 0.0}, 0.03)
+    assert set(rutas) == {"revenue[0].escalation_pct_yr", "opex.opex_escalation_pct_yr"}
+    assert ov["revenue[1].escalation_pct_yr"] == 0.0 and "valuation.terminal_growth_rate" not in ov
+    assert a.aplicar_ipc("inmueble_alquiler", {}, {"valor": 0.025, "a": "gastos"})[1] == ["gastos.subida_anual"]
+    assert set(a.aplicar_ipc("saas_gestnova", {}, 0.02)[1]) == {"meta.inflation_annual", "revenue.sources[0].pricing.price_escalation_annual"}
+    assert "ipc-fuera-de-rango" in a.handle_save({"model_id": "business_generic", "name": "x", "ipc": 3, "workspace_id": "w"})["error"]
+    with en_espacio("esp"):
+        r = a.handle_save({"model_id": "inmueble_alquiler", "name": "Piso", "ipc": 0.03})
+        assert set(r["ipc_aplicado_a"]) == {"alquiler.subida_anual", "gastos.subida_anual"}
+        u = a.handle_update({"asset_id": r["id"], "ipc": {"valor": 0.02, "a": "gastos"}})
+        ov = a.handle_get({"asset_id": r["id"]})["overrides"]
+        assert u["ipc_aplicado_a"] == ["gastos.subida_anual"] and ov == {"gastos.subida_anual": 0.02}
+        a.handle_lifecycle({"asset_id": r["id"], "lifecycle": "operational"})
+        assert a.handle_update({"asset_id": r["id"], "ipc": 0.04})["error"] == "base_locked"
