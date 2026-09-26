@@ -159,8 +159,18 @@ def _id_de(args: dict[str, Any]) -> str:
         return pedido
     from asset_finance_modeler.web_api.assets import list_assets
 
-    plano = lambda x: " ".join(str(x or "").lower().split())  # noqa: E731
-    iguales = [a["id"] for a in list_assets(None, _tenant(args))["assets"] if plano(a["name"]) == plano(pedido)]
+    import unicodedata
+
+    def plano(x: Any) -> str:
+        t = unicodedata.normalize("NFD", str(x or "").lower())
+        t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+        return " ".join(re.sub(r"[^a-z0-9]+", " ", t).split())
+
+    activos = list_assets(None, _tenant(args))["assets"]
+    iguales = [a["id"] for a in activos if plano(a["name"]) == plano(pedido)]
+    if not iguales and plano(pedido):
+        # "clinica-dental" para "Clínica Dental Centro": solo si encaja uno.
+        iguales = [a["id"] for a in activos if plano(pedido) in plano(a["name"])]
     return iguales[0] if len(iguales) == 1 else pedido
 
 

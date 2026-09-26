@@ -230,10 +230,49 @@ def _apply_overrides(cfg: dict[str, Any], overrides: dict[str, Any]) -> dict[str
         try:
             cfg = set_by_path(cfg, path, _coerce(cfg, path, value))
         except InvalidPathError as exc:
+            sugeridas = _rutas_parecidas(cfg, str(exc.path))
             raise HTTPException(
-                status_code=400, detail=f"invalid override path: {exc.path}"
+                status_code=400,
+                detail=f"invalid override path: {exc.path}"
+                + (f". Rutas parecidas que si existen: {', '.join(sugeridas)}" if sugeridas else ""),
             ) from exc
     return cfg
+
+
+def _rutas_parecidas(cfg: dict[str, Any], mala: str, n: int = 6) -> list[str]:
+    """Las rutas del modelo que mas se parecen a una que no existe (27-sep: un
+    agente puso "losses.degradation" seis veces; la buena era "degradation")."""
+    import re as _re
+
+    rutas: list[str] = []
+
+    def recorrer(x: Any, pre: str, prof: int) -> None:
+        if prof > 5:
+            return
+        if isinstance(x, dict):
+            for k, v in x.items():
+                r = f"{pre}.{k}" if pre else str(k)
+                rutas.append(r)
+                recorrer(v, r, prof + 1)
+        elif isinstance(x, list) and x:
+            recorrer(x[0], f"{pre}[0]", prof + 1)
+
+    recorrer(cfg, "", 0)
+    trozos = [t for t in _re.split(r"[.\[\]_]+", mala.lower()) if t and not t.isdigit()]
+    if not trozos:
+        return []
+    ultimo = _re.split(r"[.\[\]]+", mala.lower().strip("."))[-1]
+
+    def nota(r: str) -> float:
+        rl = r.lower()
+        partes = _re.split(r"[.\[\]_]+", rl)
+        puntos = sum(1 for t in trozos if t in rl)
+        puntos += 2 if rl.split(".")[-1] == ultimo else 0
+        puntos += 1 if any(p.startswith(ultimo[:5]) for p in partes) else 0
+        return puntos - len(r) / 1000
+
+    buenas = sorted((r for r in rutas if nota(r) >= 1), key=nota, reverse=True)
+    return buenas[:n]
 
 
 router = APIRouter(prefix="/api/models", dependencies=[Depends(require_token)])

@@ -159,3 +159,13 @@ def test_ipc_se_suma_al_crecimiento_real_y_supuestos_a_la_vista(db):
         assert r["reglas"] == [{"proveedor": "Iberdrola", "linea": "suministros"}]
         sc = r["supuestos_clave"]
         assert sc["taxes.corporate_income_tax_rate"] == 0.25 and sc["valuation.discount_rate_annual"] == 0.1 and sc["inversion_total"] == 0
+
+
+def test_encuentra_el_activo_por_parte_del_nombre(db):
+    from asset_finance_modeler.mcp_server.tools import assets as a
+
+    with en_espacio("esp"):
+        aid = a.handle_save({"model_id": "business_generic", "name": "Clínica Dental Centro"})["id"]
+        a.handle_save({"model_id": "business_generic", "name": "Clínica Veterinaria"})
+        assert a.handle_get({"asset_id": "clinica-dental"})["id"] == aid
+        assert a.handle_get({"asset_id": "clinica"})["error"] == "not_found"  # dos encajan: no elige
