@@ -286,6 +286,15 @@ def ejecutar(cfg: InmuebleConfig) -> dict[str, Any]:
             payback = y + 1
 
     r0 = lambda xs: [round(x) for x in xs]  # noqa: E731
+    # La hipoteca año a año y la caja acumulada (28-sep), para la app.
+    saldo, vivo = [], prestamo
+    for y in range(n):
+        vivo = max(vivo - capital[y], 0.0)
+        saldo.append(vivo)
+    caja, acc = [], 0.0
+    for y in range(n):
+        acc += cfo[y] + cfi[y] + cff[y]
+        caja.append(acc)
     return {
         "kpis": {
             "npv": round(van),
@@ -298,6 +307,7 @@ def ejecutar(cfg: InmuebleConfig) -> dict[str, Any]:
             "rentabilidad_neta": round(noi[0] / inversion_total, 4) if inversion_total else None,
             "cash_on_cash_y1": round(accionista[1] / fondos_propios, 4) if fondos_propios > 0 else None,
             "payback_anios": payback,
+            "payback_years": payback,
             "fondos_propios": round(fondos_propios),
             "cuota_hipoteca_mensual": round(cuota, 2),
         },
@@ -305,7 +315,10 @@ def ejecutar(cfg: InmuebleConfig) -> dict[str, Any]:
             "revenue": r0(ingresos), "ebitda": r0(noi), "ebit": r0([noi[y] - amortizacion for y in range(n)]),
             "interest_expense": r0(intereses), "ebt": r0(base), "tax": r0(impuesto), "net_income": r0(neto),
         }},
-        "cash_flow": {"years": anios, "cfo": r0(cfo), "cfi": r0(cfi), "cff": r0(cff)},
+        "cash_flow": {"years": anios, "cfo": r0(cfo), "cfi": r0(cfi), "cff": r0(cff), "cash": r0(caja)},
+        **({"deuda": {"years": anios, "saldo": r0(saldo), "intereses": r0(intereses), "amortizacion": r0(capital),
+                      "disposiciones": [round(prestamo)] + [0] * (n - 1),
+                      "dscr": [round(noi[y] / servicio_deuda[y], 2) if servicio_deuda[y] > 0 else None for y in range(n)]}} if prestamo > 0 else {}),
         "lineas": {
             "ingresos": {"Rentas": r0(rentas), **({"Otros ingresos": r0(otros_ing)} if a.otros_ingresos_anuales else {})},
             "gastos": {k: r0(vs) for k, vs in lineas_gastos.items()},

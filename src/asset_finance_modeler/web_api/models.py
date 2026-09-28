@@ -7,6 +7,7 @@ annualized P&L, free-cash-flow and headline KPIs.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -124,7 +125,7 @@ def _run_financial_output(out: FinancialOutput, ppy: int) -> dict[str, Any]:
     pnl = out.pnl
     income_rows = {
         k: [round(x) for x in _annual(pnl[k], ppy)]
-        for k in ("revenue", "ebitda", "ebit", "interest_expense", "ebt", "tax", "net_income")
+        for k in ("revenue", "cogs", "gross_profit", "opex", "ebitda", "depreciation", "ebit", "interest_expense", "ebt", "tax", "net_income")
         if k in pnl
     }
     n_years = len(next(iter(income_rows.values()))) if income_rows else 0
@@ -150,13 +151,65 @@ def _run_financial_output(out: FinancialOutput, ppy: int) -> dict[str, Any]:
     }
     if getattr(kp, "npv_equity", 0):
         kpis["npv_equity"] = round(kp.npv_equity)
+    # Lo que el motor ya calculaba y no se enseñaba (28-sep).
+    if getattr(kp, "payback_years", None) is not None:
+        kpis["payback_years"] = round(kp.payback_years, 1)
+    if getattr(kp, "dscr_avg", None):
+        kpis["dscr_avg"] = round(kp.dscr_avg, 2)
+    if getattr(kp, "lcoe", None):
+        kpis["lcoe"] = round(kp.lcoe, 2)
+    val = out.valuation or {}
+    if val.get("enterprise_value") is not None:
+        kpis["enterprise_value"] = round(val["enterprise_value"])
 
-    payload = {
+    def _fin_de_anio(serie: list[float]) -> list[float]:
+        return [round(serie[min((y + 1) * ppy, len(serie)) - 1]) for y in range(n_years)] if serie else []
+
+    summary = dict(out.summary)
+    payload: dict[str, Any] = {
         "kpis": kpis,
         "income_statement": income_statement,
         "cash_flow": cash_flow,
-        "summary": dict(out.summary),
+        "summary": summary,
     }
+    # Caja a final de cada año: la del modelo, o la suma de los flujos.
+    if "cash" in cf:
+        cash_flow["cash"] = _fin_de_anio(list(cf["cash"]))
+    elif all(k in cash_flow for k in ("cfo", "cfi", "cff")):
+        acc, caja = 0.0, []
+        for y in range(n_years):
+            acc += cash_flow["cfo"][y] + cash_flow["cfi"][y] + cash_flow["cff"][y]
+            caja.append(round(acc))
+        cash_flow["cash"] = caja
+    # Balance a final de cada año.
+    bal = out.balance or {}
+    if bal:
+        payload["balance"] = {"years": list(range(1, n_years + 1)), **{k: _fin_de_anio(list(v)) for k, v in bal.items() if isinstance(v, list)}}
+    # El calendario de la deuda año a año.
+    dm = out.debt_metrics or {}
+    deuda_anual = summary.pop("deuda_anual", None)
+    if "balance" in dm and any(dm["balance"]):
+        dscr_p = list(getattr(kp, "dscr_series", []) or [])
+        dscr_y: list[float | None] = []
+        for y in range(n_years):
+            vals = [v for v in dscr_p[y * ppy:(y + 1) * ppy] if v and v > 0 and math.isfinite(v)]
+            dscr_y.append(round(sum(vals) / len(vals), 2) if vals else None)
+        payload["deuda"] = {
+            "years": list(range(1, n_years + 1)),
+            "saldo": _fin_de_anio(list(dm["balance"])),
+            "intereses": [round(x) for x in _annual(list(dm.get("interest", [])), ppy)],
+            "amortizacion": [round(x) for x in _annual(list(dm.get("principal", [])), ppy)],
+            "disposiciones": [round(x) for x in _annual(list(dm.get("drawdowns", [])), ppy)],
+            "dscr": dscr_y,
+        }
+    elif isinstance(deuda_anual, dict):
+        payload["deuda"] = {
+            "years": list(range(1, n_years + 1)),
+            **{k: [round(x, 2) if k == "dscr" else round(x) for x in (v or [])][:n_years] for k, v in deuda_anual.items()},
+        }
+    # La valoración del modelo (DCF del proyecto).
+    if val:
+        payload["valoracion"] = {k: round(v) for k, v in val.items() if isinstance(v, (int, float))}
     # Ensure JSON-serializable (Decimals/dates -> str).
     result: dict[str, Any] = json.loads(json.dumps(payload, default=str))
     return result

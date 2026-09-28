@@ -457,6 +457,15 @@ class InfrastructureModel:
             "lcoe": kpis.lcoe if kpis.lcoe is not None else -1.0,
         }
 
+        # El calendario de la deuda por periodo (28-sep): la app lo enseña
+        # año a año (saldo, intereses, amortización, disposiciones).
+        debt_metrics = {
+            **debt_metrics,
+            "interest": list(debt_interest),
+            "principal": list(debt_principal),
+            "drawdowns": list(debt_drawdowns),
+            "balance": list(debt_balance),
+        }
         return FinancialOutput(
             pnl=pnl,
             cashflow=cf,

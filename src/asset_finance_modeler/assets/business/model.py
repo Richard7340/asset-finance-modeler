@@ -168,6 +168,16 @@ class BusinessModel:
         }
         if getattr(self, "_prestamos", None):
             summary["prestamos"] = self._prestamos  # type: ignore[assignment]
+        # La deuda año a año (28-sep): la app enseña su calendario.
+        if hay_deuda:
+            saldo, vivo = [], ya_debido
+            for y in range(years):
+                vivo = max(vivo + drawdown_total[y] - principal_y[y], 0.0)
+                saldo.append(vivo)
+            summary["deuda_anual"] = {  # type: ignore[assignment]
+                "saldo": saldo, "intereses": list(int_y), "amortizacion": list(principal_y),
+                "disposiciones": list(drawdown_total), "dscr": list(dscr_series),
+            }
 
         return FinancialOutput(
             pnl=pnl,
