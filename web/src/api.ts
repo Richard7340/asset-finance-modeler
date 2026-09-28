@@ -440,7 +440,23 @@ export type PortfolioAsset = {
   irr: number;
   /** Yield = VAN / CAPEX, decimal. */
   yield_pct: number;
+  /** Tipo de activo (28-sep). */
+  tipo?: TipoDeActivo;
+  lifecycle?: Lifecycle | null;
+  anio_inicio?: number;
+  enterprise_value?: number | null;
+  /** Deuda viva, caja, ingresos y EBITDA del año en curso. */
+  deuda_viva?: number | null;
+  caja?: number | null;
+  ingresos_anio?: number | null;
+  ebitda_anio?: number | null;
+  /** Series anuales del modelo (año 1, 2, …). */
+  series?: { revenue: number[]; ebitda: number[]; net_income: number[]; flujo_caja: number[]; deuda: number[] };
+  /** El año en curso: lo real hasta hoy frente a lo previsto hasta hoy. */
+  ytd?: { real: number; prevision: number };
 } & AssetLocation;
+
+export type TipoDeActivo = "negocio" | "inmueble" | "renovable" | "infraestructura" | "saas";
 
 export type PortfolioTotals = {
   npv: number;
@@ -449,11 +465,30 @@ export type PortfolioTotals = {
   count: number;
   /** CAPEX-weighted IRR across included assets, decimal. */
   irr_weighted?: number;
+  enterprise_value?: number;
+  deuda_viva?: number;
+  caja?: number;
+  ingresos_anio?: number;
+  ebitda_anio?: number;
+  /** Real / previsto del año en curso (activos con datos reales), en %. */
+  cumplimiento_ytd_pct?: number;
+  ytd?: { real: number; prevision: number };
+};
+
+/** Series de toda la cartera por AÑO NATURAL. */
+export type Consolidado = {
+  years: number[];
+  revenue: number[];
+  ebitda: number[];
+  net_income: number[];
+  flujo_caja: number[];
+  deuda: number[];
 };
 
 export type Portfolio = {
   assets: PortfolioAsset[];
   totals: PortfolioTotals;
+  consolidado?: Consolidado;
 };
 
 export async function getPortfolio(

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, LayoutGrid } from "lucide-react";
@@ -25,6 +25,8 @@ import { useAssetSeries } from "../hooks/useAssetSeries";
 import { consolidateSeries } from "../lib/assetSeries";
 import AssetCards from "./AssetCards";
 import PortfolioCurve from "./PortfolioCurve";
+import ConsolidadoChart from "./ConsolidadoChart";
+import type { TipoDeActivo } from "../api";
 
 type Props = {
   /** Open a saved asset in the detail editor (drill-in). */
@@ -256,7 +258,39 @@ export default function PortfolioOverview({
     () => rows.map((r) => r.id).filter((id) => !excluded.has(id)),
     [rows, excluded],
   );
-  const { byId: seriesById, loading: seriesLoading } = useAssetSeries(seriesIds);
+  // Las series ya vienen en la cartera (28-sep): solo se piden aparte las de
+  // los activos que no las traigan (antes, una petición por activo).
+  const sinSerie = useMemo(
+    () => seriesIds.filter((id) => !(metricsById.get(id)?.series?.net_income?.length ?? 0)),
+    [seriesIds, metricsById],
+  );
+  const { byId: seriesFetched, loading: seriesLoading } = useAssetSeries(sinSerie);
+  const seriesById = useMemo(() => {
+    const m = new Map<string, number[]>(seriesFetched);
+    for (const id of seriesIds) {
+      const s = metricsById.get(id)?.series;
+      if (s?.net_income?.length) m.set(id, s.net_income);
+    }
+    return m;
+  }, [seriesFetched, seriesIds, metricsById]);
+
+  // Tipo de cada activo (se recuerda aunque se excluya, para el filtro).
+  const [tipos, setTipos] = useState<Map<string, TipoDeActivo>>(new Map());
+  useEffect(() => {
+    const nuevos = (portfolio?.assets ?? []).filter((a) => a.tipo && tipos.get(a.id) !== a.tipo);
+    if (nuevos.length) setTipos((prev) => { const m = new Map(prev); nuevos.forEach((a) => m.set(a.id, a.tipo!)); return m; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [portfolio]);
+  const [filtroTipo, setFiltroTipo] = useState<TipoDeActivo | "todos">("todos");
+  const elegirTipo = (t: TipoDeActivo | "todos") => {
+    setFiltroTipo(t);
+    setExcluded(new Set(t === "todos" ? [] : allAssets.map((a) => a.id).filter((id) => tipos.get(id) !== t)));
+  };
+  const tiposPresentes = useMemo(() => {
+    const cuenta = new Map<TipoDeActivo, number>();
+    for (const t of tipos.values()) cuenta.set(t, (cuenta.get(t) ?? 0) + 1);
+    return cuenta;
+  }, [tipos]);
   const portfolioCurve = useMemo(
     () => consolidateSeries(seriesIds.map((id) => seriesById.get(id) ?? [])),
     [seriesIds, seriesById],
@@ -372,9 +406,7 @@ export default function PortfolioOverview({
         </div>
         <div
           ref={kpiRef}
-          className={`grid grid-cols-2 gap-3 ${
-            totals?.irr_weighted !== undefined ? "sm:grid-cols-5" : "sm:grid-cols-4"
-          }`}
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
         >
           <Kpi
             label="VAN total"
@@ -396,6 +428,25 @@ export default function PortfolioOverview({
               value={totals.irr_weighted}
               format={pct}
               hint="ponderada por CAPEX"
+            />
+          )}
+          {totals?.enterprise_value !== undefined && (
+            <Kpi label="Valor de empresa" value={totals.enterprise_value} format={eur} hint="lo que valen hoy sus flujos" />
+          )}
+          {totals?.deuda_viva !== undefined && totals.deuda_viva > 0 && (
+            <Kpi label="Deuda viva" value={totals.deuda_viva} format={eur} hint={`a ${new Date().getFullYear()}`} />
+          )}
+          {totals?.caja !== undefined && (
+            <Kpi label="Caja" value={totals.caja} format={eur} hint="acumulada prevista este año" />
+          )}
+          {totals?.ingresos_anio !== undefined && (
+            <Kpi label={`Ingresos ${new Date().getFullYear()}`} value={totals.ingresos_anio} format={eur} hint={totals.ebitda_anio !== undefined ? `EBITDA ${eur(totals.ebitda_anio)}` : undefined} />
+          )}
+          {totals?.cumplimiento_ytd_pct !== undefined && (
+            <Kpi
+              label="Cumplimiento del año"
+              text={`${totals.cumplimiento_ytd_pct.toLocaleString("es-ES", { maximumFractionDigits: 1 })} %`}
+              hint={totals.ytd ? `real ${eur(totals.ytd.real)} de ${eur(totals.ytd.prevision)} previstos hasta hoy` : "real frente a lo previsto hasta hoy"}
             />
           )}
           <Kpi
@@ -427,6 +478,26 @@ export default function PortfolioOverview({
             {excluded.size > 0 ? ` · ${excluded.size} excluido${excluded.size === 1 ? "" : "s"}` : ""}
           </span>
         </div>
+
+        {tiposPresentes.size > 1 && (
+          <div className="flex flex-wrap gap-1.5">
+            {([["todos", "Todos"], ["negocio", "Negocios"], ["inmueble", "Inmuebles"], ["renovable", "Renovables"], ["infraestructura", "Infraestructura"], ["saas", "SaaS"]] as Array<[TipoDeActivo | "todos", string]>)
+              .filter(([t]) => t === "todos" || tiposPresentes.has(t as TipoDeActivo))
+              .map(([t, n]) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => elegirTipo(t)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                    filtroTipo === t ? "border-accent-500 bg-accent-50 text-accent-700" : "border-slate-200 text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {n}
+                  {t !== "todos" && <span className="ml-1 text-slate-400">{tiposPresentes.get(t as TipoDeActivo)}</span>}
+                </button>
+              ))}
+          </div>
+        )}
 
         <AssetCards
           rows={rows}
@@ -692,17 +763,25 @@ export default function PortfolioOverview({
             cumulative trajectory across the included assets, over the horizon. */}
         <Reveal className="surface surface-hover p-4" delay={60}>
           <PanelTitle
-            title="Curva consolidada de cartera"
-            subtitle="Generación anual agregada y trayectoria acumulada, sobre el horizonte de proyección"
+            title="La cartera en el tiempo"
+            subtitle={portfolio?.consolidado ? "Todos los activos sumados por año natural: lo vivido a la izquierda de hoy, lo previsto a la derecha" : "Generación anual agregada y trayectoria acumulada, sobre el horizonte de proyección"}
             right={
-              portfolioCurve.length >= 2 ? (
+              portfolio?.consolidado ? (
+                <span className="text-[11px] tabular-nums text-slate-400">
+                  {portfolio.consolidado.years[0]}–{portfolio.consolidado.years[portfolio.consolidado.years.length - 1]}
+                </span>
+              ) : portfolioCurve.length >= 2 ? (
                 <span className="text-[11px] tabular-nums text-slate-400">
                   {portfolioCurve.length} años
                 </span>
               ) : null
             }
           />
-          <PortfolioCurve series={portfolioCurve} loading={seriesLoading} />
+          {portfolio?.consolidado ? (
+            <ConsolidadoChart data={portfolio.consolidado} />
+          ) : (
+            <PortfolioCurve series={portfolioCurve} loading={seriesLoading} />
+          )}
         </Reveal>
 
         {/* Año-1 revenue per asset — kept with the analytics, before the table. */}

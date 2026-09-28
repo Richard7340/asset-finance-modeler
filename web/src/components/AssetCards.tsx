@@ -325,6 +325,32 @@ export default function AssetCards({
               )}
             </div>
 
+            {/* Cómo va el año (real frente a lo previsto hasta hoy), valor y deuda (28-sep). */}
+            {m && (m.ytd || (m.deuda_viva ?? 0) > 0 || m.enterprise_value != null) && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
+                {m.ytd && m.ytd.prevision > 0 && (() => {
+                  const c = m.ytd.real / m.ytd.prevision;
+                  const tono = c >= 1 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : c >= 0.9 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-700 border-rose-200";
+                  return (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium ${tono}`} title={`Real ${eur(m.ytd.real)} frente a ${eur(m.ytd.prevision)} previstos hasta hoy`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${c >= 1 ? "bg-emerald-500" : c >= 0.9 ? "bg-amber-500" : "bg-rose-500"}`} aria-hidden />
+                      Año: {(c * 100).toLocaleString("es-ES", { maximumFractionDigits: 0 })} % de lo previsto
+                    </span>
+                  );
+                })()}
+                {m.enterprise_value != null && (
+                  <span className="rounded-full border border-slate-200 px-2 py-0.5 text-slate-500">
+                    Valor <span className="tabular-nums text-slate-700">{eur(m.enterprise_value)}</span>
+                  </span>
+                )}
+                {(m.deuda_viva ?? 0) > 0 && (
+                  <span className="rounded-full border border-slate-200 px-2 py-0.5 text-slate-500">
+                    Deuda <span className="tabular-nums text-slate-700">{eur(m.deuda_viva!)}</span>
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Freshness: when the figures were last refreshed (calm dot). */}
             <div className="mt-3">
               <UpdatedLine iso={r.last_update} frequency={r.tracking_frequency} />
