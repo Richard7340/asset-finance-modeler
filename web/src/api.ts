@@ -569,6 +569,8 @@ export type SerieReal = {
     desviacion_pct: number | null;
   }>;
   resumen: { real: number | null; prevision_de_esos_periodos: number; cumplimiento_pct: number | null; periodos_con_dato: number };
+  /** De dónde sale el reparto mensual de la previsión. */
+  estacionalidad?: string;
 };
 
 export async function getSerie(id: string, linePath: string, cada: Cada, desde?: string, hasta?: string): Promise<SerieReal> {

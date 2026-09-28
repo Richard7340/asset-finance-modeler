@@ -426,6 +426,31 @@ def _etiqueta(d: "date", cada: str) -> str:
     return str(d.year)
 
 
+def pesos_mensuales(asset: Scenario, line_path: str) -> tuple[list[float], str]:
+    """Cómo se reparte el año entre los meses para esta línea (28-sep):
+    la estacionalidad que puso el usuario (para esa línea o para todas), el
+    perfil mensual del modelo (renovables), el típico de la solar en España,
+    o igual todos los meses."""
+    snap = asset.inputs_snapshot or {}
+    est = snap.get("estacionalidad") or {}
+    nombre = line_path.split(".")[-1]
+    for k in (line_path, nombre, "*"):
+        v = est.get(k) if isinstance(est, dict) else None
+        if isinstance(v, list) and len(v) == 12 and sum(v) > 0:
+            return [float(x) for x in v], "la tuya"
+    ov = snap.get("overrides") or asset.overrides or {}
+    produce = "produccion" in line_path or line_path.endswith((".revenue", "Producción")) or line_path.startswith("lineas.ingresos")
+    for k in ("production.irradiation_profile", "production.production_profile"):
+        v = ov.get(k)
+        if produce and isinstance(v, list) and len(v) == 12 and sum(v) > 0:
+            return [float(x) for x in v], "el perfil de producción del activo"
+    if produce and str(asset.base_model).startswith(("solar", "svj_fv")):
+        from asset_finance_modeler.mcp_server.tools.assets import PERFIL_SOLAR_ES  # noqa: PLC0415
+
+        return list(PERFIL_SOLAR_ES), "la típica de la solar en España"
+    return [1.0] * 12, "igual todos los meses"
+
+
 def serie_real_vs_prevision(asset: Scenario, actuals: list[Actual], line_path: str, cada: str,
                             desde: str | None = None, hasta: str | None = None) -> dict[str, Any]:
     from datetime import date  # noqa: PLC0415
@@ -456,12 +481,17 @@ def serie_real_vs_prevision(asset: Scenario, actuals: list[Actual], line_path: s
         d0 = max(d0, date.fromordinal(max(1, d1.toordinal() - atras)))
     d0 = _inicio_de(d0, cada)
 
+    pesos, origen_pesos = pesos_mensuales(asset, line_path)
+    total_pesos = sum(pesos)
+
     def prevision_del_dia(d: "date") -> float:
+        import calendar  # noqa: PLC0415
+
         y = d.year - inicio_modelo
         if y < 0 or y >= len(base):
             return 0.0
-        dias = 366 if (d.year % 4 == 0 and (d.year % 100 != 0 or d.year % 400 == 0)) else 365
-        return float(base[y]) / dias
+        # La parte del año que toca a ese mes (estacionalidad), repartida por sus días.
+        return float(base[y]) * pesos[d.month - 1] / total_pesos / calendar.monthrange(d.year, d.month)[1]
 
     real_por_dia: dict["date", float] = {}
     for a in actuals:
@@ -500,6 +530,7 @@ def serie_real_vs_prevision(asset: Scenario, actuals: list[Actual], line_path: s
     prev_con_dato = sum(p["prevision"] for p in con_dato)
     return {
         "line_path": line_path, "cada": cada, "desde": d0.isoformat(), "hasta": d1.isoformat(),
+        "estacionalidad": origen_pesos,
         "puntos": puntos,
         "resumen": {
             "real": round(sum(p["real"] for p in con_dato), 2) if con_dato else None,

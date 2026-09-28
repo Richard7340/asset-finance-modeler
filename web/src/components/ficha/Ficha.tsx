@@ -13,6 +13,7 @@ import { AssetAlerts } from "../Alerts";
 import DeudaPanel, { Dato } from "./DeudaPanel";
 import ValoracionPanel from "./ValoracionPanel";
 import SerieRealPanel from "./SerieRealPanel";
+import LineasChart from "./LineasChart";
 import { eur, mult } from "../../format";
 
 type Pestana = "resumen" | "real" | "curvas" | "deuda" | "valor" | "estados";
@@ -100,6 +101,9 @@ export default function Ficha({
       {actual === "curvas" && (
         <div className="space-y-4">
           <Charts data={result} />
+          {(result as { lineas?: Record<string, Record<string, number[]>> }).lineas && (
+            <LineasChart lineas={(result as { lineas: Record<string, Record<string, number[]>> }).lineas} />
+          )}
           {curvas}
         </div>
       )}

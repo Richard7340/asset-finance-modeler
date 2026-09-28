@@ -95,7 +95,7 @@ export default function SerieRealPanel({ assetId }: { assetId: string }) {
           </ResponsiveContainer>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">
-          La previsión de cada periodo es la del año repartida por días (sin estacionalidad). Los datos reales se anotan abajo o pidiéndoselo a tu agente: «apunta 250 MWh de hoy».
+          La previsión de cada periodo es la del año repartida por meses según {s?.estacionalidad ? <b>{s.estacionalidad}</b> : "la estacionalidad"} (cámbiala pidiéndoselo a tu agente: «en agosto vendemos el doble»). Los datos reales se anotan abajo o pidiéndoselo a tu agente: «apunta 250 MWh de hoy».
         </p>
       </div>
     </div>

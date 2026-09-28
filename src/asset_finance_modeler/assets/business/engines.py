@@ -15,6 +15,28 @@ def indice_ipc(curva: list[float] | None, years: int) -> list[float] | None:
     return idx
 
 
+def importe_de_linea(ln: dict[str, Any], y: int, rate: float, indice: list[float] | None = None) -> float:
+    """El importe de una línea el año y (0 = el primero), 28-sep:
+    - `curva` (importes por año, los del usuario, nominales): tal cual; pasado
+      el último año, ese importe crece a `rate`.
+    - `crecimientos` (subida de cada año): se encadenan desde year1_amount; el
+      último sigue. Con IPC, la subida es real y va encima.
+    - si no: year1_amount crece a `rate` (y el IPC encima), como siempre."""
+    curva = ln.get("curva")
+    if curva:
+        if y < len(curva):
+            return float(curva[y])
+        return float(curva[-1]) * (1.0 + rate) ** (y - len(curva) + 1)
+    base = float(ln["year1_amount"])
+    crec = ln.get("crecimientos")
+    if crec:
+        f = 1.0
+        for k in range(1, y + 1):
+            f *= 1.0 + float(crec[min(k - 1, len(crec) - 1)])
+        return base * f * (indice[y] if indice else 1.0)
+    return base * (1.0 + rate) ** y * (indice[y] if indice else 1.0)
+
+
 def revenue_series(lines: list[dict[str, Any]], years: int, indice: list[float] | None = None) -> list[float]:
     """Annual total revenue = sum over lines of year1_amount * (1+growth)^(y).
 
@@ -25,9 +47,7 @@ def revenue_series(lines: list[dict[str, Any]], years: int, indice: list[float] 
     for y in range(years):
         total = 0.0
         for ln in lines:
-            base = float(ln["year1_amount"])
-            g = float(ln.get("growth_pct_yr", 0.0))
-            total += base * (1.0 + g) ** y * (indice[y] if indice else 1.0)
+            total += importe_de_linea(ln, y, float(ln.get("growth_pct_yr", 0.0)), indice)
         out.append(total)
     return out
 
@@ -54,10 +74,10 @@ def opex_series(
             if indice:
                 # Con curva de IPC: el IPC del anio y, si la linea tiene su
                 # propio crecimiento, ese crecimiento real encima.
-                fixed += float(ln["year1_amount"]) * (1.0 + float(g or 0.0)) ** y * indice[y]
+                fixed += importe_de_linea(ln, y, float(g or 0.0), indice)
                 continue
             rate = escalation_pct_yr if g is None else float(g)
-            fixed += float(ln["year1_amount"]) * (1.0 + rate) ** y
+            fixed += importe_de_linea(ln, y, rate)
         var = variable_pct * (revenue[y] if y < len(revenue) else 0.0)
         out.append(fixed + var)
     return out
@@ -138,7 +158,7 @@ def line_series(cfg: dict[str, Any], years: int) -> dict[str, dict[str, list[flo
     ingresos: dict[str, list[float]] = {}
     for ln in revenue:
         g = float(ln.get("growth_pct_yr", 0.0))
-        ingresos[str(ln["name"])] = [float(ln["year1_amount"]) * (1.0 + g) ** y * (idx_i[y] if idx_i else 1.0) for y in range(years)]
+        ingresos[str(ln["name"])] = [importe_de_linea(ln, y, g, idx_i) for y in range(years)]
     total = revenue_series(revenue, years, idx_i)
     opex = cfg.get("opex") or {}
     esc = float(opex.get("escalation_pct_yr", 0.0))
@@ -149,10 +169,10 @@ def line_series(cfg: dict[str, Any], years: int) -> dict[str, dict[str, list[flo
     for ln in opex.get("fixed_lines") or []:
         g = ln.get("growth_pct_yr")
         if idx_g:
-            gastos[str(ln["name"])] = [float(ln["year1_amount"]) * (1.0 + float(g or 0.0)) ** y * idx_g[y] for y in range(years)]
+            gastos[str(ln["name"])] = [importe_de_linea(ln, y, float(g or 0.0), idx_g) for y in range(years)]
             continue
         rate = esc if g is None else float(g)
-        gastos[str(ln["name"])] = [float(ln["year1_amount"]) * (1.0 + rate) ** y for y in range(years)]
+        gastos[str(ln["name"])] = [importe_de_linea(ln, y, rate) for y in range(years)]
     var_pct = float(opex.get("variable_pct_of_revenue", 0.0))
     if var_pct:
         gastos["Gastos variables"] = [var_pct * r for r in total]

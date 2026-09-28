@@ -20,6 +20,12 @@ class RevenueLine(BaseModel):
     name: str
     year1_amount: float
     growth_pct_yr: float = 0.0
+    # Curva propia (28-sep), lo que estime el usuario:
+    # `curva` = importe de cada año [120000, 135000, 150000…] (manda sobre
+    # year1_amount y el crecimiento; el último año sigue creciendo a
+    # growth_pct_yr); `crecimientos` = subida de cada año [0.2, 0.1, 0.05…].
+    curva: list[float] | None = None
+    crecimientos: list[float] | None = None
 
 
 class OpexLine(BaseModel):
@@ -29,6 +35,8 @@ class OpexLine(BaseModel):
     # shared ``OpexConfigB.escalation_pct_yr``; when set (incl. 0.0) it overrides
     # the shared escalation for that line — mirrors the revenue side (E2).
     growth_pct_yr: float | None = None
+    curva: list[float] | None = None
+    crecimientos: list[float] | None = None
 
 
 class CapexItemB(BaseModel):

@@ -42,3 +42,42 @@ def test_la_produccion_se_puede_anotar_y_ver_por_dia_semana_y_mes(planta, monkey
         mes = A.serie_real_vs_prevision(asset, reales, "lineas.produccion.Producción", "mes", "2030-09-01", "2030-09-30")
         assert mes["puntos"][0]["real"] == 1750
         assert mes["resumen"]["periodos_con_dato"] == 1 and mes["resumen"]["cumplimiento_pct"] is not None
+
+
+def test_estacionalidad_propia_y_la_tipica_solar(planta, monkeypatch):
+    from asset_finance_modeler.web_api import actuals as A
+    from asset_finance_modeler.mcp_server.tools import assets as a
+    aid, tmp = planta
+    st = _store(tmp)
+    with en_espacio("esp"):
+        monkeypatch.setattr(A, "_hoy", lambda: datetime(2030, 12, 31))
+        s = st.get(aid)
+        ene = A.serie_real_vs_prevision(s, [], "lineas.produccion.Producción", "mes", "2030-01-01", "2030-01-31")
+        jul = A.serie_real_vs_prevision(s, [], "lineas.produccion.Producción", "mes", "2030-07-01", "2030-07-31")
+        assert jul["puntos"][0]["prevision"] > 2 * ene["puntos"][0]["prevision"]
+        assert ene["estacionalidad"].startswith("la típica")
+        r = a.handle_configure({"asset_id": aid, "estacionalidad": [1] * 11 + [11]})
+        assert "estacionalidad" in r["cambios"][0]
+        s = st.get(aid)
+        dic = A.serie_real_vs_prevision(s, [], "lineas.produccion.Producción", "mes", "2030-12-01", "2030-12-31")
+        ene2 = A.serie_real_vs_prevision(s, [], "lineas.produccion.Producción", "mes", "2030-01-01", "2030-01-31")
+        assert dic["estacionalidad"] == "la tuya" and dic["puntos"][0]["prevision"] == pytest.approx(11 * ene2["puntos"][0]["prevision"], rel=1e-3)
+
+
+def test_configurar_renovable_y_empresa(planta, tmp_path):
+    from asset_finance_modeler.mcp_server.tools import assets as a
+    aid, _ = planta
+    with en_espacio("esp"):
+        r = a.handle_configure({"asset_id": aid, "degradacion": 0.006, "repowering": [{"anio": 20, "inversion": 3000000, "mas_potencia_pct": 0.1}],
+                                "averias": [{"anio": 8, "perdida_pct": 0.05, "nombre": "Inversores"}], "precio": {"contrato": "merchant", "puntos": [60, 58, 55]}})
+        assert not r.get("error"), r
+        assert any("degradación" in c for c in r["cambios"]) and any("repowering" in c for c in r["cambios"]) and r["kpis"]
+        g = a.handle_get({"asset_id": aid})
+        assert g["overrides"]["capex_events"][0]["year"] == 19
+        f = a.handle_save({"model_id": "business_restaurant", "name": "Bar"})["id"]
+        r2 = a.handle_configure({"asset_id": f, "ingresos": [{"nombre": "Comidas", "curva": [500000, 650000, 700000]}, {"nombre": "Terraza", "importe": 80000, "crecimientos": [0.3, 0.1]}]})
+        assert not r2.get("error"), r2
+        lineas = a.handle_get({"asset_id": f})["overrides"]["revenue"]
+        assert any(x["name"] == "Terraza" for x in lineas) and next(x for x in lineas if x["name"] == "Comidas")["curva"][1] == 650000
+        malo = a.handle_configure({"asset_id": f, "degradacion": 0.01})
+        assert any("renovables" in x for x in malo["avisos"])

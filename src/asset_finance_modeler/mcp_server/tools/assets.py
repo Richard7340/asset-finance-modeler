@@ -550,3 +550,228 @@ def handle_debt(args: dict[str, Any]) -> dict[str, Any]:
         "por_anio": [{"anio": y, "saldo": d["saldo"][i], "intereses": d["intereses"][i], "amortizacion": d["amortizacion"][i], "dscr": d["dscr"][i]} for i, y in enumerate(d["years"])][:30],
         "ver_en_la_app": {"app": "portfolio", "ruta": f"asset/{a['id']}/deuda"},
     }
+
+
+# ── Configurar un activo en lenguaje de negocio (28-sep) ────────────────────
+# El agente o la IA del conector dicen «precio de mercado con la curva X»,
+# «degradación 0,5 %», «repowering el año 18», «estas ventas año a año»,
+# «en agosto vendemos el doble»… y aquí se traduce a las rutas del modelo.
+
+# Reparto mensual típico de la producción solar en España (aprox., % del año).
+PERFIL_SOLAR_ES = [5.5, 6.5, 8.5, 9.3, 10.5, 10.9, 11.3, 10.6, 9.0, 7.5, 5.6, 4.8]
+
+
+def _doce(v: Any) -> list[float] | None:
+    if isinstance(v, dict):
+        v = [v.get(k) for k in ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")]
+    if not isinstance(v, (list, tuple)) or len(v) != 12:
+        return None
+    try:
+        xs = [float(x) for x in v]
+    except (TypeError, ValueError):
+        return None
+    return xs if sum(xs) > 0 and all(x >= 0 for x in xs) else None
+
+
+def _config_actual(model_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
+    from asset_finance_modeler.web_api.models import _apply_overrides, _BUSINESS_IDS, load_business_preset, load_preset  # noqa: PLC0415
+
+    base = load_business_preset(model_id).model_dump() if model_id in _BUSINESS_IDS else load_preset(model_id).model_dump()
+    return _apply_overrides(base, overrides)
+
+
+def _lineas(actuales: list[dict[str, Any]], pedidas: Any, cambios: list[str], que: str) -> list[dict[str, Any]]:
+    """Mezcla líneas por nombre: cambia las que existen y añade las nuevas."""
+    out = [dict(x) for x in actuales]
+    for p in list(pedidas or [])[:40]:
+        if not isinstance(p, dict) or not str(p.get("nombre") or p.get("name") or "").strip():
+            continue
+        nombre = str(p.get("nombre") or p.get("name")).strip()
+        ln = next((x for x in out if _norm(x.get("name")) == _norm(nombre)), None)
+        if ln is None:
+            ln = {"name": nombre, "year1_amount": 0.0}
+            out.append(ln)
+        if p.get("quitar"):
+            out.remove(ln)
+            cambios.append(f"{que}: quitado «{nombre}»")
+            continue
+        if p.get("importe") is not None:
+            ln["year1_amount"] = float(p["importe"])
+        if p.get("crecimiento") is not None:
+            ln["growth_pct_yr"] = float(p["crecimiento"])
+        if isinstance(p.get("curva"), list) and p["curva"]:
+            ln["curva"] = [float(x) for x in p["curva"]][:60]
+            ln["year1_amount"] = ln["curva"][0]
+            ln["crecimientos"] = None
+        if isinstance(p.get("crecimientos"), list) and p["crecimientos"]:
+            ln["crecimientos"] = [float(x) for x in p["crecimientos"]][:60]
+            ln["curva"] = None
+        cambios.append(f"{que}: «{nombre}» " + ("con su curva año a año" if ln.get("curva") else "con sus subidas año a año" if ln.get("crecimientos") else f"{ln['year1_amount']:,.0f} € el primer año".replace(",", ".")))
+    return out
+
+
+@_seguro
+def handle_configure(args: dict[str, Any]) -> dict[str, Any]:
+    """Configura un activo por bloques: ingresos/gastos (curva o subidas por
+    año), precio (curva de mercado, puntos o fijo), producción (perfil mensual,
+    producible), estacionalidad, IPC, años, degradación, repowering, averías y
+    recortes. Lo que no aplique a su tipo se dice, no se inventa."""
+    from asset_finance_modeler.web_api.assets import _store  # noqa: PLC0415
+    from asset_finance_modeler.web_api.models import _BUSINESS_IDS, _INMUEBLE_IDS  # noqa: PLC0415
+
+    t = _tenant(args)
+    store = _store()
+    s = store.get(_id_de(args), workspace_id=t.workspace_id)
+    if s is None or s.is_deleted:
+        return {"error": "not_found"}
+    model_id = s.base_model
+    snap = dict(s.inputs_snapshot or {})
+    overrides_previos = dict(snap.get("overrides") or s.overrides or {})
+    es_empresa = model_id in _BUSINESS_IDS
+    es_inmueble = model_id in _INMUEBLE_IDS
+    es_renovable = model_id.startswith(("solar", "wind", "bess"))
+    cambios: list[str] = []
+    avisos: list[str] = []
+    ov: dict[str, Any] = {}
+
+    # Estacionalidad (para comparar lo real): se guarda con el activo.
+    if args.get("estacionalidad") is not None:
+        e = args["estacionalidad"]
+        if isinstance(e, dict) and _doce(e) is None:
+            por_linea = {str(k): _doce(v) for k, v in e.items()}
+            if not all(por_linea.values()):
+                return {"error": "estacionalidad-invalida", "detail": "12 números (uno por mes, ene…dic) o {linea: [12 números]}."}
+            snap["estacionalidad"] = por_linea
+        else:
+            d = _doce(e)
+            if d is None:
+                return {"error": "estacionalidad-invalida", "detail": "12 números (uno por mes, ene…dic): pesos o % de cada mes."}
+            snap["estacionalidad"] = {"*": d}
+        cambios.append("estacionalidad mensual para comparar lo real con lo previsto")
+
+    try:
+        cfg = _config_actual(model_id, overrides_previos) if (es_empresa or es_renovable) else {}
+    except Exception:  # noqa: BLE001
+        cfg = {}
+
+    if args.get("ingresos") or args.get("gastos"):
+        if es_empresa:
+            if args.get("ingresos"):
+                ov["revenue"] = _lineas(cfg.get("revenue") or [], args["ingresos"], cambios, "ingreso")
+            if args.get("gastos"):
+                ov["opex.fixed_lines"] = _lineas((cfg.get("opex") or {}).get("fixed_lines") or [], args["gastos"], cambios, "gasto")
+        else:
+            avisos.append("Ingresos y gastos línea a línea con curva: en empresas. " + ("En inmuebles, la renta y los gastos van con sus hipótesis (overrides) y el IPC." if es_inmueble else "En renovables, el ingreso sale de la producción y el precio (usa `precio`)."))
+
+    if args.get("precio") is not None:
+        if not es_renovable:
+            avisos.append("`precio` es para renovables (€/MWh).")
+        else:
+            p = args["precio"] if isinstance(args["precio"], dict) else {"fijo": args["precio"]}
+            fuentes = [dict(x) for x in (cfg.get("revenue") or [])]
+            quiere = _norm(p.get("contrato") or "merchant")
+            idx = next((i for i, x in enumerate(fuentes) if _norm(x.get("type")) == quiere or _norm(x.get("name")) == quiere), None)
+            if idx is None:
+                return {"error": "contrato-desconocido", "detail": "contratos: " + ", ".join(f"{x.get('type')} ({x.get('name')})" for x in fuentes)}
+            f = fuentes[idx]
+            if p.get("curva"):
+                f["price_curve_name"], f["price_points"] = str(p["curva"]), None
+                cambios.append(f"precio {f.get('name')}: curva de mercado «{p['curva']}»")
+            elif isinstance(p.get("puntos"), list):
+                f["price_points"], f["price_curve_name"] = [float(x) for x in p["puntos"]][:60], None
+                cambios.append(f"precio {f.get('name')}: {len(f['price_points'])} años de precio propio")
+            elif p.get("fijo") is not None:
+                k = "price_eur_per_unit" if f.get("type") == "ppa" else "base_price_eur_per_unit"
+                f[k], f["price_curve_name"], f["price_points"] = float(p["fijo"]), None, None
+                cambios.append(f"precio {f.get('name')}: {float(p['fijo'])} €/MWh")
+            if p.get("subida") is not None:
+                f["escalation_pct_yr"] = float(p["subida"])
+            if p.get("volumen") is not None:
+                f["volume_fraction"] = float(p["volumen"])
+            if p.get("anios") is not None and f.get("type") == "ppa":
+                f["tenor_years"] = int(p["anios"])
+            fuentes[idx] = f
+            ov["revenue"] = fuentes
+
+    if args.get("produccion") is not None:
+        if not es_renovable:
+            avisos.append("`produccion` es para renovables.")
+        else:
+            p = args["produccion"] if isinstance(args["produccion"], dict) else {}
+            tipo = (cfg.get("production") or {}).get("type")
+            perfil = _doce(p.get("perfil_mensual"))
+            if perfil:
+                ov["production.irradiation_profile" if tipo == "solar_pv" else "production.production_profile"] = perfil
+                cambios.append("producción mes a mes con su perfil")
+            if p.get("producible") is not None and tipo == "solar_pv":
+                ov["production.specific_yield_kwh_kwp"] = float(p["producible"])
+                cambios.append(f"producible {float(p['producible'])} kWh/kWp")
+            if p.get("factor_capacidad") is not None and tipo == "wind_onshore":
+                ov["production.capacity_factor"] = float(p["factor_capacidad"])
+                cambios.append(f"factor de capacidad {float(p['factor_capacidad'])}")
+
+    if args.get("degradacion") is not None:
+        if not es_renovable:
+            avisos.append("`degradacion` es para renovables.")
+        else:
+            d = args["degradacion"]
+            ov["degradation"] = {"type": "custom", "curve": [float(x) for x in d][:60]} if isinstance(d, list) else {"type": "time_based", "annual_rate": float(d)}
+            cambios.append("degradación " + ("con su curva año a año" if isinstance(d, list) else f"{float(d) * 100:.2f} % al año"))
+
+    if args.get("repowering") is not None:
+        if not es_renovable:
+            avisos.append("`repowering` es para renovables.")
+        else:
+            ev = []
+            for r in list(args["repowering"] or [])[:10]:
+                if isinstance(r, dict) and r.get("anio"):
+                    ev.append({"year": max(0, int(r["anio"]) - 1), "amount": float(r.get("inversion") or 0),
+                               "resets_degradation": bool(r.get("vuelve_a_placa", True)),
+                               "capacity_uplift_pct": float(r.get("mas_potencia_pct") or 0), "label": str(r.get("nombre") or "Repowering")})
+            ov["capex_events"] = ev
+            cambios.append(f"{len(ev)} repowering" + ("s" if len(ev) != 1 else ""))
+
+    if args.get("averias") is not None:
+        if not es_renovable:
+            avisos.append("`averias` es para renovables.")
+        else:
+            ev = [{"year": int(a["anio"]), "loss_pct": float(a.get("perdida_pct") or 0), "years": int(a.get("anios") or 1), "label": str(a.get("nombre") or "")}
+                  for a in list(args["averias"] or [])[:20] if isinstance(a, dict) and a.get("anio")]
+            ov["losses.equipment_events"] = ev
+            cambios.append(f"{len(ev)} caída" + ("s" if len(ev) != 1 else "") + " de producción por equipos")
+
+    if args.get("recortes") is not None:
+        if not es_renovable:
+            avisos.append("`recortes` es para renovables.")
+        else:
+            r = args["recortes"]
+            if isinstance(r, list):
+                ov["losses.curtailment_curve"] = [float(x) for x in r][:60]
+            else:
+                ov["losses.curtailment_pct"] = float(r)
+            cambios.append("recortes de producción")
+
+    # Lo del modelo, por el mismo camino que una actualización (valida, recalcula
+    # y respeta la base bloqueada de un activo en marcha).
+    resultado: dict[str, Any] = {}
+    if ov or args.get("ipc") not in (None, "", {}) or args.get("anios"):
+        if args.get("ipc") not in (None, "", {}):
+            cambios.append("IPC")
+        if args.get("anios"):
+            cambios.append(f"{args['anios']} años de proyección")
+        s.inputs_snapshot = snap
+        store.save(s)
+        resultado = handle_update({"asset_id": s.id, "workspace_id": t.workspace_id, "user_id": t.user_id,
+                                   "overrides": ov, "ipc": args.get("ipc"), "anios": args.get("anios")})
+        if resultado.get("error"):
+            return {**resultado, "cambios_pedidos": cambios}
+    else:
+        s.inputs_snapshot = snap
+        store.save(s)
+    if es_renovable and model_id.startswith("solar") and "estacionalidad" not in snap and not (overrides_previos.get("production.irradiation_profile") or ov.get("production.irradiation_profile")):
+        avisos.append("Para comparar lo real mes a mes se usa el reparto típico de la solar en España; si tienes el tuyo, pásalo en `produccion.perfil_mensual`.")
+    return {
+        "id": s.id, "activo": s.name, "cambios": cambios or ["nada que cambiar"], "avisos": avisos,
+        **({"kpis": resultado.get("kpis")} if resultado.get("kpis") else {}),
+        "ver_en_la_app": {"app": "portfolio", "ruta": f"asset/{s.id}/curvas"},
+    }
