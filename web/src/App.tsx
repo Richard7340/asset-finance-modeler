@@ -443,7 +443,7 @@ export default function App() {
       <ViewTransition viewKey={`${view}:${page}`}>
         {view === "portfolio" ? (
           <main className="flex-1 overflow-y-auto p-5 lg:p-8">
-            <Dashboard page={page} onOpenAsset={selectAsset} />
+            <Dashboard page={page} onOpenAsset={selectAsset} onIrA={goToPage} />
           </main>
         ) : (
           <div className="flex flex-1 flex-col lg:flex-row lg:items-stretch lg:overflow-hidden">

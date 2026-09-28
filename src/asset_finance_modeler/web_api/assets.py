@@ -260,6 +260,27 @@ class LifecycleBody(BaseModel):
     commissioning_date: str | None = None  # ISO; si falta al promover, se usa ahora
 
 
+def en_operacion_si_tiene_reales(store: Any, s: Any, periodos: list[str]) -> bool:  # noqa: ARG001
+    """Si se anotan datos reales de una oportunidad, es que ya funciona (29-sep):
+    la planta de prueba tenía producción real y la Cartera salía vacía porque
+    seguía como oportunidad. Pasa a operación; la puesta en marcha es la del
+    modelo (meta.start_date) o la de alta. Devuelve si ha cambiado."""
+    if s is None or s.lifecycle == "operational":
+        return False
+    from asset_finance_modeler.web_api.actuals import _inicio_del_modelo  # noqa: PLC0415
+
+    s.lifecycle = "operational"
+    s.base_locked = True
+    s.is_canonical = True
+    s.tracking_frequency = s.tracking_frequency or "monthly"
+    if s.commissioning_date is None:
+        # La del modelo si la dice; si no, la de alta: así la comparación con
+        # lo previsto no se mueve de año al pasar a operación.
+        s.commissioning_date = _inicio_del_modelo(s) or s.created_at
+    store.save(s)
+    return True
+
+
 @router.patch("/{asset_id}/lifecycle")
 def set_lifecycle(
     asset_id: str, body: LifecycleBody, tenant: TenantContext = Depends(tenant_ctx)
@@ -398,8 +419,9 @@ def portfolio(
 
 
 def _anio_de_inicio(s: Scenario) -> int:
-    fecha = s.commissioning_date or s.created_at
-    return fecha.year
+    from asset_finance_modeler.web_api.actuals import _model_start_year  # noqa: PLC0415
+
+    return _model_start_year(s)
 
 
 def _extra_de_cartera(s: Scenario, result: dict[str, Any]) -> dict[str, Any]:

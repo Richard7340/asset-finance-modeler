@@ -220,6 +220,10 @@ class InfrastructureModel:
         # 4b. CAPEX events (repowering / augmentation injections): add each
         #     event amount to the spend at its period (lands in investing cash
         #     flow / reduces FCF) and to the headline total CAPEX.
+        # Lo que se invierte al principio: con esto se dimensiona la deuda y
+        # el capital del socio (29-sep: una repotenciacion del anio 20 subia el
+        # prestamo de 2,5 a 2,86 M y se contaba como capital del anio 0).
+        cap["capex_inicial"] = cap["total_capex"]
         if cfg.capex_events:
             cap["capex_spend"] = apply_capex_events(
                 cap["capex_spend"],
@@ -728,7 +732,7 @@ class InfrastructureModel:
 
         if cfg.financing.senior is not None:
             sr = cfg.financing.senior
-            total_capex = cap["total_capex"]
+            total_capex = cap.get("capex_inicial", cap["total_capex"])
 
             if sr.auto_size:
                 sizing = size_debt(
@@ -780,7 +784,7 @@ class InfrastructureModel:
         mezz = cfg.financing.mezzanine
         if mezz is not None:
             residual_cfads = [ebitda[t] - senior_ds[t] for t in range(n)]
-            headroom_capex = max(cap["total_capex"] - senior_amount, 0.0)
+            headroom_capex = max(cap.get("capex_inicial", cap["total_capex"]) - senior_amount, 0.0)
             mezz_sizing = size_debt(
                 cfads=residual_cfads,
                 dscr_target=mezz.dscr_target,
@@ -956,8 +960,13 @@ class InfrastructureModel:
         project_cf = list(fcf_annual)
 
         # Equity FCF: equity deployed = capex minus debt drawdown at t=0
-        equity_outlay = total_capex - (debt_drawdowns[0] if debt_drawdowns else 0.0)
+        # Las inversiones posteriores (repotenciacion…) las pone el socio en su anio.
+        equity_outlay = cap.get("capex_inicial", total_capex) - (debt_drawdowns[0] if debt_drawdowns else 0.0)
         equity_cf: list[float] = [-equity_outlay]
+        eventos_por_anio: dict[int, float] = {}
+        for e in cfg.capex_events or []:
+            if 0 <= e.year * ppy < len(debt_balance or pnl["net_income"]):
+                eventos_por_anio[e.year] = eventos_por_anio.get(e.year, 0.0) + e.amount
         for y in range(years):
             ni_yr = sum(pnl["net_income"][y * ppy : (y + 1) * ppy])
             dep_yr = sum(cap_book_depr[y * ppy : (y + 1) * ppy])
@@ -968,7 +977,7 @@ class InfrastructureModel:
             # a longer reserve hold lowers equity NPV at Ke. The reserve is fully
             # released by horizon end, so the timing (not the total) is what bites.
             dsra_yr = sum(dsra_funding_flows[y * ppy : (y + 1) * ppy])
-            equity_cf.append(ni_yr + dep_yr - rep_yr + dsra_yr)
+            equity_cf.append(ni_yr + dep_yr - rep_yr + dsra_yr - eventos_por_anio.get(y, 0.0))
 
         has_debt = sum(debt_balance) > 0
 

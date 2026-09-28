@@ -28,7 +28,9 @@ _GOLDENS: list[tuple[str, int, float | None, float | None, float | None]] = [
     ("bess_20mw_4h", 2_369_756, 0.099, 0.1466, 1.64),
     ("datacenter_10mw_tier3", 13_650_321, 0.1345, 0.0945, 1.25),
     ("solar_pv_50mw_spain", 2_354_276, 0.0825, 0.125, 2.27),
-    ("svj_bess_cordoba", 2_382_001, 0.1832, 0.1198, 0.94),
+    # 29-sep: la repotenciacion del anio 15 (846k) ya no cuenta como capital
+    # del socio en el anio 0: con 1,84 M de deuda sobre 1,98 M, pone 142k.
+    ("svj_bess_cordoba", 2_382_001, 0.1832, 0.7791, 0.94),
     ("svj_fv_cordoba", -146_919, 0.0292, 0.0295, 1.02),
     ("wind_onshore_30mw_spain", 611_917, 0.0672, 0.0703, 1.3),
     ("business_generic", 1_102_585, 0.1384, 0.1384, 0.0),

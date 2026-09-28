@@ -1,6 +1,6 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2 } from "lucide-react";
-import { setLifecycle } from "../api";
+import { listAssets, setLifecycle } from "../api";
 import type { SavedAssetSummary } from "../api";
 import PortfolioOverview from "./PortfolioOverview";
 import PortfolioHeader from "./PortfolioHeader";
@@ -10,6 +10,7 @@ import { PortfolioAlerts } from "./Alerts";
 type Props = {
   /** Open a saved asset in the detail editor (drill-in). */
   onOpenAsset: (a: SavedAssetSummary) => void;
+  onVerOportunidades?: () => void;
 };
 
 /**
@@ -19,7 +20,11 @@ type Props = {
  * per-asset table, and finally the geographic map of the operational fleet.
  * Each row can be demoted back to an opportunity ("Devolver a oportunidad").
  */
-export default function CarteraPage({ onOpenAsset }: Props) {
+export default function CarteraPage({ onOpenAsset, onVerOportunidades }: Props) {
+  // Con la Cartera vacía, decir que lo guardado está en Oportunidades y cómo
+  // pasarlo (29-sep: se veía todo a 0 y parecía que no había nada).
+  const oportunidades = useQuery({ queryKey: ["assets", "opportunity"], queryFn: () => listAssets("opportunity") });
+  const nOpo = oportunidades.data?.length ?? 0;
   const queryClient = useQueryClient();
 
   const refresh = () => {
@@ -48,6 +53,23 @@ export default function CarteraPage({ onOpenAsset }: Props) {
             agg={agg}
           />
         )}
+        vacio={
+          nOpo > 0 ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="text-slate-600">
+                Aún no hay activos en operación. Tienes <b>{nOpo}</b> {nOpo === 1 ? "activo" : "activos"} en Oportunidades.
+              </div>
+              <div className="max-w-md text-xs text-slate-400">
+                Si ya está funcionando, pásalo a la cartera con «Marcar en operación», o díselo a tu agente. Al anotar sus datos reales pasa solo.
+              </div>
+              {onVerOportunidades && (
+                <button type="button" onClick={onVerOportunidades} className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-700">
+                  Ver oportunidades
+                </button>
+              )}
+            </div>
+          ) : undefined
+        }
         alertsSlot={<PortfolioAlerts />}
         mapSlot={<AssetsMap onOpenAsset={onOpenAsset} lifecycle="operational" />}
         rowAction={(a) => (

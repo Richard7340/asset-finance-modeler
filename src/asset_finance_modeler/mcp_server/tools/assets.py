@@ -9,6 +9,7 @@ Antes lo que se modelaba por chat no aparecia en el Portfolio.
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -306,9 +307,15 @@ def handle_save(args: dict[str, Any]) -> dict[str, Any]:
         if con_ipc:
             s.inputs_snapshot = {**(s.inputs_snapshot or {}), "ipc_aplicado_a": con_ipc}
         _store().save(s)
+    en_marcha = args.get("en_operacion_desde") or args.get("commissioning_date")
+    if en_marcha and str(en_marcha)[:10] <= datetime.now(UTC).date().isoformat():
+        # Ya produce: va a la Cartera, no a Oportunidades (29-sep).
+        from asset_finance_modeler.web_api.assets import LifecycleBody, set_lifecycle
+
+        set_lifecycle(r["id"], LifecycleBody(lifecycle="operational", commissioning_date=str(en_marcha)[:10]), t)
     a = get_asset(r["id"], t)
     return {
-        "id": r["id"], "name": a["name"], "model_id": a["model_id"], "kpis": (a.get("results_snapshot") or {}).get("kpis", {}),
+        "id": r["id"], "name": a["name"], "model_id": a["model_id"], "lifecycle": a.get("lifecycle"), "kpis": (a.get("results_snapshot") or {}).get("kpis", {}),
         "carpeta": a.get("carpeta"), "reglas": a.get("reglas"),
         **({"ipc_aplicado_a": con_ipc} if con_ipc else {}),
         "supuestos_clave": supuestos_clave(a["model_id"], a.get("overrides") or {}, a.get("results_snapshot") or {}),

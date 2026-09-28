@@ -147,9 +147,24 @@ def _hoy() -> datetime:
     return datetime.now()
 
 
+def _inicio_del_modelo(asset: Scenario) -> "datetime | None":
+    ov = (asset.inputs_snapshot or {}).get("overrides") or asset.overrides or {}
+    v = ov.get("meta.start_date")
+    try:
+        return datetime.fromisoformat(str(v)[:10]) if v else None
+    except ValueError:
+        return None
+
+
 def _model_start_year(asset: Scenario) -> int:
     """The calendar year that maps to model year index 0. Prefers the
-    commissioning_date; falls back to the asset's created_at year."""
+    commissioning_date; falls back to the asset's created_at year.
+
+    Si el modelo dice cuando empieza (meta.start_date), manda eso: su año 1
+    es ese año (29-sep: una planta de 2025 se comparaba como si fuera de 2026)."""
+    inicio = _inicio_del_modelo(asset)
+    if inicio is not None:
+        return inicio.year
     if asset.commissioning_date is not None:
         return asset.commissioning_date.year
     return asset.created_at.year
@@ -218,7 +233,7 @@ def get_lines(
 def post_actuals(
     asset_id: str, body: PostActualsBody, tenant: TenantContext = Depends(tenant_ctx)
 ) -> dict[str, Any]:
-    _get_asset_or_404(asset_id, workspace_id=tenant.workspace_id)
+    asset = _get_asset_or_404(asset_id, workspace_id=tenant.workspace_id)
     items = [
         Actual(
             scenario_id=asset_id,
@@ -231,7 +246,10 @@ def post_actuals(
         for a in body.actuals
     ]
     ids = _actuals_store().add_batch(items)
-    return {"ids": ids}
+    from asset_finance_modeler.web_api.assets import _store, en_operacion_si_tiene_reales  # noqa: PLC0415
+
+    paso = en_operacion_si_tiene_reales(_store(), asset, [a.period_start for a in body.actuals])
+    return {"ids": ids, **({"pasado_a_operacion": True} if paso else {})}
 
 
 @router.get("/{asset_id}/actuals")

@@ -9,6 +9,8 @@ type Props = {
   /** Which primary page to render. */
   page: DashboardPage;
   onOpenAsset: (a: SavedAssetSummary) => void;
+  /** Cambiar de página (la Cartera vacía lleva a Oportunidades). */
+  onIrA?: (p: DashboardPage) => void;
 };
 
 /**
@@ -17,10 +19,10 @@ type Props = {
  * and its own promote/demote action, so an asset can move both ways and both
  * pages stay in sync via the broad ["assets"]/["portfolio"] invalidations.
  */
-export default function Dashboard({ page, onOpenAsset }: Props) {
+export default function Dashboard({ page, onOpenAsset, onIrA }: Props) {
   return page === "oportunidades" ? (
     <OportunidadesPage onOpenAsset={onOpenAsset} />
   ) : (
-    <CarteraPage onOpenAsset={onOpenAsset} />
+    <CarteraPage onOpenAsset={onOpenAsset} onVerOportunidades={() => onIrA?.("oportunidades")} />
   );
 }

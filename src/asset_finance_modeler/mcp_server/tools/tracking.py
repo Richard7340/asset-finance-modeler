@@ -99,7 +99,11 @@ def make_track_import(store: SQLiteScenarioStore) -> Any:
                 note=str(b.get("note", "")),
             ))
         ids = actuals.add_batch(nuevos)
-        return {"ok": True, "scenario_id": s.id, "imported": ids}
+        from asset_finance_modeler.web_api.assets import en_operacion_si_tiene_reales  # noqa: PLC0415
+
+        paso = en_operacion_si_tiene_reales(store, s, [n.period_start for n in nuevos])
+        return {"ok": True, "scenario_id": s.id, "imported": ids,
+                **({"pasado_a_operacion": True, "nota": "Tenia datos reales: ahora esta en la Cartera (en operacion)."} if paso else {})}
     return _handle
 
 

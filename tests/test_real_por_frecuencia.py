@@ -81,3 +81,37 @@ def test_configurar_renovable_y_empresa(planta, tmp_path):
         assert any(x["name"] == "Terraza" for x in lineas) and next(x for x in lineas if x["name"] == "Comidas")["curva"][1] == 650000
         malo = a.handle_configure({"asset_id": f, "degradacion": 0.01})
         assert any("renovables" in x for x in malo["avisos"])
+
+
+def test_anotar_reales_la_pasa_a_la_cartera_sin_mover_su_anio(tmp_path, monkeypatch):
+    """29-sep: la planta tenía producción real y la Cartera salía vacía."""
+    monkeypatch.setenv("ASSET_FINANCE_DB_PATH", str(tmp_path / "a.db"))
+    from asset_finance_modeler.mcp_server.tools import assets as a
+    from asset_finance_modeler.mcp_server.tools.tracking import make_track_import
+    from asset_finance_modeler.web_api.actuals import _model_start_year
+    st = _store(tmp_path)
+    with en_espacio("esp"):
+        aid = a.handle_save({"model_id": "solar_pv_50mw_spain", "name": "P", "overrides": {"meta.start_date": "2025-01-01"}})["id"]
+        assert st.get(aid).lifecycle == "opportunity"
+        r = make_track_import(st)({"scenario_id": aid, "actuals": [{"line_path": "lineas.produccion.Producción", "period_start": "2026-01-01", "value": 500}]})
+        assert r["pasado_a_operacion"] is True
+        s = st.get(aid)
+        assert s.lifecycle == "operational" and _model_start_year(s) == 2025
+
+
+def test_si_ya_funciona_se_guarda_en_la_cartera(tmp_path, monkeypatch):
+    monkeypatch.setenv("ASSET_FINANCE_DB_PATH", str(tmp_path / "a.db"))
+    from asset_finance_modeler.mcp_server.tools import assets as a
+    with en_espacio("esp"):
+        r = a.handle_save({"model_id": "solar_pv_50mw_spain", "name": "Q", "en_operacion_desde": "2025-01-01"})
+        assert r["lifecycle"] == "operational"
+
+
+def test_la_repotenciacion_no_agranda_el_prestamo():
+    """29-sep: 2,5 M sobre 3,5 M de inversión salían 2,86 M por la repotenciación del año 20."""
+    from asset_finance_modeler.web_api.assets import _run_model
+    ov = {"financing.senior.auto_size": False, "financing.max_leverage": 0.5}
+    sin = _run_model("solar_pv_50mw_spain", ov)
+    con = _run_model("solar_pv_50mw_spain", {**ov, "capex_events": [{"year": 20, "amount": 5_000_000, "label": "R"}]})
+    assert sum(con["deuda"]["disposiciones"]) == pytest.approx(sum(sin["deuda"]["disposiciones"]))
+    assert con["kpis"]["irr_equity"] < sin["kpis"]["irr_equity"]

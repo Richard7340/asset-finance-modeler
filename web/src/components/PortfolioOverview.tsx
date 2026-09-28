@@ -33,6 +33,8 @@ type Props = {
   onOpenAsset: (a: SavedAssetSummary) => void;
   /** Restrict the listing+aggregate to one lifecycle bucket. */
   lifecycle?: import("../api").Lifecycle;
+  /** Qué decir si no hay activos (por defecto, cómo crear uno). */
+  vacio?: React.ReactNode;
   /** Optional action column rendered per row (e.g. "Marcar en operación"). */
   rowAction?: (a: SavedAssetSummary) => React.ReactNode;
   /**
@@ -184,6 +186,7 @@ export default function PortfolioOverview({
   onOpenAsset,
   lifecycle,
   rowAction,
+  vacio,
   header,
   alertsSlot,
   mapSlot,
@@ -378,7 +381,7 @@ export default function PortfolioOverview({
       <div className="mx-auto max-w-[1400px] space-y-6">
         {headerNode}
         <div className="grid h-64 place-items-center px-6 text-center text-sm text-slate-400">
-          Aún no hay activos guardados. Crea y guarda un activo desde un modelo.
+          {vacio ?? "Aún no hay activos guardados. Crea y guarda un activo desde un modelo."}
         </div>
       </div>
     );
