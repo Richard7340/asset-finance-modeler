@@ -91,22 +91,13 @@ export default function ConsolidadoChart({ data }: { data: Consolidado }) {
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <ReferenceLine x={String(hoy)} stroke="#f59e0b" strokeDasharray="4 3" label={{ value: "hoy", position: "top", fontSize: 10, fill: "#f59e0b" }} />
             <ReferenceLine y={0} stroke={ct.zeroLine} />
-            {vista === "resultado" && (
-              <>
-                <Bar dataKey="ingresos" name="Ingresos" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={26} />
-                <Line dataKey="ebitda" name="EBITDA" stroke="#10b981" strokeWidth={2.2} dot={false} />
-                <Line dataKey="beneficio" name="Beneficio neto" stroke="#0ea5e9" strokeWidth={1.6} strokeDasharray="5 3" dot={false} />
-              </>
-            )}
-            {vista === "caja" && (
-              <>
-                <Bar dataKey="flujo" name="Flujo de caja del año" fill="#0ea5e9" radius={[3, 3, 0, 0]} maxBarSize={26} />
-                <Line dataKey="acumulado" name="Acumulado" stroke="#4f46e5" strokeWidth={2.2} dot={false} />
-              </>
-            )}
-            {vista === "deuda" && (
-              <Area dataKey="deuda" name="Deuda viva" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.15} strokeWidth={2} />
-            )}
+            {/* Recharts no mira dentro de fragmentos: cada serie, suelta. */}
+            {vista === "resultado" && <Bar dataKey="ingresos" name="Ingresos" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={26} />}
+            {vista === "resultado" && <Line dataKey="ebitda" name="EBITDA" stroke="#10b981" strokeWidth={2.2} dot={false} />}
+            {vista === "resultado" && <Line dataKey="beneficio" name="Beneficio neto" stroke="#0ea5e9" strokeWidth={1.6} strokeDasharray="5 3" dot={false} />}
+            {vista === "caja" && <Bar dataKey="flujo" name="Flujo de caja del año" fill="#0ea5e9" radius={[3, 3, 0, 0]} maxBarSize={26} />}
+            {vista === "caja" && <Line dataKey="acumulado" name="Acumulado" stroke="#4f46e5" strokeWidth={2.2} dot={false} />}
+            {vista === "deuda" && <Area dataKey="deuda" name="Deuda viva" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.15} strokeWidth={2} />}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
