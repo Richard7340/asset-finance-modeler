@@ -78,6 +78,38 @@ def _last_update_iso(scenario: Scenario, actuals: SQLiteActualsStore) -> str:
     return created
 
 
+_CACHE_DE_MODELOS: dict[str, dict[str, Any]] = {}
+
+
+def _run_model_cacheado(model_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
+    """La cartera recalculaba TODOS los modelos en cada visita (28-sep): con
+    los mismos datos el resultado es el mismo, así que se guarda (máx. 256)."""
+    import json as _json  # noqa: PLC0415
+
+    clave = model_id + "|" + _json.dumps(overrides or {}, sort_keys=True, default=str)
+    r = _CACHE_DE_MODELOS.get(clave)
+    if r is None:
+        r = _run_model(model_id, overrides)
+        if len(_CACHE_DE_MODELOS) >= 256:
+            _CACHE_DE_MODELOS.pop(next(iter(_CACHE_DE_MODELOS)))
+        _CACHE_DE_MODELOS[clave] = r
+    return r
+
+
+def _tipo_de_modelo(model_id: str) -> str:
+    from asset_finance_modeler.web_api.models import _INMUEBLE_IDS  # noqa: PLC0415
+
+    if model_id in _INMUEBLE_IDS or model_id == "real_estate_rental":
+        return "inmueble"
+    if model_id in _SAAS_IDS:
+        return "saas"
+    if model_id in _BUSINESS_IDS:
+        return "negocio"
+    if model_id.startswith(("solar", "wind", "bess", "svj")):
+        return "renovable"
+    return "infraestructura"
+
+
 def _run_model(model_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
     """Run a model and return its JSON-serializable result payload (with a
     top-level 'kpis' key). Mirrors web_api.models.model_run dispatch."""
@@ -310,6 +342,8 @@ def portfolio(
     skipped: list[dict[str, Any]] = []
     totals = {"npv": 0.0, "capex": 0.0, "revenue_y1": 0.0, "count": 0, "irr_weighted": 0.0}
     _irr_capex_sum = 0.0
+    consolidado: dict[int, dict[str, float]] = {}
+    ytd_total = {"real": 0.0, "prevision": 0.0}
     for s in _store().list(lifecycle=lifecycle, workspace_id=tenant.workspace_id):
         if wanted is not None and s.id not in wanted:
             continue
@@ -317,13 +351,14 @@ def portfolio(
         model_id = snapshot.get("model_id", s.base_model)
         overrides = snapshot.get("overrides", s.overrides) or {}
         try:
-            result = _run_model(model_id, overrides)
+            result = _run_model_cacheado(model_id, overrides)
             metrics = _normalize_run(result)
         except Exception as exc:  # noqa: BLE001 — surface failures, don't 500
             skipped.append(
                 {"id": s.id, "name": s.name, "model_id": model_id, "error": str(exc)}
             )
             continue
+        extra = _extra_de_cartera(s, result)
         assets.append(
             {
                 "id": s.id,
@@ -335,8 +370,16 @@ def portfolio(
                 "capex": metrics["capex"],
                 "yield_pct": metrics["yield_pct"],
                 **_location_of(snapshot),
+                **extra,
             }
         )
+        _sumar_consolidado(consolidado, extra)
+        for k in ("enterprise_value", "deuda_viva", "caja", "ingresos_anio", "ebitda_anio"):
+            if extra.get(k) is not None:
+                totals[k] = totals.get(k, 0.0) + float(extra[k])
+        if extra.get("ytd"):
+            ytd_total["real"] += extra["ytd"]["real"]
+            ytd_total["prevision"] += extra["ytd"]["prevision"]
         totals["npv"] += metrics["npv"]
         totals["capex"] += metrics["capex"]
         totals["revenue_y1"] += metrics["revenue_y1"]
@@ -346,4 +389,103 @@ def portfolio(
     if totals["capex"]:
         totals["irr_weighted"] = round(_irr_capex_sum / totals["capex"], 4)
 
-    return {"assets": assets, "totals": totals, "skipped": skipped}
+    if ytd_total["prevision"]:
+        totals["cumplimiento_ytd_pct"] = round(ytd_total["real"] / ytd_total["prevision"] * 100, 1)
+        totals["ytd"] = {k: round(v) for k, v in ytd_total.items()}
+    anios = sorted(consolidado)
+    serie = {"years": anios, **{k: [round(consolidado[a].get(k, 0.0)) for a in anios] for k in ("revenue", "ebitda", "net_income", "flujo_caja", "deuda")}}
+    return {"assets": assets, "totals": totals, "skipped": skipped, "consolidado": serie}
+
+
+def _anio_de_inicio(s: Scenario) -> int:
+    fecha = s.commissioning_date or s.created_at
+    return fecha.year
+
+
+def _extra_de_cartera(s: Scenario, result: dict[str, Any]) -> dict[str, Any]:
+    """Lo que el cuadro general necesita de cada activo (28-sep): tipo, fase,
+    valor, deuda viva y caja de este año, sus series anuales (para su curva y
+    la consolidada) y cómo va el año real frente a lo previsto."""
+    inicio = _anio_de_inicio(s)
+    hoy = datetime.now(UTC).year
+    i = max(0, hoy - inicio)
+    rows = (result.get("income_statement") or {}).get("rows") or {}
+    cf = result.get("cash_flow") or {}
+    deuda = result.get("deuda") or {}
+    kp = result.get("kpis") or {}
+    def en(serie: list[float] | None) -> float | None:
+        return float(serie[i]) if serie and i < len(serie) and serie[i] is not None else None
+    flujo = [((cf.get("cfo") or [0] * 99)[y] if y < len(cf.get("cfo") or []) else 0) + ((cf.get("cfi") or [])[y] if y < len(cf.get("cfi") or []) else 0) + ((cf.get("cff") or [])[y] if y < len(cf.get("cff") or []) else 0)
+             for y in range(len(cf.get("cfo") or []))]
+    extra: dict[str, Any] = {
+        "tipo": _tipo_de_modelo(str(s.base_model if not (s.inputs_snapshot or {}).get("model_id") else s.inputs_snapshot["model_id"])),
+        "lifecycle": getattr(s, "lifecycle", None),
+        "anio_inicio": inicio,
+        "enterprise_value": kp.get("enterprise_value"),
+        "deuda_viva": en(deuda.get("saldo")),
+        "caja": en(cf.get("cash")),
+        "ingresos_anio": en(rows.get("revenue")),
+        "ebitda_anio": en(rows.get("ebitda")),
+        "series": {
+            "revenue": rows.get("revenue") or [],
+            "ebitda": rows.get("ebitda") or [],
+            "net_income": rows.get("net_income") or [],
+            "flujo_caja": [round(x) for x in flujo],
+            "deuda": deuda.get("saldo") or [],
+        },
+    }
+    # El año en curso, real frente a lo previsto hasta hoy (solo si hay datos reales).
+    try:
+        from asset_finance_modeler.web_api.actuals import _variance_for_line  # noqa: PLC0415
+
+        reales = _actuals_store().list(scenario_id=s.id, line_path="income_statement.rows.revenue")
+        if reales:
+            v = _variance_for_line(s, reales, "income_statement.rows.revenue", "Ingresos", "")
+            ac = v.get("anio_en_curso")
+            if isinstance(ac, int) and v["actual"][ac] is not None and (v["base_comparada"][ac] or 0) > 0:
+                extra["ytd"] = {"real": float(v["actual"][ac]), "prevision": float(v["base_comparada"][ac])}
+    except Exception:  # noqa: BLE001 — la cartera no se cae por el seguimiento
+        pass
+    return extra
+
+
+def _sumar_consolidado(acc: dict[int, dict[str, float]], extra: dict[str, Any]) -> None:
+    """Suma las series de un activo por AÑO NATURAL (cada uno empieza cuando empieza)."""
+    inicio = int(extra.get("anio_inicio") or 0)
+    for k, serie in (extra.get("series") or {}).items():
+        for y, v in enumerate(serie or []):
+            if v is None:
+                continue
+            fila = acc.setdefault(inicio + y, {})
+            fila[k] = fila.get(k, 0.0) + float(v)
+
+
+@router.get("/{asset_id}/valoracion")
+def valoracion_del_activo(
+    asset_id: str,
+    tasa: float | None = None,
+    crecimiento: float | None = None,
+    multiplo_ebitda: float | None = None,
+    deuda_neta: float | None = None,
+    tenant: TenantContext = Depends(tenant_ctx),
+) -> dict[str, Any]:
+    """Cuánto vale hoy el activo (28-sep), para la ficha: el mismo cálculo que
+    le pide el agente (finance.asset.value), con rango y la tabla tasa ×
+    crecimiento. Solo dentro de su espacio."""
+    from asset_finance_modeler.mcp_server.tools.assets import handle_value  # noqa: PLC0415
+    from asset_finance_modeler.store.scenarios import en_espacio  # noqa: PLC0415
+
+    args: dict[str, Any] = {"asset_id": asset_id, "workspace_id": tenant.workspace_id, "user_id": tenant.user_id}
+    for k, v in (("tasa", tasa), ("crecimiento", crecimiento), ("multiplo_ebitda", multiplo_ebitda), ("deuda_neta", deuda_neta)):
+        if v is not None:
+            args[k] = v
+    with en_espacio(tenant.workspace_id):
+        try:
+            r = handle_value(args)
+        except (KeyError, LookupError) as exc:
+            raise HTTPException(status_code=404, detail="asset not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if isinstance(r, dict) and r.get("error"):
+        raise HTTPException(status_code=404 if "not" in str(r["error"]) else 400, detail=str(r["error"]))
+    return r
