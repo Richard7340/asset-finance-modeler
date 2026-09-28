@@ -23,8 +23,11 @@ type Pestana = "resumen" | "real" | "curvas" | "deuda" | "valor" | "estados";
  * Estados financieros. `curvas` es el editor de curvas de precios del modelo.
  */
 export default function Ficha({
-  result, hybrid, assetId, operativo, trackingFrequency, curvas, pie,
+  result, hybrid, assetId, operativo, trackingFrequency, curvas, pie, pestana, onPestana,
 }: {
+  /** Pestaña pedida (por la dirección o por el agente) y aviso al cambiarla. */
+  pestana?: string | null;
+  onPestana?: (p: string) => void;
   result: RunResult;
   hybrid: boolean;
   assetId: string | null;
@@ -43,8 +46,10 @@ export default function Ficha({
     ...(assetId && !hybrid ? ([["valor", "Valoración", Coins]] as Array<[Pestana, string, typeof Coins]>) : []),
     ...(!hybrid ? ([["estados", "Estados financieros", Table2]] as Array<[Pestana, string, typeof Table2]>) : []),
   ];
-  const [p, setP] = useState<Pestana>(operativo && assetId ? "real" : "resumen");
-  const actual = pestanas.some(([k]) => k === p) ? p : "resumen";
+  const [p0, setP0] = useState<Pestana>(operativo && assetId ? "real" : "resumen");
+  const p = (pestana as Pestana | null) ?? p0;
+  const setP = (x: Pestana) => { setP0(x); onPestana?.(x); };
+  const actual = pestanas.some(([k]) => k === p) ? p : pestanas.some(([k]) => k === p0) ? p0 : "resumen";
   const k = result.kpis ?? {};
 
   return (

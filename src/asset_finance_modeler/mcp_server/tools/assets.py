@@ -460,3 +460,93 @@ def handle_value(args: dict[str, Any]) -> dict[str, Any]:
         v["notas"] = ["Deuda neta tomada de los préstamos que ya tiene (sin descontar su caja; pásala si tiene)."] + [
             n for n in v.get("notas", []) if not n.startswith("Sin deuda neta")]
     return {"activo": nombre, "model_id": model_id, **v}
+
+
+# ── Lo que se ve en la app, también para el agente y la IA del conector (28-sep) ──
+
+def _norm(t: Any) -> str:
+    import unicodedata  # noqa: PLC0415
+
+    return "".join(c for c in unicodedata.normalize("NFD", str(t or "").lower()) if unicodedata.category(c) != "Mn")
+
+
+@_seguro
+def handle_series(args: dict[str, Any]) -> dict[str, Any]:
+    """Lo real frente a lo previsto de una línea (ingresos, producción, un
+    gasto…) por día, semana, mes o año. `linea` admite la ruta o su nombre."""
+    from asset_finance_modeler.web_api.actuals import _actuals_store, _get_asset_or_404, _trackable_lines, serie_real_vs_prevision  # noqa: PLC0415
+
+    t = _tenant(args)
+    s = _get_asset_or_404(_id_de(args), workspace_id=t.workspace_id)
+    lineas = _trackable_lines(s.results_snapshot)
+    pedida = str(args.get("linea") or args.get("line_path") or "").strip()
+    elegida = None
+    if pedida:
+        n = _norm(pedida)
+        elegida = next((x for x in lineas if x["path"] == pedida), None) \
+            or next((x for x in lineas if _norm(x["label"]) == n or _norm(x["path"].split(".")[-1]) == n), None) \
+            or next((x for x in lineas if n in _norm(x["label"]) or n in _norm(x["path"])), None)
+    else:
+        # Sin línea: la que más se sigue (producción, ingresos…).
+        orden = sorted(lineas, key=lambda x: (0 if "produccion" in x["path"] else 1 if x["path"].endswith(".revenue") else 2))
+        elegida = orden[0] if orden else None
+    if elegida is None:
+        return {"error": "linea-desconocida", "lineas": [x["label"] for x in lineas][:30]}
+    cada = str(args.get("cada") or "mes")
+    if cada not in ("dia", "semana", "mes", "anio"):
+        return {"error": "cada-invalido", "detail": "dia, semana, mes o anio"}
+    reales = _actuals_store().list(scenario_id=s.id, line_path=elegida["path"])
+    r = serie_real_vs_prevision(s, reales, elegida["path"], cada, args.get("desde"), args.get("hasta"))
+    # Compacto (el agente ve 4.000 caracteres): los últimos periodos.
+    puntos = [{"p": x["etiqueta"], "real": x["real"], "prev": round(x["prevision"])} for x in r["puntos"]][-24:]
+    return {
+        "activo": s.name, "asset_id": s.id, "linea": elegida["label"], "unidad": elegida.get("unit") or "€", "cada": cada,
+        "resumen": r["resumen"], "periodos": puntos,
+        "ver_en_la_app": {"app": "portfolio", "ruta": f"asset/{s.id}/real"},
+    }
+
+
+@_seguro
+def handle_overview(args: dict[str, Any]) -> dict[str, Any]:
+    """El cuadro general de la cartera: totales, cada activo con su valor,
+    deuda y cómo va el año, y la serie de la cartera por año natural."""
+    from asset_finance_modeler.web_api.assets import portfolio  # noqa: PLC0415
+
+    r = portfolio(ids=None, lifecycle=args.get("lifecycle"), tenant=_tenant(args))
+    activos = []
+    for a in r.get("assets", []):
+        ytd = a.get("ytd")
+        activos.append({
+            "id": a["id"], "nombre": a["name"], "tipo": a.get("tipo"), "fase": a.get("lifecycle"),
+            "van": round(a.get("npv") or 0), "tir": a.get("irr"), "valor": a.get("enterprise_value"),
+            "deuda_viva": a.get("deuda_viva"), "ingresos_anio": a.get("ingresos_anio"),
+            "cumplimiento_anio_pct": round(ytd["real"] / ytd["prevision"] * 100, 1) if ytd and ytd.get("prevision") else None,
+        })
+    c = r.get("consolidado") or {}
+    return {
+        "totales": {k: (round(v) if isinstance(v, float) else v) for k, v in (r.get("totals") or {}).items()},
+        "activos": activos,
+        "cartera_por_anio": [{"anio": y, "ingresos": c["revenue"][i], "ebitda": c["ebitda"][i], "flujo_caja": c["flujo_caja"][i], "deuda": c["deuda"][i]} for i, y in enumerate(c.get("years", []))][:15],
+        "con_error": [x.get("name") for x in r.get("skipped", [])],
+        "ver_en_la_app": {"app": "portfolio", "ruta": "cartera"},
+    }
+
+
+@_seguro
+def handle_debt(args: dict[str, Any]) -> dict[str, Any]:
+    """La deuda de un activo año a año: saldo, intereses, amortización y DSCR."""
+    from asset_finance_modeler.web_api.assets import _run_model_cacheado, get_asset  # noqa: PLC0415
+
+    a = get_asset(_id_de(args), _tenant(args))
+    r = _run_model_cacheado(a["model_id"], a.get("overrides") or {})
+    d = r.get("deuda")
+    if not d or not any(d.get("disposiciones") or []):
+        return {"activo": a["name"], "asset_id": a["id"], "sin_deuda": True, "nota": "Este activo no tiene deuda en su modelo."}
+    dscr = [x for x in d.get("dscr", []) if x is not None]
+    return {
+        "activo": a["name"], "asset_id": a["id"],
+        "pedida": round(sum(d.get("disposiciones", []))), "intereses_totales": round(sum(d.get("intereses", []))),
+        "dscr_minimo": min(dscr) if dscr else None,
+        "por_anio": [{"anio": y, "saldo": d["saldo"][i], "intereses": d["intereses"][i], "amortizacion": d["amortizacion"][i], "dscr": d["dscr"][i]} for i, y in enumerate(d["years"])][:30],
+        "ver_en_la_app": {"app": "portfolio", "ruta": f"asset/{a['id']}/deuda"},
+    }

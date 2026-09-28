@@ -7,6 +7,7 @@ import {
   getSchema,
   isHybridResult,
   isEmbed,
+  listAssets,
   setLifecycle,
 } from "./api";
 import type {
@@ -75,6 +76,8 @@ export default function App() {
   const [page, setPage] = useState<DashboardPage>("cartera");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
+  // La pestaña de la ficha (28-sep): va en la dirección para poder enlazarla.
+  const [pestana, setPestana] = useState<string | null>(null);
 
   const modelId = selection?.modelId ?? null;
 
@@ -204,21 +207,57 @@ export default function App() {
     );
   };
 
-  // Select an asset by id (used by the agent bridge: "open THIS asset"). Mirrors
-  // selectAsset but takes only the id, fetching the full record itself.
-  const selectAssetById = async (id: string) => {
-    const full = await getAsset(id);
+  // Select an asset by id OR name (agent bridge: "open THIS asset", and the
+  // #/asset/<id> link). Carries lifecycle/tracking from the list, so an
+  // operational asset opens with its «Real vs previsto» tab (28-sep).
+  const selectAssetById = async (idOrName: string, tab?: string | null) => {
+    let lista: SavedAssetSummary[] = [];
+    try { lista = await listAssets(); } catch { /* sin lista: por id */ }
+    const q = idOrName.trim().toLowerCase();
+    const sum = lista.find((x) => x.id === idOrName) ?? lista.find((x) => x.name.toLowerCase() === q) ?? lista.find((x) => x.name.toLowerCase().includes(q));
+    const full = await getAsset(sum?.id ?? idOrName);
     setSelection({
       modelId: full.model_id,
       modelName: full.name,
       assetId: full.id,
       savedAt: full.created_at,
-      lifecycle: null,
-      trackingFrequency: null,
+      lifecycle: sum?.lifecycle ?? null,
+      trackingFrequency: sum?.tracking_frequency ?? null,
     });
     setOverrides(full.overrides ?? {});
+    if (sum?.lifecycle === "operational") setPage("cartera");
+    else if (sum?.lifecycle === "opportunity") setPage("oportunidades");
+    setPestana(tab ?? null);
     setView("detail");
   };
+
+  // ── Direcciones (28-sep): #/cartera, #/oportunidades, #/asset/<id>[/<pestaña>]
+  // Se leen al entrar y cuando cambian, y se escriben al navegar, para poder
+  // compartir un enlace y volver atrás.
+  useEffect(() => {
+    const aplicar = () => {
+      const h = decodeURIComponent(window.location.hash.replace(/^#\/?/, ""));
+      const [a, b, c] = h.split("/");
+      if (a === "asset" && b) {
+        if (selection?.assetId === b) { if (c) setPestana(c); setView("detail"); }
+        else void selectAssetById(b, c ?? null).catch(() => goToPage("cartera"));
+      } else if (a === "oportunidades" || a === "cartera") {
+        goToPage(a);
+      }
+    };
+    aplicar();
+    window.addEventListener("hashchange", aplicar);
+    return () => window.removeEventListener("hashchange", aplicar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const destino = view === "detail" && selection?.assetId
+      ? `#/asset/${encodeURIComponent(selection.assetId)}${pestana ? "/" + pestana : ""}`
+      : view === "portfolio" ? `#/${page}` : null;
+    if (destino && window.location.hash !== destino) {
+      try { window.history.replaceState(null, "", destino); } catch { /* sin historial */ }
+    }
+  }, [view, page, selection?.assetId, pestana]);
 
   // Force a re-run of the current scenario (used by the agent bridge `run`
   // command). useRun re-simulates automatically on override changes; this
@@ -251,10 +290,9 @@ export default function App() {
       navigate: (section) => {
         if (section === "oportunidades") goToPage("oportunidades");
         else if (section === "cartera") goToPage("cartera");
-        // Other sections (live/curvas/actuals/variance) live inside the detail
-        // view; the webOS toolbar handles those. Default: no-op.
+        else if (["resumen", "real", "curvas", "deuda", "valor", "estados"].includes(section)) setPestana(section);
       },
-      selectAsset: (assetId) => selectAssetById(assetId),
+      selectAsset: (assetId, tab) => selectAssetById(assetId, tab ?? null),
       refresh: refreshEmbedded,
     }),
     // setOverride/goToPage/selectAssetById/runCurrent/refreshEmbedded are stable
@@ -537,6 +575,9 @@ export default function App() {
                 </div>
               ) : (
                 <Ficha
+                  key={selection?.assetId ?? modelId ?? "nuevo"}
+                  pestana={pestana}
+                  onPestana={setPestana}
                   result={result}
                   hybrid={hybrid}
                   assetId={selection?.assetId ?? null}

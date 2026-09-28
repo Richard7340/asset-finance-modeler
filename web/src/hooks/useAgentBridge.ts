@@ -40,7 +40,8 @@ export type AgentBridgeHandlers = {
   /** Navigate to a primary section/page. */
   navigate: (section: string) => void;
   /** Select an asset by id (fetches + opens its detail). Async. */
-  selectAsset: (assetId: string) => Promise<void> | void;
+  /** Abre un activo (por id o nombre) y, si se pide, en una pestaña de su ficha. */
+  selectAsset: (assetId: string, tab?: string | null) => Promise<void> | void;
   /** Reload the embedded data (re-fetch from backend). */
   refresh: () => void;
 };
@@ -147,7 +148,8 @@ export function useAgentBridge(handlers: AgentBridgeHandlers): void {
             postResult(parentOrigin, { cmd, ok: false, error: "invalid_args" });
             return;
           }
-          Promise.resolve(handlers.selectAsset(assetId))
+          const tab = (data as { tab?: unknown }).tab;
+          Promise.resolve(handlers.selectAsset(assetId, typeof tab === "string" ? tab : null))
             .then(() => postResult(parentOrigin, { cmd, ok: true, assetId }))
             .catch((e: unknown) =>
               postResult(parentOrigin, { cmd, ok: false, error: String(e) }),
