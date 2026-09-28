@@ -474,6 +474,8 @@ class InfrastructureModel:
             revenue_breakdown={
                 "streams": rev.get("streams", {}),
                 "total": rev["total_revenue"],
+                # La producción por periodo (28-sep): para anotar la real y compararla.
+                "production_mwh": list(prod.get("production_mwh") or []),
             },
             valuation=val,
             sensitivity=None,

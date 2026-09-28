@@ -91,9 +91,9 @@ def _trackable_lines(snapshot: dict[str, Any]) -> list[dict[str, str]]:
                 }
             )
     # Cada ingreso y gasto por separado (IBI, comunidad, O&M, PPA…).
-    for grupo, prefijo in (("ingresos", "Ingreso"), ("gastos", "Gasto")):
+    for grupo, prefijo, unidad in (("ingresos", "Ingreso", ""), ("gastos", "Gasto", ""), ("produccion", "Producción", "MWh")):
         for nombre in ((snapshot.get("lineas") or {}).get(grupo) or {}):
-            lines.append({"path": f"lineas.{grupo}.{nombre}", "label": f"{prefijo}: {nombre}", "unit": ""})
+            lines.append({"path": f"lineas.{grupo}.{nombre}", "label": f"{prefijo}: {nombre}" if nombre != prefijo else prefijo, "unit": unidad})
     cash_flow = snapshot.get("cash_flow") or {}
     for key in ("cfo", "cfi", "cff"):
         if key in cash_flow:
@@ -380,3 +380,149 @@ def get_variance(
             for ln in all_lines
         ]
     }
+
+
+# ── Real frente a previsto con la frecuencia que se quiera (28-sep) ─────────
+# Cada uno anota lo real como le viene (a diario, por semanas, por meses…) y
+# lo ve igual: la previsión anual del modelo se reparte por días, así que un
+# día, una semana o un mes tienen su parte (sin estacionalidad todavía).
+
+_CADAS = ("dia", "semana", "mes", "anio")
+_MAX_PUNTOS = {"dia": 400, "semana": 260, "mes": 360, "anio": 60}
+
+
+def _inicio_de(d: "date", cada: str) -> "date":
+    from datetime import date, timedelta  # noqa: PLC0415
+
+    if cada == "dia":
+        return d
+    if cada == "semana":
+        return d - timedelta(days=d.weekday())
+    if cada == "mes":
+        return date(d.year, d.month, 1)
+    return date(d.year, 1, 1)
+
+
+def _siguiente(d: "date", cada: str) -> "date":
+    from datetime import date, timedelta  # noqa: PLC0415
+
+    if cada == "dia":
+        return d + timedelta(days=1)
+    if cada == "semana":
+        return d + timedelta(days=7)
+    if cada == "mes":
+        return date(d.year + (d.month == 12), 1 if d.month == 12 else d.month + 1, 1)
+    return date(d.year + 1, 1, 1)
+
+
+def _etiqueta(d: "date", cada: str) -> str:
+    meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+    if cada == "dia":
+        return f"{d.day} {meses[d.month - 1]}"
+    if cada == "semana":
+        return f"sem. {d.isocalendar()[1]} · {d.day} {meses[d.month - 1]}"
+    if cada == "mes":
+        return f"{meses[d.month - 1]} {d.year}"
+    return str(d.year)
+
+
+def serie_real_vs_prevision(asset: Scenario, actuals: list[Actual], line_path: str, cada: str,
+                            desde: str | None = None, hasta: str | None = None) -> dict[str, Any]:
+    from datetime import date  # noqa: PLC0415
+
+    base = _base_series(asset.results_snapshot, line_path) or []
+    inicio_modelo = _model_start_year(asset)
+    hoy = _hoy().date()
+    try:
+        d0 = date.fromisoformat(desde) if desde else None
+    except ValueError:
+        d0 = None
+    try:
+        d1 = date.fromisoformat(hasta) if hasta else hoy
+    except ValueError:
+        d1 = hoy
+    fechas_reales = []
+    for a in actuals:
+        if a.line_path != line_path:
+            continue
+        try:
+            fechas_reales.append(date.fromisoformat(str(a.period_start)[:10]))
+        except ValueError:
+            continue
+    if d0 is None:
+        d0 = min(fechas_reales) if fechas_reales else date(inicio_modelo, 1, 1)
+        # Por defecto, no más atrás de lo que cabe en la gráfica.
+        atras = {"dia": 90, "semana": 7 * 26, "mes": 365 * 2, "anio": 365 * 30}[cada]
+        d0 = max(d0, date.fromordinal(max(1, d1.toordinal() - atras)))
+    d0 = _inicio_de(d0, cada)
+
+    def prevision_del_dia(d: "date") -> float:
+        y = d.year - inicio_modelo
+        if y < 0 or y >= len(base):
+            return 0.0
+        dias = 366 if (d.year % 4 == 0 and (d.year % 100 != 0 or d.year % 400 == 0)) else 365
+        return float(base[y]) / dias
+
+    real_por_dia: dict["date", float] = {}
+    for a in actuals:
+        if a.line_path != line_path:
+            continue
+        try:
+            f = date.fromisoformat(str(a.period_start)[:10])
+        except ValueError:
+            continue
+        real_por_dia[f] = real_por_dia.get(f, 0.0) + float(a.value)
+
+    puntos: list[dict[str, Any]] = []
+    acc_r = acc_p = 0.0
+    cur = d0
+    while cur <= d1 and len(puntos) < _MAX_PUNTOS[cada]:
+        fin = _siguiente(cur, cada)
+        prev = 0.0
+        dd = cur
+        from datetime import timedelta  # noqa: PLC0415
+        while dd < fin and dd <= d1:
+            prev += prevision_del_dia(dd)
+            dd += timedelta(days=1)
+        reales = [v for f, v in real_por_dia.items() if cur <= f < fin]
+        real = round(sum(reales), 2) if reales else None
+        acc_p += prev
+        if real is not None:
+            acc_r += real
+        puntos.append({
+            "desde": cur.isoformat(), "etiqueta": _etiqueta(cur, cada),
+            "real": real, "prevision": round(prev, 2),
+            "acumulado_real": round(acc_r, 2), "acumulado_prevision": round(acc_p, 2),
+            "desviacion_pct": round((real - prev) / prev * 100, 1) if real is not None and prev else None,
+        })
+        cur = fin
+    con_dato = [p for p in puntos if p["real"] is not None]
+    prev_con_dato = sum(p["prevision"] for p in con_dato)
+    return {
+        "line_path": line_path, "cada": cada, "desde": d0.isoformat(), "hasta": d1.isoformat(),
+        "puntos": puntos,
+        "resumen": {
+            "real": round(sum(p["real"] for p in con_dato), 2) if con_dato else None,
+            "prevision_de_esos_periodos": round(prev_con_dato, 2),
+            "cumplimiento_pct": round(sum(p["real"] for p in con_dato) / prev_con_dato * 100, 1) if con_dato and prev_con_dato else None,
+            "periodos_con_dato": len(con_dato),
+        },
+    }
+
+
+@router.get("/{asset_id}/serie")
+def get_serie(
+    asset_id: str,
+    line_path: str,
+    cada: str = "mes",
+    desde: str | None = None,
+    hasta: str | None = None,
+    tenant: TenantContext = Depends(tenant_ctx),
+) -> dict[str, Any]:
+    if cada not in _CADAS:
+        raise HTTPException(status_code=400, detail=f"cada: {', '.join(_CADAS)}")
+    asset = _get_asset_or_404(asset_id, workspace_id=tenant.workspace_id)
+    if not any(ln["path"] == line_path for ln in _trackable_lines(asset.results_snapshot)):
+        raise HTTPException(status_code=404, detail=f"untrackable line: {line_path}")
+    actuals = _actuals_store().list(scenario_id=asset_id, line_path=line_path)
+    return serie_real_vs_prevision(asset, actuals, line_path, cada, desde, hasta)

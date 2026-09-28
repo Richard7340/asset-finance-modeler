@@ -116,6 +116,10 @@ def _run_config(cfg_dict: dict[str, Any]) -> dict[str, Any]:
     gastos = {"Gastos de explotación": [round(x) for x in _annual(list(out.pnl.get("opex", [])), ppy)]} if "opex" in out.pnl else {}
     if ingresos or gastos:
         payload["lineas"] = {"ingresos": ingresos, "gastos": gastos}
+    # La producción (MWh) por año: se anota la real (diaria, semanal, mensual…) y se compara.
+    mwh = (getattr(out, "revenue_breakdown", None) or {}).get("production_mwh")
+    if isinstance(mwh, list) and any(mwh):
+        payload.setdefault("lineas", {"ingresos": ingresos, "gastos": gastos})["produccion"] = {"Producción": [round(x) for x in _annual(list(mwh), ppy)]}
     return payload
 
 
