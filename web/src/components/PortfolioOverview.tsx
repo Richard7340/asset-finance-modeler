@@ -437,7 +437,7 @@ export default function PortfolioOverview({
             <Kpi label="Deuda viva" value={totals.deuda_viva} format={eur} hint={`a ${new Date().getFullYear()}`} />
           )}
           {totals?.caja !== undefined && (
-            <Kpi label="Caja" value={totals.caja} format={eur} hint="acumulada prevista este año" />
+            <Kpi label="Flujo acumulado" value={totals.caja} format={eur} hint="flujos de caja desde el inicio, con la inversión, hasta este año" />
           )}
           {totals?.ingresos_anio !== undefined && (
             <Kpi label={`Ingresos ${new Date().getFullYear()}`} value={totals.ingresos_anio} format={eur} hint={totals.ebitda_anio !== undefined ? `EBITDA ${eur(totals.ebitda_anio)}` : undefined} />

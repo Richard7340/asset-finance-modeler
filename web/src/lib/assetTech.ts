@@ -35,9 +35,11 @@ export function assetTech(modelId: string | undefined): AssetTech {
     return { label: "Data center", Icon: Server };
   if (id.includes("svj") || id.includes("hybrid") || id.includes("hibrido"))
     return { label: "Híbrido", Icon: Layers };
-  if (id.includes("real_estate") || id.includes("inmob") || id.includes("estate"))
+  if (id.includes("real_estate") || id.includes("inmob") || id.includes("estate") || id.includes("inmueble") || id.includes("piso") || id.includes("local"))
     return { label: "Inmobiliario", Icon: Home };
   if (id.includes("business") || id.includes("negocio"))
     return { label: "Negocio", Icon: Briefcase };
+  if (id.includes("saas"))
+    return { label: "SaaS", Icon: Server };
   return { label: modelId ?? "Activo", Icon: Building2 };
 }
