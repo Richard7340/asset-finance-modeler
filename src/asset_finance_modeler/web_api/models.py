@@ -205,7 +205,7 @@ def _run_financial_output(out: FinancialOutput, ppy: int) -> dict[str, Any]:
     elif isinstance(deuda_anual, dict):
         payload["deuda"] = {
             "years": list(range(1, n_years + 1)),
-            **{k: [round(x, 2) if k == "dscr" else round(x) for x in (v or [])][:n_years] for k, v in deuda_anual.items()},
+            **{k: [(round(x, 2) if x is not None and math.isfinite(x) else None) if k == "dscr" else round(x) for x in (v or [])][:n_years] for k, v in deuda_anual.items()},
         }
     # La valoración del modelo (DCF del proyecto).
     if val:

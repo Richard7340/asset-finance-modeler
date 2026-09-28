@@ -176,7 +176,7 @@ class BusinessModel:
                 saldo.append(vivo)
             summary["deuda_anual"] = {  # type: ignore[assignment]
                 "saldo": saldo, "intereses": list(int_y), "amortizacion": list(principal_y),
-                "disposiciones": list(drawdown_total), "dscr": list(dscr_series),
+                "disposiciones": list(drawdown_total), "dscr": self._dscr_por_anio(dscr_series, int_y, principal_y, years),
             }
 
         return FinancialOutput(
@@ -195,6 +195,20 @@ class BusinessModel:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _dscr_por_anio(dscr: list[float], int_y: list[float], principal_y: list[float], years: int) -> list[float | None]:
+        """El DSCR viene solo de los años con pagos de deuda: se pone en su año
+        y vacío en los que no hay deuda que pagar."""
+        con_pago = [y for y in range(years) if (int_y[y] + principal_y[y]) > 0]
+        out: list[float | None] = [None] * years
+        if len(dscr) == len(con_pago):
+            for y, v in zip(con_pago, dscr):
+                out[y] = v
+        else:
+            for y, v in enumerate(dscr[:years]):
+                out[y] = v
+        return out
 
     @staticmethod
     def _expand(annual: list[float], ppy: int, n: int) -> list[float]:
