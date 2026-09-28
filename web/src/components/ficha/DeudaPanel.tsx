@@ -21,14 +21,19 @@ export default function DeudaPanel({ deuda, inicio }: { deuda: Deuda; inicio?: n
   const total = (xs: number[]) => xs.reduce((a, b) => a + (b ?? 0), 0);
   const dscrs = deuda.dscr.filter((x): x is number => x != null && Number.isFinite(x));
   const dscrMin = dscrs.length ? Math.min(...dscrs) : null;
-  const finPago = (() => { for (let i = deuda.saldo.length - 1; i >= 0; i -= 1) if ((deuda.saldo[i] ?? 0) > 0.5) return i + 1; return 0; })();
+  // El año en que se hace el último pago: el siguiente al último con saldo pendiente.
+  const finPago = (() => {
+    for (let i = deuda.saldo.length - 1; i >= 0; i -= 1) if ((deuda.saldo[i] ?? 0) > 0.5) return i + 2 <= deuda.saldo.length ? i + 2 : 0;
+    const ultimoPago = deuda.amortizacion.reduce((u, x, i) => (x > 0 ? i + 1 : u), 0);
+    return ultimoPago;
+  })();
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Dato label="Deuda pedida" valor={eur(total(deuda.disposiciones))} />
         <Dato label="Intereses totales" valor={eur(total(deuda.intereses))} />
         <Dato label="DSCR mínimo" valor={dscrMin != null ? mult(dscrMin) : "—"} tono={dscrMin == null ? undefined : dscrMin >= 1.3 ? "bien" : dscrMin >= 1.1 ? "justo" : "mal"} />
-        <Dato label="Se termina de pagar" valor={finPago ? (inicio ? String(inicio + finPago - 1) : `año ${finPago}`) : "—"} />
+        <Dato label="Se termina de pagar" valor={finPago ? (inicio ? String(inicio + finPago - 1) : `año ${finPago}`) : "después del horizonte"} />
       </div>
       <div className="surface p-4">
         <div className="mb-2 text-sm font-semibold text-slate-800">Pagos del año y saldo pendiente</div>
