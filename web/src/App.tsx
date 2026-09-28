@@ -39,16 +39,9 @@ import Dashboard from "./components/Dashboard";
 import type { DashboardPage } from "./components/Dashboard";
 import DynamicInputs from "./components/DynamicInputs";
 import CurvesPanel from "./components/CurvesPanel";
-import KpiCards from "./components/KpiCards";
-import IncomeStatementTable from "./components/IncomeStatement";
-import CashFlowTable from "./components/CashFlowTable";
-import Charts from "./components/Charts";
 import Toolbar from "./components/Toolbar";
 import ViewTransition from "./components/ViewTransition";
-import ActualsGrid from "./components/ActualsGrid";
-import VariancePanel from "./components/VariancePanel";
-import LivePanel from "./components/LivePanel";
-import { AssetAlerts } from "./components/Alerts";
+import Ficha from "./components/ficha/Ficha";
 
 type Selection = {
   modelId: string;
@@ -543,49 +536,28 @@ export default function App() {
                   Calculando…
                 </div>
               ) : (
-                <>
-                  <KpiCards data={result} />
-                  {schemaQuery.data && (
-                    <CurvesPanel
-                      schema={schemaQuery.data}
-                      overrides={overrides}
-                      onChangeOverride={setOverride}
-                    />
-                  )}
-                  <Charts data={result} />
-                  {!hybrid && result.income_statement && (
-                    <IncomeStatementTable data={result.income_statement} />
-                  )}
-                  {!hybrid && result.cash_flow && (
-                    <CashFlowTable data={result.cash_flow} />
-                  )}
-                </>
-              )}
-
-              {/* Seguimiento: solo para activos en operación (F2). */}
-              {selection?.assetId && selection.lifecycle === "operational" && (
-                <>
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-                      Seguimiento operativo
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={demoteCurrent}
-                      className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
-                      title="Devolver este activo a la lista de oportunidades"
-                    >
-                      Devolver a oportunidad
-                    </button>
-                  </div>
-                  <AssetAlerts assetId={selection.assetId} />
-                  <ActualsGrid
-                    assetId={selection.assetId}
-                    trackingFrequency={selection.trackingFrequency}
-                  />
-                  <VariancePanel assetId={selection.assetId} />
-                  <LivePanel assetId={selection.assetId} />
-                </>
+                <Ficha
+                  result={result}
+                  hybrid={hybrid}
+                  assetId={selection?.assetId ?? null}
+                  operativo={selection?.lifecycle === "operational"}
+                  trackingFrequency={selection?.trackingFrequency ?? null}
+                  curvas={schemaQuery.data ? (
+                    <CurvesPanel schema={schemaQuery.data} overrides={overrides} onChangeOverride={setOverride} />
+                  ) : null}
+                  pie={selection?.assetId && selection.lifecycle === "operational" ? (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={demoteCurrent}
+                        className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
+                        title="Devolver este activo a la lista de oportunidades"
+                      >
+                        Devolver a oportunidad
+                      </button>
+                    </div>
+                  ) : null}
+                />
               )}
             </main>
           </div>

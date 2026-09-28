@@ -70,6 +70,8 @@ export type GenericResult = {
   income_statement: IncomeStatement;
   cash_flow: CashFlow;
   summary?: Record<string, unknown>;
+  /** Calendario de la deuda año a año (28-sep). */
+  deuda?: Deuda;
 };
 
 /** Legacy svj_hybrid v1 result shape. */
@@ -445,6 +447,7 @@ export type PortfolioAsset = {
   lifecycle?: Lifecycle | null;
   anio_inicio?: number;
   enterprise_value?: number | null;
+  valor_para_el_dueno?: number | null;
   /** Deuda viva, caja, ingresos y EBITDA del año en curso. */
   deuda_viva?: number | null;
   caja?: number | null;
@@ -466,6 +469,7 @@ export type PortfolioTotals = {
   /** CAPEX-weighted IRR across included assets, decimal. */
   irr_weighted?: number;
   enterprise_value?: number;
+  valor_para_el_dueno?: number;
   deuda_viva?: number;
   caja?: number;
   ingresos_anio?: number;
@@ -500,4 +504,76 @@ export async function getPortfolio(
   if (opts?.lifecycle) qs.push(`lifecycle=${opts.lifecycle}`);
   const q = qs.length ? `?${qs.join("&")}` : "";
   return getJson<Portfolio>(`/api/portfolio${q}`);
+}
+
+
+// ---------------------------------------------------------------------------
+// Ficha del activo (28-sep): deuda, valoración y real por frecuencia.
+// ---------------------------------------------------------------------------
+
+export type Deuda = {
+  years: number[];
+  saldo: number[];
+  intereses: number[];
+  amortizacion: number[];
+  disposiciones: number[];
+  dscr: Array<number | null>;
+};
+
+export type Valoracion = {
+  activo?: string;
+  metodo?: string;
+  tasa_descuento: number;
+  crecimiento_final: number;
+  anios: number;
+  flujos_libres: number[];
+  dcf: { vp_flujos: number; valor_terminal: number; vp_valor_terminal: number; valor_empresa: number };
+  peso_valor_terminal: number;
+  deuda_neta: number;
+  valor_empresa: number;
+  valor_para_el_dueno: number;
+  inversion_inicial?: number;
+  van?: number;
+  ev_ebitda_implicito?: number | null;
+  multiplo?: { ebitda_referencia: number; multiplo: number; valor_empresa?: number } | null;
+  rango_valor_empresa?: [number, number];
+  rango_para_el_dueno?: [number, number];
+  sensibilidad?: { tasas: number[]; crecimientos: number[]; valor_empresa: number[][] };
+  notas?: string[];
+};
+
+export async function getValoracion(
+  id: string,
+  opts?: { tasa?: number; crecimiento?: number; deuda_neta?: number; multiplo_ebitda?: number },
+): Promise<Valoracion> {
+  const qs = Object.entries(opts ?? {})
+    .filter(([, v]) => v !== undefined && Number.isFinite(v))
+    .map(([k, v]) => `${k}=${v}`);
+  return getJson<Valoracion>(`/api/assets/${encodeURIComponent(id)}/valoracion${qs.length ? "?" + qs.join("&") : ""}`);
+}
+
+export type Cada = "dia" | "semana" | "mes" | "anio";
+
+export type SerieReal = {
+  line_path: string;
+  cada: Cada;
+  desde: string;
+  hasta: string;
+  puntos: Array<{
+    desde: string;
+    etiqueta: string;
+    real: number | null;
+    prevision: number;
+    acumulado_real: number;
+    acumulado_prevision: number;
+    desviacion_pct: number | null;
+  }>;
+  resumen: { real: number | null; prevision_de_esos_periodos: number; cumplimiento_pct: number | null; periodos_con_dato: number };
+};
+
+export async function getSerie(id: string, linePath: string, cada: Cada, desde?: string, hasta?: string): Promise<SerieReal> {
+  const qs = [`line_path=${encodeURIComponent(linePath)}`, `cada=${cada}`];
+  if (desde) qs.push(`desde=${desde}`);
+  if (hasta) qs.push(`hasta=${hasta}`);
+  return getJson<SerieReal>(`/api/assets/${encodeURIComponent(id)}/serie?${qs.join("&")}`);
 }

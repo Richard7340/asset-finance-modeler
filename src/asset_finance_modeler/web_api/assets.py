@@ -374,7 +374,7 @@ def portfolio(
             }
         )
         _sumar_consolidado(consolidado, extra)
-        for k in ("enterprise_value", "deuda_viva", "caja", "ingresos_anio", "ebitda_anio"):
+        for k in ("enterprise_value", "valor_para_el_dueno", "deuda_viva", "caja", "ingresos_anio", "ebitda_anio"):
             if extra.get(k) is not None:
                 totals[k] = totals.get(k, 0.0) + float(extra[k])
         if extra.get("ytd"):
@@ -421,7 +421,8 @@ def _extra_de_cartera(s: Scenario, result: dict[str, Any]) -> dict[str, Any]:
         "tipo": _tipo_de_modelo(str(s.base_model if not (s.inputs_snapshot or {}).get("model_id") else s.inputs_snapshot["model_id"])),
         "lifecycle": getattr(s, "lifecycle", None),
         "anio_inicio": inicio,
-        "enterprise_value": kp.get("enterprise_value"),
+        # El valor de verdad (el mismo que da «¿cuánto vale?»), no el VAN (28-sep).
+        **_valor_de(s, result, en(deuda.get("saldo"))),
         "deuda_viva": en(deuda.get("saldo")),
         "caja": en(cf.get("cash")),
         "ingresos_anio": en(rows.get("revenue")),
@@ -447,6 +448,38 @@ def _extra_de_cartera(s: Scenario, result: dict[str, Any]) -> dict[str, Any]:
     except Exception:  # noqa: BLE001 — la cartera no se cae por el seguimiento
         pass
     return extra
+
+
+_CACHE_DE_VALOR: dict[str, dict[str, Any]] = {}
+
+
+def _valor_de(s: Scenario, result: dict[str, Any], deuda_viva: float | None) -> dict[str, Any]:
+    """Cuánto vale hoy el activo (flujos descontados, sin la inversión de
+    partida) y lo que queda para el dueño tras su deuda. Guardado por resultado."""
+    import json as _json  # noqa: PLC0415
+
+    snapshot = s.inputs_snapshot or {}
+    model_id = str(snapshot.get("model_id", s.base_model))
+    overrides = snapshot.get("overrides", s.overrides) or {}
+    clave = model_id + "|" + _json.dumps(overrides, sort_keys=True, default=str) + "|" + str(round(deuda_viva or 0))
+    if clave in _CACHE_DE_VALOR:
+        return _CACHE_DE_VALOR[clave]
+    out: dict[str, Any] = {"enterprise_value": (result.get("kpis") or {}).get("enterprise_value")}
+    try:
+        from asset_finance_modeler.mcp_server.tools.assets import _por_defecto  # noqa: PLC0415
+        from asset_finance_modeler.valoracion import valorar  # noqa: PLC0415
+
+        tasa = _por_defecto(model_id, overrides, ("discount_rate_annual", "tasa_descuento"))
+        g = _por_defecto(model_id, overrides, ("terminal_growth_rate",))
+        v = valorar(result, model_id=model_id, tasa=float(tasa if tasa is not None else 0.08),
+                    crecimiento=float(g if g is not None else 0.02), deuda_neta=float(deuda_viva or 0))
+        out = {"enterprise_value": round(v["valor_empresa"]), "valor_para_el_dueno": round(v["valor_para_el_dueno"])}
+    except Exception:  # noqa: BLE001 — sin valoración, el del modelo
+        pass
+    if len(_CACHE_DE_VALOR) >= 256:
+        _CACHE_DE_VALOR.pop(next(iter(_CACHE_DE_VALOR)))
+    _CACHE_DE_VALOR[clave] = out
+    return out
 
 
 def _sumar_consolidado(acc: dict[int, dict[str, float]], extra: dict[str, Any]) -> None:
